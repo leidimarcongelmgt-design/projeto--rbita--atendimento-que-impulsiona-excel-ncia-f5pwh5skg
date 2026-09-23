@@ -16,6 +16,8 @@ import {
   FileText,
   ExternalLink,
   Download,
+  CheckCircle2,
+  ShieldCheck,
 } from 'lucide-react'
 import { AttachedPdf, formatFileSize } from '@/lib/pdfStorage'
 
@@ -717,26 +719,59 @@ export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
               </div>
             </div>
 
-            {/* Visualização Generosa do PDF */}
+            {/* Visualização e Ações do PDF Anexo (Card Seguro e Responsivo) */}
             <div className="mt-4 flex flex-col items-center justify-center bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
               {attachedPdf ? (
-                <div className="w-full flex flex-col">
-                  <div className="w-full h-[520px] sm:h-[620px] bg-slate-100 flex flex-col">
-                    <iframe
-                      src={attachedPdf.blobUrl}
-                      title={`Visualização de ${attachedPdf.name}`}
-                      className="w-full h-full border-0"
-                    />
+                <div className="w-full flex flex-col divide-y divide-slate-100">
+                  <div className="p-6 sm:p-8 bg-gradient-to-br from-slate-50 via-white to-blue-50/30 flex flex-col items-center text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-[#1E3A5F] mb-4 shadow-xs">
+                      <FileText className="w-8 h-8" />
+                    </div>
+
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 mb-2">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> PDF Conectado com Sucesso
+                    </div>
+
+                    <h4 className="text-base font-bold text-slate-800 break-all max-w-lg mb-1">
+                      {attachedPdf.name}
+                    </h4>
+
+                    <p className="text-xs text-slate-500 mb-6">
+                      Tamanho do documento: {formatFileSize(attachedPdf.size)} • Pronto para
+                      conferência
+                    </p>
+
+                    <div className="flex flex-wrap items-center justify-center gap-3">
+                      <Button
+                        type="button"
+                        onClick={() =>
+                          window.open(attachedPdf.blobUrl, '_blank', 'noopener,noreferrer')
+                        }
+                        className="bg-[#1E3A5F] hover:bg-[#16304F] text-white text-xs h-9 px-4 gap-2 font-medium shadow-xs"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" /> Abrir Documento em Nova Aba
+                      </Button>
+
+                      <a
+                        href={attachedPdf.blobUrl}
+                        download={attachedPdf.name}
+                        className="inline-flex"
+                      >
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="text-xs h-9 px-4 text-slate-700 hover:text-slate-900 border-slate-300 gap-2 font-medium"
+                        >
+                          <Download className="w-3.5 h-3.5" /> Baixar Cópia Local
+                        </Button>
+                      </a>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap items-center justify-between w-full py-2.5 px-4 bg-slate-50 border-t border-slate-200 text-xs text-slate-500">
-                    <div className="flex items-center gap-2 truncate max-w-[80%]">
-                      <FileText className="w-4 h-4 text-[#1E3A5F] flex-shrink-0" />
-                      <span className="font-medium text-slate-700 truncate">
-                        {attachedPdf.name}
-                      </span>
-                      <span className="text-slate-400 font-mono text-[11px]">
-                        ({formatFileSize(attachedPdf.size)})
-                      </span>
+
+                  <div className="flex flex-wrap items-center justify-between w-full py-2.5 px-4 bg-slate-50 text-xs text-slate-500">
+                    <div className="flex items-center gap-1.5 text-slate-600 text-[11px]">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Arquivo processado localmente no navegador com total privacidade.</span>
                     </div>
                     <span className="text-[11px] text-slate-400">Disponível nesta sessão</span>
                   </div>

@@ -85,6 +85,8 @@ export default function Index() {
     const nextState = { ...DEFAULT_CALCULATOR_STATE }
     setState(nextState)
     setIsDocumentMode(false)
+    clearAttachedPdf()
+    setAttachedPdf(null)
     const newQuery = serializeStateToUrl(nextState)
     window.history.replaceState(null, '', `${window.location.pathname}${newQuery}`)
     toast.info('Valores redefinidos para os padrões da referência.')

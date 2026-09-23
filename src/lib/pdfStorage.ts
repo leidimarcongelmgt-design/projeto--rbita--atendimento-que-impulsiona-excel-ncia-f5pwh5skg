@@ -29,31 +29,48 @@ export function loadPersistedPdf(): AttachedPdf | null {
     return memoryPdf
   }
 
+  if (typeof window === 'undefined' || typeof sessionStorage === 'undefined') {
+    return null
+  }
+
   try {
     const metaStr = sessionStorage.getItem(STORAGE_KEY)
     const base64 = sessionStorage.getItem(STORAGE_DATA_KEY)
     if (metaStr && base64) {
-      const meta = JSON.parse(metaStr) as { name: string; size: number; uploadedAt: string }
-      // Convert base64 data url back to Blob
-      const byteCharacters = atob(base64.split(',')[1] || '')
-      const byteNumbers = new Array(byteCharacters.length)
+      const meta = JSON.parse(metaStr) as { name?: string; size?: number; uploadedAt?: string }
+      if (!meta || !meta.name) {
+        clearAttachedPdf()
+        return null
+      }
+
+      // Convert base64 data url back to Blob safely
+      const parts = base64.split(',')
+      const base64Content = parts[1] || parts[0] || ''
+      const byteCharacters = atob(base64Content)
+      const byteNumbers = new Uint8Array(byteCharacters.length)
       for (let i = 0; i < byteCharacters.length; i++) {
         byteNumbers[i] = byteCharacters.charCodeAt(i)
       }
-      const byteArray = new Uint8Array(byteNumbers)
-      const blob = new Blob([byteArray], { type: 'application/pdf' })
+      const blob = new Blob([byteNumbers], { type: 'application/pdf' })
       const blobUrl = URL.createObjectURL(blob)
 
       memoryPdf = {
         name: meta.name,
-        size: meta.size,
+        size: typeof meta.size === 'number' ? meta.size : byteNumbers.length,
         blobUrl,
-        uploadedAt: meta.uploadedAt,
+        uploadedAt: meta.uploadedAt || new Date().toISOString(),
       }
       return memoryPdf
     }
-  } catch {
-    // sessionStorage failed or unsupported
+  } catch (err) {
+    // sessionStorage failed, corrupted data, or quota issue - clean up smoothly
+    console.warn('Falha ao restaurar PDF anexado da sessão:', err)
+    try {
+      sessionStorage.removeItem(STORAGE_KEY)
+      sessionStorage.removeItem(STORAGE_DATA_KEY)
+    } catch {
+      // ignore
+    }
   }
 
   return null
