@@ -486,22 +486,80 @@ export function parseClientDataFromPdfText(
   // Priority 1: High-specificity Client/Tomador/Destinatário/Sacado labeled patterns
   // E.g.: "Tomador do Serviço: EMPRESA CLIENTE LTDA", "Destinatário/Remetente: FULANO DE TAL",
   // "Nome / Razão Social do Tomador: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA", "Sacado: NOME CLIENTE"
-  const explicitClientNameRegexes = [
-    /(?:TOMADOR(?:\s+DE\s+SERVI[ÇC]OS?)?|DESTINAT[ÁA]RIO(?:\s*\/\s*REMETENTE)?|SACADO|PAGADOR|CONSUMIDOR|CLIENTE|CONTRATANTE)[\s:]+(?:NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|RAZ[ÃA]O\s*SOCIAL)?[:\s\-–—]+([^\n\r]{3,120})/i,
-    /(?:NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|RAZ[ÃA]O\s*SOCIAL)\s+(?:DO\s+)?(?:TOMADOR|DESTINAT[ÁA]RIO|CLIENTE|SACADO|CONSUMIDOR)[:\s\-–—]+([^\n\r]{3,120})/i,
-    /NOME\s+DO\s+CLIENTE[:\s\-–—]+([^\n\r]{3,120})/i,
-    /(?:^|\b)(?:TOMADOR|DESTINAT[ÁA]RIO|SACADO|PAGADOR|CLIENTE)[:\s\-–—]+([^\n\r]{3,120})/i,
-  ]
+  // Priority 0: Explicit "Nome Empresarial" inside client section or explicit client patterns
+  // E.g.: "Nome Empresarial: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA"
+  // or line 1: "Nome Empresarial", line 2: "RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA"
+  // Treated with highest priority when within client section or paired with client context,
+  // strictly discarding issuer/prestador blocks.
+  const NOME_EMPRESARIAL_INLINE_REGEX =
+    /(?:(?:TOMADOR(?:\s+DE\s+SERVI[ÇC]OS?)?|DESTINAT[ÁA]RIO(?:\s*\/\s*REMETENTE)?|SACADO|PAGADOR|CONSUMIDOR|CLIENTE|CONTRATANTE)[\s:]+)?NOME\s+EMPRESARIAL(?:\s+DO\s+(?:TOMADOR|DESTINAT[ÁA]RIO|CLIENTE|SACADO))?[:\s\-–—]+([^\n\r]{3,120})/i
 
-  // Priority 1 scan in full text
-  for (const regex of explicitClientNameRegexes) {
+  const NOME_EMPRESARIAL_HEADER_ONLY_REGEX =
+    /^(?:(?:TOMADOR(?:\s+DE\s+SERVI[ÇC]OS?)?|DESTINAT[ÁA]RIO(?:\s*\/\s*REMETENTE)?|SACADO|PAGADOR|CONSUMIDOR|CLIENTE)[\s:]+)?NOME\s+EMPRESARIAL(?:\s+DO\s+(?:TOMADOR|DESTINAT[ÁA]RIO|CLIENTE|SACADO))?[:\-–—]?$/i
+
+  // 0.a) Scan inside clientSectionLines first if client section was detected
+  if (clientSectionLines.length > 0) {
+    for (let i = 0; i < clientSectionLines.length; i++) {
+      const line = clientSectionLines[i]
+      if (ISSUER_HEADER_REGEX.test(line) && !CLIENT_HEADER_REGEX.test(line)) continue
+
+      // Inline: "Nome Empresarial: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA"
+      const match = NOME_EMPRESARIAL_INLINE_REGEX.exec(line)
+      if (match && match[1]) {
+        let candidate = cleanNameCandidate(match[1])
+        if (!isExcludedGenericTerm(candidate) && candidate.length >= 3) {
+          candidate = mergeWrappedNameLines(candidate, clientSectionLines, i)
+          detectedNome = candidate
+          nomeSnippet = line
+          nomeConfidence = 'high'
+          const fullIdx = lines.indexOf(line)
+          if (fullIdx !== -1) detectedNomeLineIndex = fullIdx
+          break
+        }
+      }
+
+      // Next line: "Nome Empresarial" / line+1: "RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA"
+      if (NOME_EMPRESARIAL_HEADER_ONLY_REGEX.test(line)) {
+        if (i + 1 < clientSectionLines.length) {
+          const nextLine = clientSectionLines[i + 1].trim()
+          let candidate = cleanNameCandidate(nextLine)
+          if (!isExcludedGenericTerm(candidate) && candidate.length >= 3) {
+            candidate = mergeWrappedNameLines(candidate, clientSectionLines, i + 1)
+            detectedNome = candidate
+            nomeSnippet = `${line} -> ${nextLine}`
+            nomeConfidence = 'high'
+            const fullIdx = lines.indexOf(nextLine)
+            if (fullIdx !== -1) detectedNomeLineIndex = fullIdx
+            break
+          }
+        }
+      }
+    }
+  }
+
+  // 0.b) If not in clientSectionLines (or clientSectionLines not isolated), scan all lines outside issuer block
+  if (!detectedNome) {
+    let inIssuerBlock = false
+    let inClientBlock = false
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
-      // Don't match lines that are clearly PRESTADOR / EMITENTE headers
+
       if (ISSUER_HEADER_REGEX.test(line) && !CLIENT_HEADER_REGEX.test(line)) {
-        continue
+        inIssuerBlock = true
+        inClientBlock = false
+      } else if (CLIENT_HEADER_REGEX.test(line)) {
+        inIssuerBlock = false
+        inClientBlock = true
+      } else if (SECTION_BOUNDARY_REGEX.test(line) && inClientBlock) {
+        inClientBlock = false
       }
-      const match = regex.exec(line)
+
+      // Never extract client name from within issuer section
+      if (inIssuerBlock) continue
+
+      // Inline match for Nome Empresarial
+      const match = NOME_EMPRESARIAL_INLINE_REGEX.exec(line)
       if (match && match[1]) {
         let candidate = cleanNameCandidate(match[1])
         if (!isExcludedGenericTerm(candidate) && candidate.length >= 3) {
@@ -513,14 +571,65 @@ export function parseClientDataFromPdfText(
           break
         }
       }
+
+      // Next line match for Nome Empresarial
+      if (NOME_EMPRESARIAL_HEADER_ONLY_REGEX.test(line)) {
+        if (i + 1 < lines.length) {
+          const nextLine = lines[i + 1].trim()
+          let candidate = cleanNameCandidate(nextLine)
+          if (!isExcludedGenericTerm(candidate) && candidate.length >= 3) {
+            candidate = mergeWrappedNameLines(candidate, lines, i + 1)
+            detectedNome = candidate
+            nomeSnippet = `${line} -> ${nextLine}`
+            nomeConfidence = 'high'
+            detectedNomeLineIndex = i + 1
+            break
+          }
+        }
+      }
     }
-    if (detectedNome) break
   }
 
-  // Priority 2: If we identified a clientSectionText, search inside it for "Nome/Razão Social" or multi-line patterns
+  // Priority 1: High-specificity Client/Tomador/Destinatário/Sacado labeled patterns
+  // E.g.: "Tomador do Serviço: EMPRESA CLIENTE LTDA", "Destinatário/Remetente: FULANO DE TAL",
+  // "Nome / Razão Social do Tomador: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA", "Sacado: NOME CLIENTE"
+  const explicitClientNameRegexes = [
+    /(?:TOMADOR(?:\s+DE\s+SERVI[ÇC]OS?)?|DESTINAT[ÁA]RIO(?:\s*\/\s*REMETENTE)?|SACADO|PAGADOR|CONSUMIDOR|CLIENTE|CONTRATANTE)[\s:]+(?:NOME\s+EMPRESARIAL|NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|RAZ[ÃA]O\s*SOCIAL)?[:\s\-–—]+([^\n\r]{3,120})/i,
+    /(?:NOME\s+EMPRESARIAL|NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|RAZ[ÃA]O\s*SOCIAL)\s+(?:DO\s+)?(?:TOMADOR|DESTINAT[ÁA]RIO|CLIENTE|SACADO|CONSUMIDOR)[:\s\-–—]+([^\n\r]{3,120})/i,
+    /NOME\s+DO\s+CLIENTE[:\s\-–—]+([^\n\r]{3,120})/i,
+    /(?:^|\b)(?:TOMADOR|DESTINAT[ÁA]RIO|SACADO|PAGADOR|CLIENTE)[:\s\-–—]+([^\n\r]{3,120})/i,
+  ]
+
+  // Priority 1 scan in full text
+  if (!detectedNome) {
+    for (const regex of explicitClientNameRegexes) {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]
+        // Don't match lines that are clearly PRESTADOR / EMITENTE headers
+        if (ISSUER_HEADER_REGEX.test(line) && !CLIENT_HEADER_REGEX.test(line)) {
+          continue
+        }
+        const match = regex.exec(line)
+        if (match && match[1]) {
+          let candidate = cleanNameCandidate(match[1])
+          if (!isExcludedGenericTerm(candidate) && candidate.length >= 3) {
+            candidate = mergeWrappedNameLines(candidate, lines, i)
+            detectedNome = candidate
+            nomeSnippet = line
+            nomeConfidence = 'high'
+            detectedNomeLineIndex = i
+            break
+          }
+        }
+      }
+      if (detectedNome) break
+    }
+  }
+
+  // Priority 2: If we identified a clientSectionText, search inside it for "Nome Empresarial", "Razão Social", "Nome/Razão Social" or multi-line patterns
   if (!detectedNome && clientSectionLines.length > 0) {
     const clientBlockNameRegex =
-      /(?:RAZ[ÃA]O\s*SOCIAL|NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|NOME\s+EMPRESARIAL|NOME)[:\s\-–—]+([^\n\r]{3,120})/i
+      /(?:NOME\s+EMPRESARIAL|RAZ[ÃA]O\s*SOCIAL|NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|NOME)[:\s\-–—]+([^\n\r]{3,120})/i
 
     for (let i = 0; i < clientSectionLines.length; i++) {
       const line = clientSectionLines[i]
@@ -542,10 +651,10 @@ export function parseClientDataFromPdfText(
       }
 
       // Next-line pattern inside client block:
-      // Line i: "Razão Social:" or "Nome / Razão Social"
+      // Line i: "Nome Empresarial", "Razão Social:" or "Nome / Razão Social"
       // Line i+1: "RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA"
       if (
-        /(?:RAZ[ÃA]O\s*SOCIAL|NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|NOME\s+EMPRESARIAL)[:]?$/i.test(
+        /(?:NOME\s+EMPRESARIAL|RAZ[ÃA]O\s*SOCIAL|NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|NOME)[:]?$/i.test(
           line,
         )
       ) {

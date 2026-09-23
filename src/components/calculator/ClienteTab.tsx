@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react'
+import React, { useRef, useState, useCallback, useEffect } from 'react'
 import { CalculatorState } from '@/types/calculator'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -32,6 +32,7 @@ import { formatPhoneBR } from '@/lib/calculatorState'
 import { AttachedPdf, formatFileSize, getAttachedPdfArrayBuffer } from '@/lib/pdfStorage'
 import { extractTextFromPdf } from '@/lib/pdfTextExtractor'
 import { parseClientDataFromPdfText, ClientExtractionResult } from '@/lib/clientDataParser'
+import { runClientParserSelfCheck } from '@/lib/clientDataParser.test'
 import { PdfDataReviewModal } from './PdfDataReviewModal'
 import { PdfPasswordDialog } from './PdfPasswordDialog'
 import { toast } from 'sonner'
@@ -176,6 +177,14 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
   const handleOpenPasswordPrompt = useCallback(() => {
     setPasswordDialogOpen(true)
     setPasswordError('')
+  }, [])
+
+  // Self-check dos cenários do parser ao carregar a aba
+  useEffect(() => {
+    const check = runClientParserSelfCheck()
+    if (!check.passed) {
+      console.warn('[clientDataParser] Falha na auto-checagem de regressão:', check.results)
+    }
   }, [])
 
   // Trigger re-extraction manually on currently attached PDF

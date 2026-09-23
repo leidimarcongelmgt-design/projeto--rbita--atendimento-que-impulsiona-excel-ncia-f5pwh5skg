@@ -282,5 +282,91 @@ export function runClientParserSelfCheck(): { passed: boolean; results: string[]
     results.push(`FALHA: Cenário 13 - obteve nome: ${n13}`)
   }
 
+  // Teste 14: Nome sob rótulo "Nome Empresarial" na mesma linha dentro do tomador
+  const testInvoice14 = `
+    PRESTADOR DE SERVIÇOS
+    Razão Social: TECNOLOGIA E SERVICOS LTDA
+    CNPJ: 12.345.678/0001-90
+
+    TOMADOR DO SERVIÇO
+    Nome Empresarial: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA
+    CNPJ: 45.987.654/0001-88
+    Endereço: RUA DAS FLORES, 500
+  `
+  const r14 = parseClientDataFromPdfText(testInvoice14, DEFAULT_CALCULATOR_STATE)
+  const n14 = r14.fields.find((f) => f.key === 'clienteNome')?.value
+  const c14 = r14.fields.find((f) => f.key === 'clienteCnpj')?.value
+  if (n14 === 'RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA' && c14 === '45.987.654/0001-88') {
+    results.push('OK: Cenário 14 (Nome Empresarial na mesma linha)')
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 14 - obteve nome: ${n14}, cnpj: ${c14}`)
+  }
+
+  // Teste 15: Nome sob rótulo "Nome Empresarial" em linha separada dentro do tomador
+  const testInvoice15 = `
+    DADOS DO EMITENTE
+    EMITENTE: AUDITORIA E CONSULTORIA LTDA
+    CNPJ: 01.999.888/0001-77
+
+    DADOS DO TOMADOR
+    Nome Empresarial
+    RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA
+    CNPJ/CPF: 45.987.654/0001-88
+  `
+  const r15 = parseClientDataFromPdfText(testInvoice15, DEFAULT_CALCULATOR_STATE)
+  const n15 = r15.fields.find((f) => f.key === 'clienteNome')?.value
+  const c15 = r15.fields.find((f) => f.key === 'clienteCnpj')?.value
+  if (n15 === 'RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA' && c15 === '45.987.654/0001-88') {
+    results.push('OK: Cenário 15 (Nome Empresarial em linha separada)')
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 15 - obteve nome: ${n15}, cnpj: ${c15}`)
+  }
+
+  // Teste 16: Nome Empresarial com quebra em duas linhas e caracteres residuais
+  const testInvoice16 = `
+    PRESTADOR DE SERVIÇOS
+    CONSTRUTORA E ENGENHARIA LTDA
+    CNPJ: 11.222.333/0001-44
+
+    TOMADOR DE SERVIÇOS
+    Nome Empresarial:
+    RESIDENCIAL ESTRELA
+    INCORPORADORA SPE LTDA
+    CNPJ: 45.987.654/0001-88
+  `
+  const r16 = parseClientDataFromPdfText(testInvoice16, DEFAULT_CALCULATOR_STATE)
+  const n16 = r16.fields.find((f) => f.key === 'clienteNome')?.value
+  if (n16 === 'RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA') {
+    results.push('OK: Cenário 16 (Nome Empresarial em linha separada quebrado em duas linhas)')
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 16 - obteve nome: ${n16}`)
+  }
+
+  // Teste 17: Prestador possui "Razão Social" e Tomador possui "Nome Empresarial"
+  // Garante que o Nome Empresarial do tomador não seja confundido ou substituído pelo prestador
+  const testInvoice17 = `
+    IDENTIFICAÇÃO DO PRESTADOR DE SERVIÇOS
+    Nome / Razão Social: CONTABILIDADE INTEGRADA S/S
+    CNPJ: 98.765.432/0001-10
+
+    IDENTIFICAÇÃO DO TOMADOR DE SERVIÇOS
+    Nome Empresarial: : - RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA - :
+    CNPJ: 45.987.654/0001-88
+  `
+  const r17 = parseClientDataFromPdfText(testInvoice17, DEFAULT_CALCULATOR_STATE)
+  const n17 = r17.fields.find((f) => f.key === 'clienteNome')?.value
+  const c17 = r17.fields.find((f) => f.key === 'clienteCnpj')?.value
+  if (n17 === 'RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA' && c17 === '45.987.654/0001-88') {
+    results.push(
+      'OK: Cenário 17 (Prestador com Razão Social vs Tomador com Nome Empresarial pontuado)',
+    )
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 17 - obteve nome: ${n17}, cnpj: ${c17}`)
+  }
+
   return { passed, results }
 }
