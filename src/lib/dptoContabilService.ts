@@ -82,10 +82,18 @@ export function syncContabilFromEmpresas(
         contabilVal = String(emp.contabil).trim()
       }
 
+      let zonaVal = ''
+      if (existing && existing.zona !== undefined && existing.zona !== '') {
+        zonaVal = existing.zona
+      } else if (emp.zona !== '' && emp.zona !== null && emp.zona !== undefined) {
+        zonaVal = String(emp.zona).trim()
+      }
+
       return {
         id: existing?.id || `contabil-sync-${Date.now()}-${index}`,
         empresa: emp.empresas.trim(),
         cnpj: emp.cnpj ? formatCNPJ(emp.cnpj) : existing?.cnpj || '',
+        zona: zonaVal,
         contabil: contabilVal,
       }
     })
@@ -101,11 +109,13 @@ export function mapContabilHeaders(headers: string[]): {
   empresaColIdx: number
   contabilColIdx: number
   cnpjColIdx: number
+  zonaColIdx: number
   unrecognizedColumns: string[]
 } {
   let empresaColIdx = -1
   let contabilColIdx = -1
   let cnpjColIdx = -1
+  let zonaColIdx = -1
   const unrecognizedColumns: string[] = []
 
   headers.forEach((rawHeader, colIdx) => {
@@ -134,12 +144,17 @@ export function mapContabilHeaders(headers: string[]): {
       (normalized === 'cnpj' || normalized === 'cnpj cpf' || normalized === 'cpf cnpj')
     ) {
       cnpjColIdx = colIdx
+    } else if (
+      zonaColIdx === -1 &&
+      (normalized === 'zona' || normalized.startsWith('zona ') || normalized.startsWith('zona'))
+    ) {
+      zonaColIdx = colIdx
     } else {
       unrecognizedColumns.push(rawHeader)
     }
   })
 
-  return { empresaColIdx, contabilColIdx, cnpjColIdx, unrecognizedColumns }
+  return { empresaColIdx, contabilColIdx, cnpjColIdx, zonaColIdx, unrecognizedColumns }
 }
 
 /**
@@ -170,7 +185,7 @@ export async function parseDptoContabilFile(file: File): Promise<{
   }
 
   const headerRow = (rawData[0] || []).map((c) => String(c ?? ''))
-  const { empresaColIdx, contabilColIdx, cnpjColIdx, unrecognizedColumns } =
+  const { empresaColIdx, contabilColIdx, cnpjColIdx, zonaColIdx, unrecognizedColumns } =
     mapContabilHeaders(headerRow)
 
   // Se não identificou coluna de empresa, não é possível associar
@@ -191,6 +206,7 @@ export async function parseDptoContabilFile(file: File): Promise<{
     const rawEmpresa = rawRow[empresaColIdx]
     const rawContabil = contabilColIdx !== -1 ? rawRow[contabilColIdx] : ''
     const rawCnpj = cnpjColIdx !== -1 ? rawRow[cnpjColIdx] : ''
+    const rawZona = zonaColIdx !== -1 ? rawRow[zonaColIdx] : ''
 
     const empresaStr = (rawEmpresa ?? '').toString().trim()
     if (!empresaStr) {
@@ -202,12 +218,14 @@ export async function parseDptoContabilFile(file: File): Promise<{
       rawContabil !== null && rawContabil !== undefined ? String(rawContabil).trim() : ''
 
     const cnpjStr = rawCnpj ? formatCNPJ(String(rawCnpj).trim()) : ''
+    const zonaStr = rawZona !== null && rawZona !== undefined ? String(rawZona).trim() : ''
 
     const id = `contabil-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 7)}`
     rows.push({
       id,
       empresa: empresaStr,
       cnpj: cnpjStr,
+      zona: zonaStr,
       contabil: contabilStr,
     })
   }
@@ -265,6 +283,8 @@ export function mergeDptoContabilRows(
       result[targetIdx] = {
         ...result[targetIdx],
         contabil: item.contabil !== '' ? item.contabil : result[targetIdx].contabil,
+        zona:
+          item.zona !== undefined && item.zona !== '' ? item.zona : result[targetIdx].zona || '',
         cnpj: item.cnpj || result[targetIdx].cnpj || '',
       }
       updatedCount++

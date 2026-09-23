@@ -2,6 +2,7 @@ export interface DptoContabilRow {
   id: string
   empresa: string
   cnpj?: string
+  zona?: string
   contabil: string
 }
 

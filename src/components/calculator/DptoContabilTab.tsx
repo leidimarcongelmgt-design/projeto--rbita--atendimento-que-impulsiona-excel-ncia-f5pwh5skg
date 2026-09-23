@@ -58,7 +58,7 @@ interface DptoContabilTabProps {
   empresas: EmpresaRow[]
 }
 
-type SortField = 'empresa' | 'contabil'
+type SortField = 'empresa' | 'cnpj' | 'zona' | 'contabil'
 type SortConfig = {
   field: SortField
   direction: 'asc' | 'desc'
@@ -66,14 +66,18 @@ type SortConfig = {
 
 const DEFAULT_DPTO_CONTABIL_COL_WIDTHS: { [key: string]: number } = {
   index: 48,
-  empresa: 460,
-  contabil: 240,
+  empresa: 340,
+  cnpj: 160,
+  zona: 130,
+  contabil: 220,
   acoes: 64,
 }
 
 const MIN_DPTO_CONTABIL_COL_WIDTHS: { [key: string]: number } = {
   index: 40,
   empresa: 150,
+  cnpj: 120,
+  zona: 80,
   contabil: 100,
   acoes: 50,
 }
@@ -111,6 +115,7 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [newEmpresaNome, setNewEmpresaNome] = useState('')
   const [newEmpresaCnpj, setNewEmpresaCnpj] = useState('')
+  const [newZona, setNewZona] = useState('')
   const [newContabil, setNewContabil] = useState('')
 
   // Resumo da última importação
@@ -138,7 +143,7 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
 
       if (parsed.rows.length === 0) {
         toast.error(
-          'Nenhum registro válido encontrado. Certifique-se de que a planilha possui as colunas EMPRESAS e CONTÁBIL.',
+          'Nenhum registro válido encontrado. Certifique-se de que a planilha possui a coluna EMPRESAS.',
         )
         if (parsed.ignoredRowsCount > 0) {
           toast.warning(
@@ -232,6 +237,18 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
     onRowsChange(updated)
   }
 
+  // Edição inline de ZONA
+  const handleZonaChange = (id: string, value: string) => {
+    const updated = rows.map((r) => (r.id === id ? { ...r, zona: value } : r))
+    onRowsChange(updated)
+  }
+
+  // Edição inline de CNPJ
+  const handleCnpjChange = (id: string, value: string) => {
+    const updated = rows.map((r) => (r.id === id ? { ...r, cnpj: value } : r))
+    onRowsChange(updated)
+  }
+
   // Edição inline do nome da empresa
   const handleEmpresaChange = (id: string, value: string) => {
     const updated = rows.map((r) => (r.id === id ? { ...r, empresa: value } : r))
@@ -251,12 +268,14 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
       id: `contabil-manual-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       empresa: trimmedNome,
       cnpj: newEmpresaCnpj.trim(),
+      zona: newZona.trim(),
       contabil: newContabil.trim(),
     }
 
     onRowsChange([...rows, newRow])
     setNewEmpresaNome('')
     setNewEmpresaCnpj('')
+    setNewZona('')
     setNewContabil('')
     setAddModalOpen(false)
     toast.success(`Empresa "${trimmedNome}" adicionada.`)
@@ -318,8 +337,9 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
       list = list.filter((r) => {
         const matchEmpresa = r.empresa.toLowerCase().includes(q)
         const matchContabil = (r.contabil || '').toLowerCase().includes(q)
+        const matchZona = (r.zona || '').toLowerCase().includes(q)
         const matchCnpj = r.cnpj ? r.cnpj.toLowerCase().includes(q) : false
-        return matchEmpresa || matchContabil || matchCnpj
+        return matchEmpresa || matchContabil || matchZona || matchCnpj
       })
     }
 
@@ -349,7 +369,7 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
                   <CardTitle className="text-lg font-bold text-slate-900">Dpto. Contábil</CardTitle>
                 </div>
                 <CardDescription className="text-slate-500 mt-1">
-                  Gerencie as informações da coluna Contábil por empresa.
+                  Gerencie as informações de empresas, CNPJ, Zona e Contábil.
                 </CardDescription>
               </div>
 
@@ -369,7 +389,7 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
                     variant="outline"
                     onClick={handleSyncFromEmpresas}
                     className="text-xs h-9 text-[#1E3A5F] hover:bg-slate-100 border-slate-300 gap-1.5"
-                    title="Preencher com o nome, CNPJ e valor contábil das empresas cadastradas na aba Empresas"
+                    title="Preencher com o nome, CNPJ, Zona e valor contábil das empresas cadastradas na aba Empresas"
                   >
                     <RefreshCw className="w-3.5 h-3.5 text-[#1E3A5F]" />
                     <span>Carregar de Empresas ({empresas.length})</span>
@@ -421,7 +441,7 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
                   </span>
                 </div>
                 <span className="text-[11px] text-slate-500">
-                  Apenas EMPRESAS e CONTÁBIL são gerenciados aqui
+                  EMPRESAS, CNPJ, ZONA e CONTÁBIL gerenciados nesta aba
                 </span>
               </div>
 
@@ -429,6 +449,12 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
                 <div className="inline-flex min-w-full text-[11px] font-bold text-white tracking-wider rounded overflow-hidden shadow-xs border border-purple-950">
                   <div className="bg-[#380638] px-4 py-2 text-left flex-1 border-r border-purple-950/40">
                     EMPRESAS
+                  </div>
+                  <div className="bg-[#380638] px-4 py-2 text-left w-44 border-r border-purple-950/40">
+                    CNPJ
+                  </div>
+                  <div className="bg-[#380638] px-4 py-2 text-left w-36 border-r border-purple-950/40">
+                    ZONA
                   </div>
                   <div className="bg-[#380638] px-4 py-2 text-left w-56">CONTÁBIL</div>
                 </div>
@@ -505,7 +531,7 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <Input
                   type="text"
-                  placeholder="Filtrar por empresa ou contábil..."
+                  placeholder="Filtrar por empresa, CNPJ, zona ou contábil..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="h-9 pl-9 pr-8 text-xs bg-[#F9FAFB]"
@@ -547,8 +573,8 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
                   Nenhum registro no Dpto. Contábil
                 </h3>
                 <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 mb-5">
-                  Importe uma planilha contendo as colunas EMPRESAS e CONTÁBIL, carregue os dados da
-                  coluna contábil já existentes na aba Empresas ou adicione manualmente.
+                  Importe uma planilha com as colunas EMPRESAS, CNPJ, ZONA e CONTÁBIL, carregue os
+                  dados já existentes na aba Empresas ou adicione manualmente.
                 </p>
                 <div className="flex items-center justify-center gap-3 flex-wrap">
                   {empresas.length > 0 && (
@@ -620,6 +646,52 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
                           </div>
                         </ResizableTh>
                         <ResizableTh
+                          width={widths.cnpj}
+                          minWidth={MIN_DPTO_CONTABIL_COL_WIDTHS.cnpj}
+                          resizable={true}
+                          onResizeStart={(e) => startResize(e, 'cnpj')}
+                          onHeaderClick={() => handleSort('cnpj')}
+                          isDraggingRef={isDraggingRef}
+                          className="py-2.5 px-3 font-bold uppercase tracking-wider cursor-pointer hover:bg-purple-900/60 transition-colors border-r border-purple-950/40 overflow-hidden"
+                          title="Clique para ordenar por CNPJ"
+                        >
+                          <div className="inline-flex items-center gap-1.5 w-full overflow-hidden">
+                            <span className="truncate">CNPJ</span>
+                            {sortConfig?.field === 'cnpj' ? (
+                              sortConfig.direction === 'asc' ? (
+                                <ArrowUp className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
+                              ) : (
+                                <ArrowDown className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
+                              )
+                            ) : (
+                              <ArrowUpDown className="w-3 h-3 text-purple-300 opacity-60 flex-shrink-0" />
+                            )}
+                          </div>
+                        </ResizableTh>
+                        <ResizableTh
+                          width={widths.zona}
+                          minWidth={MIN_DPTO_CONTABIL_COL_WIDTHS.zona}
+                          resizable={true}
+                          onResizeStart={(e) => startResize(e, 'zona')}
+                          onHeaderClick={() => handleSort('zona')}
+                          isDraggingRef={isDraggingRef}
+                          className="py-2.5 px-3 font-bold uppercase tracking-wider cursor-pointer hover:bg-purple-900/60 transition-colors border-r border-purple-950/40 overflow-hidden"
+                          title="Clique para ordenar por Zona"
+                        >
+                          <div className="inline-flex items-center gap-1.5 w-full overflow-hidden">
+                            <span className="truncate">ZONA</span>
+                            {sortConfig?.field === 'zona' ? (
+                              sortConfig.direction === 'asc' ? (
+                                <ArrowUp className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
+                              ) : (
+                                <ArrowDown className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
+                              )
+                            ) : (
+                              <ArrowUpDown className="w-3 h-3 text-purple-300 opacity-60 flex-shrink-0" />
+                            )}
+                          </div>
+                        </ResizableTh>
+                        <ResizableTh
                           width={widths.contabil}
                           minWidth={MIN_DPTO_CONTABIL_COL_WIDTHS.contabil}
                           resizable={true}
@@ -656,7 +728,7 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
                     <tbody className="divide-y divide-slate-200 bg-white">
                       {filteredAndSortedRows.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="py-8 text-center text-slate-500">
+                          <td colSpan={6} className="py-8 text-center text-slate-500">
                             Nenhum registro encontrado para o filtro "{searchQuery}".
                           </td>
                         </tr>
@@ -672,6 +744,24 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
                                 onChange={(e) => handleEmpresaChange(row.id, e.target.value)}
                                 className="h-8 text-xs font-medium text-slate-900 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
                                 placeholder="Nome da empresa"
+                              />
+                            </td>
+                            <td className="py-2 px-3 border-r border-slate-100 overflow-hidden">
+                              <Input
+                                type="text"
+                                value={row.cnpj || ''}
+                                onChange={(e) => handleCnpjChange(row.id, e.target.value)}
+                                className="h-8 text-xs font-mono text-slate-700 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
+                                placeholder="00.000.000/0000-00"
+                              />
+                            </td>
+                            <td className="py-2 px-3 border-r border-slate-100 overflow-hidden">
+                              <Input
+                                type="text"
+                                value={row.zona || ''}
+                                onChange={(e) => handleZonaChange(row.id, e.target.value)}
+                                className="h-8 text-xs text-slate-800 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
+                                placeholder="Zona..."
                               />
                             </td>
                             <td className="py-2 px-3 border-r border-slate-100 overflow-hidden">
@@ -714,6 +804,20 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
                           <td className="py-2.5 px-3 uppercase tracking-wider text-[11px] text-slate-600 truncate">
                             Total Geral ({filteredAndSortedRows.length} empresa
                             {filteredAndSortedRows.length === 1 ? '' : 's'})
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-500 text-[11px] truncate">
+                            {
+                              filteredAndSortedRows.filter((r) => (r.cnpj || '').trim() !== '')
+                                .length
+                            }{' '}
+                            com CNPJ
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-500 text-[11px] truncate">
+                            {
+                              filteredAndSortedRows.filter((r) => (r.zona || '').trim() !== '')
+                                .length
+                            }{' '}
+                            com Zona
                           </td>
                           <td className="py-2.5 px-3 text-xs text-[#1E3A5F] font-semibold truncate">
                             {
@@ -830,6 +934,23 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
                   placeholder="00.000.000/0000-00"
                   value={newEmpresaCnpj}
                   onChange={(e) => setNewEmpresaCnpj(e.target.value)}
+                  className="h-9 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="manualContabilZona"
+                  className="text-xs font-semibold text-slate-700"
+                >
+                  ZONA (opcional)
+                </Label>
+                <Input
+                  id="manualContabilZona"
+                  type="text"
+                  placeholder="Ex: 01, ZONA NORTE, ZONA 2..."
+                  value={newZona}
+                  onChange={(e) => setNewZona(e.target.value)}
                   className="h-9 text-xs"
                 />
               </div>
