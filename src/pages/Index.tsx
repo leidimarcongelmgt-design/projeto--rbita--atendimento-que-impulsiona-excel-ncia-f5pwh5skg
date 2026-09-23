@@ -5,11 +5,14 @@ import { Header } from '@/components/calculator/Header'
 import { IdentificacaoTab } from '@/components/calculator/IdentificacaoTab'
 import { EmpresasTab } from '@/components/calculator/EmpresasTab'
 import { DptoPessoalTab } from '@/components/calculator/DptoPessoalTab'
+import { DptoFiscalTab } from '@/components/calculator/DptoFiscalTab'
 import { DocumentView } from '@/components/calculator/DocumentView'
 import { EmpresaRow } from '@/types/empresa'
 import { DptoPessoalRow } from '@/types/dptoPessoal'
+import { DptoFiscalRow } from '@/types/dptoFiscal'
 import { loadEmpresasFromStorage, clearEmpresasStorage } from '@/lib/empresasService'
 import { loadDptoPessoalFromStorage, clearDptoPessoalStorage } from '@/lib/dptoPessoalService'
+import { loadDptoFiscalFromStorage, clearDptoFiscalStorage } from '@/lib/dptoFiscalService'
 import { toast } from 'sonner'
 
 export default function Index() {
@@ -26,6 +29,11 @@ export default function Index() {
   // Dpto. Pessoal persistido em sessionStorage (não poluindo a URL)
   const [dptoRows, setDptoRows] = useState<DptoPessoalRow[]>(() => {
     return loadDptoPessoalFromStorage()
+  })
+
+  // Dpto. Fiscal persistido em sessionStorage (não poluindo a URL)
+  const [fiscalRows, setFiscalRows] = useState<DptoFiscalRow[]>(() => {
+    return loadDptoFiscalFromStorage()
   })
 
   const [hasCopied, setHasCopied] = useState(false)
@@ -64,8 +72,10 @@ export default function Index() {
     setState(nextState)
     setEmpresas([])
     setDptoRows([])
+    setFiscalRows([])
     clearEmpresasStorage()
     clearDptoPessoalStorage()
+    clearDptoFiscalStorage()
     setIsDocumentMode(false)
     const newQuery = serializeStateToUrl(nextState)
     window.history.replaceState(null, '', `${window.location.pathname}${newQuery}`)
@@ -121,6 +131,9 @@ export default function Index() {
             )}
             {state.tab === 'dpto-pessoal' && (
               <DptoPessoalTab rows={dptoRows} onRowsChange={setDptoRows} empresas={empresas} />
+            )}
+            {state.tab === 'fiscal-pesos' && (
+              <DptoFiscalTab rows={fiscalRows} onRowsChange={setFiscalRows} empresas={empresas} />
             )}
           </div>
         )}

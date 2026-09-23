@@ -23,7 +23,8 @@ export const Header: React.FC<HeaderProps> = ({
   const tabs: { id: CalculatorState['tab']; label: string }[] = [
     { id: 'identificacao', label: 'Identificação' },
     { id: 'empresas', label: 'Empresas' },
-    { id: 'dpto-pessoal', label: 'PESOS' },
+    { id: 'dpto-pessoal', label: 'Dpto. Pessoal - Pesos' },
+    { id: 'fiscal-pesos', label: 'Dpto. Fiscal - Pesos' },
   ]
 
   return (

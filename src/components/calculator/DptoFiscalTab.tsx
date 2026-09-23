@@ -1,12 +1,12 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react'
-import { DptoPessoalRow } from '@/types/dptoPessoal'
+import { DptoFiscalRow } from '@/types/dptoFiscal'
 import { EmpresaRow } from '@/types/empresa'
 import {
-  parseDptoPessoalFile,
-  mergeDptoRows,
-  saveDptoPessoalToStorage,
-  syncFromEmpresas,
-} from '@/lib/dptoPessoalService'
+  parseDptoFiscalFile,
+  mergeDptoFiscalRows,
+  saveDptoFiscalToStorage,
+  syncFiscalFromEmpresas,
+} from '@/lib/dptoFiscalService'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
-  Users,
+  Receipt,
   Upload,
   Trash2,
   Search,
@@ -46,23 +46,23 @@ import {
   X,
   Plus,
   RefreshCw,
-  FileSpreadsheet,
+  Scale,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
-interface DptoPessoalTabProps {
-  rows: DptoPessoalRow[]
-  onRowsChange: (rows: DptoPessoalRow[]) => void
+interface DptoFiscalTabProps {
+  rows: DptoFiscalRow[]
+  onRowsChange: (rows: DptoFiscalRow[]) => void
   empresas: EmpresaRow[]
 }
 
-type SortField = 'empresa' | 'numFunc'
+type SortField = 'empresa' | 'peso'
 type SortConfig = {
   field: SortField
   direction: 'asc' | 'desc'
 } | null
 
-export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChange, empresas }) => {
+export const DptoFiscalTab: React.FC<DptoFiscalTabProps> = ({ rows, onRowsChange, empresas }) => {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Busca e ordenação
@@ -71,7 +71,7 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
 
   // Diálogo de Conflito de Importação
   const [pendingFileRows, setPendingFileRows] = useState<{
-    rows: DptoPessoalRow[]
+    rows: DptoFiscalRow[]
     ignoredRowsCount: number
     unrecognizedColumns: string[]
   } | null>(null)
@@ -83,7 +83,8 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
   // Diálogo para Adicionar Nova Empresa Manualmente
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [newEmpresaNome, setNewEmpresaNome] = useState('')
-  const [newNumFunc, setNewNumFunc] = useState('')
+  const [newEmpresaCnpj, setNewEmpresaCnpj] = useState('')
+  const [newPeso, setNewPeso] = useState('')
 
   // Resumo da última importação
   const [lastImportSummary, setLastImportSummary] = useState<{
@@ -93,12 +94,12 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
     unrecognized: string[]
   } | null>(null)
 
-  // Persiste no sessionStorage sempre que a lista mudar
+  // Persiste no sessionStorage com chave própria distinta
   useEffect(() => {
-    saveDptoPessoalToStorage(rows)
+    saveDptoFiscalToStorage(rows)
   }, [rows])
 
-  // Trata o arquivo selecionado
+  // Trata o arquivo selecionado (.xlsx / .xls)
   const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -106,11 +107,11 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
     e.target.value = ''
 
     try {
-      const parsed = await parseDptoPessoalFile(file)
+      const parsed = await parseDptoFiscalFile(file)
 
       if (parsed.rows.length === 0) {
         toast.error(
-          'Nenhum registro válido encontrado. Certifique-se de que a planilha possui as colunas EMPRESAS e Nº FUNC.',
+          'Nenhum registro válido encontrado. Certifique-se de que a planilha possui as colunas EMPRESAS e PESO.',
         )
         if (parsed.ignoredRowsCount > 0) {
           toast.warning(
@@ -133,12 +134,12 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
   }
 
   const applyImport = (
-    incomingRows: DptoPessoalRow[],
+    incomingRows: DptoFiscalRow[],
     mode: 'replace' | 'append',
     ignoredCount = 0,
     unrecognizedCols: string[] = [],
   ) => {
-    const result = mergeDptoRows(rows, incomingRows, mode)
+    const result = mergeDptoFiscalRows(rows, incomingRows, mode)
     onRowsChange(result.rows)
 
     setLastImportSummary({
@@ -193,19 +194,19 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
       return
     }
 
-    const synced = syncFromEmpresas(empresas, rows)
+    const synced = syncFiscalFromEmpresas(empresas, rows)
     onRowsChange(synced)
     toast.success(`${synced.length} empresa(s) carregada(s) da aba Empresas com sucesso!`)
   }
 
-  // Edição inline do número de funcionários
-  const handleNumFuncChange = (id: string, value: string) => {
+  // Edição inline do PESO
+  const handlePesoChange = (id: string, value: string) => {
     const updated = rows.map((r) => {
       if (r.id !== id) return r
       const trimmed = value.trim()
-      if (trimmed === '') return { ...r, numFunc: '' }
+      if (trimmed === '') return { ...r, peso: '' }
       const parsed = Number(trimmed.replace(',', '.'))
-      return { ...r, numFunc: !isNaN(parsed) ? parsed : value }
+      return { ...r, peso: !isNaN(parsed) ? parsed : value }
     })
     onRowsChange(updated)
   }
@@ -225,21 +226,23 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
       return
     }
 
-    let numVal: number | string = ''
-    if (newNumFunc.trim() !== '') {
-      const parsed = Number(newNumFunc.trim().replace(',', '.'))
-      numVal = !isNaN(parsed) ? parsed : newNumFunc.trim()
+    let pesoVal: number | string = ''
+    if (newPeso.trim() !== '') {
+      const parsed = Number(newPeso.trim().replace(',', '.'))
+      pesoVal = !isNaN(parsed) ? parsed : newPeso.trim()
     }
 
-    const newRow: DptoPessoalRow = {
-      id: `dpto-manual-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    const newRow: DptoFiscalRow = {
+      id: `fiscal-manual-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       empresa: trimmedNome,
-      numFunc: numVal,
+      cnpj: newEmpresaCnpj.trim(),
+      peso: pesoVal,
     }
 
     onRowsChange([...rows, newRow])
     setNewEmpresaNome('')
-    setNewNumFunc('')
+    setNewEmpresaCnpj('')
+    setNewPeso('')
     setAddModalOpen(false)
     toast.success(`Empresa "${trimmedNome}" adicionada.`)
   }
@@ -256,7 +259,7 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
     onRowsChange([])
     setLastImportSummary(null)
     setClearDialogOpen(false)
-    toast.info('Lista do Dpto. Pessoal - Pesos limpa com sucesso.')
+    toast.info('Lista do Dpto. Fiscal - Pesos limpa com sucesso.')
   }
 
   // Alternar ordenação
@@ -272,11 +275,10 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
     })
   }
 
-  // Total de funcionários somados
-  const totalFuncionarios = useMemo(() => {
+  // Somatório dos Pesos
+  const totalPesos = useMemo(() => {
     return rows.reduce((acc, r) => {
-      const val =
-        typeof r.numFunc === 'number' ? r.numFunc : parseFloat(String(r.numFunc).replace(',', '.'))
+      const val = typeof r.peso === 'number' ? r.peso : parseFloat(String(r.peso).replace(',', '.'))
       return acc + (Number.isFinite(val) ? val : 0)
     }, 0)
   }, [rows])
@@ -289,23 +291,20 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
     if (q) {
       list = list.filter((r) => {
         const matchEmpresa = r.empresa.toLowerCase().includes(q)
-        const matchFunc = String(r.numFunc).toLowerCase().includes(q)
-        return matchEmpresa || matchFunc
+        const matchPeso = String(r.peso).toLowerCase().includes(q)
+        const matchCnpj = r.cnpj ? r.cnpj.toLowerCase().includes(q) : false
+        return matchEmpresa || matchPeso || matchCnpj
       })
     }
 
     if (sortConfig) {
       const { field, direction } = sortConfig
       list.sort((a, b) => {
-        if (field === 'numFunc') {
+        if (field === 'peso') {
           const numA =
-            typeof a.numFunc === 'number'
-              ? a.numFunc
-              : parseFloat(String(a.numFunc).replace(',', '.')) || 0
+            typeof a.peso === 'number' ? a.peso : parseFloat(String(a.peso).replace(',', '.')) || 0
           const numB =
-            typeof b.numFunc === 'number'
-              ? b.numFunc
-              : parseFloat(String(b.numFunc).replace(',', '.')) || 0
+            typeof b.peso === 'number' ? b.peso : parseFloat(String(b.peso).replace(',', '.')) || 0
           return direction === 'asc' ? numA - numB : numB - numA
         }
 
@@ -328,13 +327,13 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
-                  <Users className="w-5 h-5 text-[#1E3A5F]" />
+                  <Receipt className="w-5 h-5 text-[#1E3A5F]" />
                   <CardTitle className="text-lg font-bold text-slate-900">
-                    Dpto. Pessoal - Pesos
+                    Dpto. Fiscal - Pesos
                   </CardTitle>
                 </div>
                 <CardDescription className="text-slate-500 mt-1">
-                  Gerencie exclusivamente as informações de Nº de Funcionários por empresa.
+                  Gerencie exclusivamente as informações de Peso Fiscal por empresa.
                 </CardDescription>
               </div>
 
@@ -354,7 +353,7 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
                     variant="outline"
                     onClick={handleSyncFromEmpresas}
                     className="text-xs h-9 text-[#1E3A5F] hover:bg-slate-100 border-slate-300 gap-1.5"
-                    title="Preencher com as empresas já importadas na aba Empresas"
+                    title="Preencher com o nome e CNPJ das empresas já cadastradas na aba Empresas"
                   >
                     <RefreshCw className="w-3.5 h-3.5 text-[#1E3A5F]" />
                     <span>Carregar de Empresas ({empresas.length})</span>
@@ -406,7 +405,7 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
                   </span>
                 </div>
                 <span className="text-[11px] text-slate-500">
-                  Apenas EMPRESAS e Nº FUNC. são lidos e gerenciados aqui
+                  Apenas EMPRESAS e PESO são lidos e gerenciados aqui
                 </span>
               </div>
 
@@ -415,7 +414,7 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
                   <div className="bg-[#380638] px-4 py-2 text-left flex-1 border-r border-purple-950/40">
                     EMPRESAS
                   </div>
-                  <div className="bg-[#380638] px-4 py-2 text-right w-44">Nº FUNC.</div>
+                  <div className="bg-[#380638] px-4 py-2 text-right w-44">PESO</div>
                 </div>
               </div>
             </div>
@@ -467,15 +466,16 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
 
               <div className="p-4 rounded-lg border border-slate-200 bg-slate-50/60 flex items-center justify-between">
                 <div>
-                  <span className="text-xs text-slate-500 font-medium">
-                    Total Geral de Funcionários
-                  </span>
+                  <span className="text-xs text-slate-500 font-medium">Somatório dos Pesos</span>
                   <p className="text-2xl font-bold text-slate-900 mt-0.5">
-                    {totalFuncionarios.toLocaleString('pt-BR')}
+                    {totalPesos.toLocaleString('pt-BR', {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 2,
+                    })}
                   </p>
                 </div>
                 <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700">
-                  <Users className="w-5 h-5" />
+                  <Scale className="w-5 h-5" />
                 </div>
               </div>
             </div>
@@ -486,7 +486,7 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <Input
                   type="text"
-                  placeholder="Filtrar por empresa ou nº func..."
+                  placeholder="Filtrar por empresa ou peso..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="h-9 pl-9 pr-8 text-xs bg-[#F9FAFB]"
@@ -518,17 +518,17 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
               </div>
             </div>
 
-            {/* Tabela de Empresas e Nº Funcionários */}
+            {/* Tabela de Empresas e PESO */}
             {rows.length === 0 ? (
               <div className="border border-dashed border-slate-300 rounded-lg p-12 text-center bg-slate-50/50">
                 <div className="w-12 h-12 rounded-full bg-slate-200/80 flex items-center justify-center mx-auto mb-3 text-slate-500">
-                  <Users className="w-6 h-6" />
+                  <Scale className="w-6 h-6" />
                 </div>
                 <h3 className="text-sm font-semibold text-slate-800">
-                  Nenhum registro no Dpto. Pessoal - Pesos
+                  Nenhum registro no Dpto. Fiscal - Pesos
                 </h3>
                 <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 mb-5">
-                  Importe uma planilha contendo apenas as colunas EMPRESAS e Nº FUNC., carregue as
+                  Importe uma planilha contendo apenas as colunas EMPRESAS e PESO, carregue as
                   empresas já existentes na aba Empresas ou adicione manualmente.
                 </p>
                 <div className="flex items-center justify-center gap-3 flex-wrap">
@@ -590,13 +590,13 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
                           </div>
                         </th>
                         <th
-                          onClick={() => handleSort('numFunc')}
+                          onClick={() => handleSort('peso')}
                           className="py-2.5 px-3 font-bold uppercase tracking-wider cursor-pointer hover:bg-purple-900/60 transition-colors border-r border-purple-950/40 text-right w-56"
-                          title="Clique para ordenar por Nº de Funcionários"
+                          title="Clique para ordenar por Peso"
                         >
                           <div className="inline-flex items-center justify-end gap-1.5 w-full">
-                            <span>Nº FUNC.</span>
-                            {sortConfig?.field === 'numFunc' ? (
+                            <span>PESO</span>
+                            {sortConfig?.field === 'peso' ? (
                               sortConfig.direction === 'asc' ? (
                                 <ArrowUp className="w-3.5 h-3.5 text-yellow-300" />
                               ) : (
@@ -634,8 +634,8 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
                             <td className="py-2 px-3 border-r border-slate-100 text-right">
                               <Input
                                 type="text"
-                                value={row.numFunc}
-                                onChange={(e) => handleNumFuncChange(row.id, e.target.value)}
+                                value={row.peso}
+                                onChange={(e) => handlePesoChange(row.id, e.target.value)}
                                 className="h-8 text-xs text-right font-mono font-semibold text-slate-900 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white"
                                 placeholder="0"
                               />
@@ -676,12 +676,15 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
                             {filteredAndSortedRows
                               .reduce((acc, r) => {
                                 const val =
-                                  typeof r.numFunc === 'number'
-                                    ? r.numFunc
-                                    : parseFloat(String(r.numFunc).replace(',', '.'))
+                                  typeof r.peso === 'number'
+                                    ? r.peso
+                                    : parseFloat(String(r.peso).replace(',', '.'))
                                 return acc + (Number.isFinite(val) ? val : 0)
                               }, 0)
-                              .toLocaleString('pt-BR')}
+                              .toLocaleString('pt-BR', {
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 2,
+                              })}
                           </td>
                           <td></td>
                         </tr>
@@ -702,24 +705,24 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
                 Como deseja importar a nova planilha?
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500 pt-1">
-                Já existem {rows.length} empresa(s) cadastradas em Dpto. Pessoal - Pesos. A planilha
-                contém {pendingFileRows?.rows.length ?? 0} registro(s) com informações de Nº de
-                Funcionários.
+                Já existem {rows.length} empresa(s) cadastradas em Dpto. Fiscal - Pesos. A planilha
+                contém {pendingFileRows?.rows.length ?? 0} registro(s) com informações de Peso
+                Fiscal.
               </DialogDescription>
             </DialogHeader>
 
             <div className="py-3 text-xs text-slate-600 space-y-2">
               <div className="p-3 rounded-md bg-slate-50 border border-slate-200">
                 <span className="font-semibold text-slate-800 block mb-0.5">Substituir tudo</span>
-                Apaga os registros atuais de Dpto. Pessoal - Pesos e mantém apenas os novos
+                Apaga os registros atuais de Dpto. Fiscal - Pesos e mantém apenas os novos
                 registros.
               </div>
               <div className="p-3 rounded-md bg-slate-50 border border-slate-200">
                 <span className="font-semibold text-slate-800 block mb-0.5">
                   Adicionar / Atualizar existentes
                 </span>
-                Acrescenta novos registros e atualiza o Nº de Funcionários de empresas que já
-                existam na lista pelo nome.
+                Acrescenta novos registros e atualiza o Peso de empresas que já existam na lista
+                pelo nome ou CNPJ.
               </div>
             </div>
 
@@ -756,20 +759,23 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-slate-900">
-                Adicionar Empresa em Dpto. Pessoal - Pesos
+                Adicionar Empresa em Dpto. Fiscal - Pesos
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500 pt-1">
-                Cadastre o nome da empresa e o respectivo número de funcionários.
+                Cadastre o nome da empresa e o respectivo peso fiscal.
               </DialogDescription>
             </DialogHeader>
 
             <form onSubmit={handleAddManualRow} className="space-y-4 pt-2">
               <div className="space-y-1.5">
-                <Label htmlFor="manualEmpresa" className="text-xs font-semibold text-slate-700">
+                <Label
+                  htmlFor="manualFiscalEmpresa"
+                  className="text-xs font-semibold text-slate-700"
+                >
                   Nome da Empresa *
                 </Label>
                 <Input
-                  id="manualEmpresa"
+                  id="manualFiscalEmpresa"
                   placeholder="Ex: Alfa Transportes Ltda"
                   value={newEmpresaNome}
                   onChange={(e) => setNewEmpresaNome(e.target.value)}
@@ -779,17 +785,28 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="manualNumFunc" className="text-xs font-semibold text-slate-700">
-                  Nº de Funcionários
+                <Label htmlFor="manualFiscalCnpj" className="text-xs font-semibold text-slate-700">
+                  CNPJ (opcional)
                 </Label>
                 <Input
-                  id="manualNumFunc"
-                  type="number"
-                  min="0"
-                  step="1"
-                  placeholder="Ex: 25"
-                  value={newNumFunc}
-                  onChange={(e) => setNewNumFunc(e.target.value)}
+                  id="manualFiscalCnpj"
+                  placeholder="00.000.000/0000-00"
+                  value={newEmpresaCnpj}
+                  onChange={(e) => setNewEmpresaCnpj(e.target.value)}
+                  className="h-9 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="manualPeso" className="text-xs font-semibold text-slate-700">
+                  PESO
+                </Label>
+                <Input
+                  id="manualPeso"
+                  type="text"
+                  placeholder="Ex: 10"
+                  value={newPeso}
+                  onChange={(e) => setNewPeso(e.target.value)}
                   className="h-9 text-xs"
                 />
               </div>
@@ -819,11 +836,11 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle className="text-base font-bold text-slate-900">
-                Limpar registros do Dpto. Pessoal - Pesos?
+                Limpar registros do Dpto. Fiscal - Pesos?
               </AlertDialogTitle>
               <AlertDialogDescription className="text-xs text-slate-500 pt-1">
-                Essa ação removerá todas as {rows.length} empresas e seus respectivos números de
-                funcionários desta aba. Essa ação não poderá ser desfeita.
+                Essa ação removerá todas as {rows.length} empresas e seus respectivos pesos fiscais
+                desta aba. Essa ação não poderá ser desfeita.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
