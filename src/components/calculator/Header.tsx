@@ -1,7 +1,7 @@
 import React from 'react'
 import { CalculatorState } from '@/types/calculator'
 import { Button } from '@/components/ui/button'
-import { Calculator, RotateCcw, Link2, Check } from 'lucide-react'
+import { FolderOpen, RotateCcw, Link2, Check } from 'lucide-react'
 
 interface HeaderProps {
   onReset: () => void
@@ -33,11 +33,11 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-[#1E3A5F] flex items-center justify-center text-white shadow-sm flex-shrink-0">
-            <Calculator className="w-5 h-5" />
+            <FolderOpen className="w-5 h-5" />
           </div>
           <div>
             <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight leading-snug">
-              Calculadora Financeira Empresarial
+              DOSSIÊ DO CLIENTE
             </h1>
             <p className="text-xs text-slate-500 font-normal">
               Receita, despesas, tributos e folha de pagamento

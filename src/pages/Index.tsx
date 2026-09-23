@@ -21,6 +21,10 @@ export default function Index() {
   const [hasCopied, setHasCopied] = useState(false)
   const [isDocumentMode, setIsDocumentMode] = useState(false)
 
+  useEffect(() => {
+    document.title = 'DOSSIÊ DO CLIENTE'
+  }, [])
+
   // Listen to external popstate/URL changes
   useEffect(() => {
     const handlePopState = () => {

@@ -28,7 +28,7 @@ export const DocumentView: React.FC<DocumentViewProps> = ({ state, computed, onB
           onClick={onBack}
           className="gap-2 text-slate-700 hover:text-slate-900"
         >
-          <ArrowLeft className="w-4 h-4" /> Voltar à Calculadora
+          <ArrowLeft className="w-4 h-4" /> Voltar ao Dossiê
         </Button>
 
         <div className="flex items-center gap-3">
@@ -389,8 +389,8 @@ export const DocumentView: React.FC<DocumentViewProps> = ({ state, computed, onB
 
         {/* Rodapé legal no documento impresso */}
         <div className="mt-12 text-center text-[10px] text-slate-400">
-          Documento gerado pela Calculadora Financeira Empresarial • Proibida a reprodução total ou
-          parcial sem autorização.
+          Documento gerado pelo DOSSIÊ DO CLIENTE • Proibida a reprodução total ou parcial sem
+          autorização.
         </div>
       </div>
     </div>
