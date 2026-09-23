@@ -140,7 +140,20 @@ export const DocumentView: React.FC<DocumentViewProps> = ({
                 {state.clienteNome && (
                   <p className="font-semibold text-slate-800">{state.clienteNome}</p>
                 )}
+                {state.clienteRamo && (
+                  <p className="text-slate-500 font-medium">
+                    <span className="text-slate-400">Ramo: </span>
+                    {state.clienteRamo}
+                  </p>
+                )}
                 {state.clienteCnpj && <p>CNPJ/CPF: {state.clienteCnpj}</p>}
+                {(state.clienteIE || state.clienteIM) && (
+                  <p className="text-[11px] text-slate-500">
+                    {state.clienteIE && <span>IE: {state.clienteIE}</span>}
+                    {state.clienteIE && state.clienteIM && ' • '}
+                    {state.clienteIM && <span>IM: {state.clienteIM}</span>}
+                  </p>
+                )}
                 {state.clienteEndereco && <p>{state.clienteEndereco}</p>}
                 {(state.clienteCidade || state.clienteUf) && (
                   <p>

@@ -490,6 +490,42 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
               />
             </div>
             <div>
+              <Label htmlFor="clienteRamo" className="text-xs font-medium text-slate-700">
+                Ramo de Atividade
+              </Label>
+              <Input
+                id="clienteRamo"
+                placeholder="Ex: Comércio Varejista de Calçados"
+                value={state.clienteRamo}
+                onChange={(e) => onChange({ clienteRamo: e.target.value })}
+                className="mt-1 h-9 bg-[#F9FAFB]"
+              />
+            </div>
+            <div>
+              <Label htmlFor="clienteIE" className="text-xs font-medium text-slate-700">
+                Inscrição Estadual
+              </Label>
+              <Input
+                id="clienteIE"
+                placeholder="Ex: 123.456.789.110 ou Isento"
+                value={state.clienteIE}
+                onChange={(e) => onChange({ clienteIE: e.target.value })}
+                className="mt-1 h-9 bg-[#F9FAFB]"
+              />
+            </div>
+            <div>
+              <Label htmlFor="clienteIM" className="text-xs font-medium text-slate-700">
+                Inscrição Municipal
+              </Label>
+              <Input
+                id="clienteIM"
+                placeholder="Ex: 987654321"
+                value={state.clienteIM}
+                onChange={(e) => onChange({ clienteIM: e.target.value })}
+                className="mt-1 h-9 bg-[#F9FAFB]"
+              />
+            </div>
+            <div className="md:col-span-2">
               <Label htmlFor="clienteEndereco" className="text-xs font-medium text-slate-700">
                 Endereço
               </Label>

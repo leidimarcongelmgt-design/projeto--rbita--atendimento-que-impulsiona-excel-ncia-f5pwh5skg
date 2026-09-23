@@ -46,6 +46,9 @@ export interface CalculatorState {
 
   clienteNome: string
   clienteCnpj: string
+  clienteIE: string
+  clienteIM: string
+  clienteRamo: string
   clienteEndereco: string
   clienteCidade: string
   clienteUf: string
@@ -112,6 +115,9 @@ export const DEFAULT_CALCULATOR_STATE: CalculatorState = {
 
   clienteNome: '',
   clienteCnpj: '',
+  clienteIE: '',
+  clienteIM: '',
+  clienteRamo: '',
   clienteEndereco: '',
   clienteCidade: '',
   clienteUf: '',

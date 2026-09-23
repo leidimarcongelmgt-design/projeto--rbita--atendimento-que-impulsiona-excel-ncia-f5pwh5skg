@@ -192,6 +192,13 @@ export function parseClientDataFromPdfText(
     }
   }
 
+  const linesToSearch = clientSectionText
+    ? clientSectionText
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean)
+    : lines
+
   // --- A. CNPJ / CPF do Cliente ---
   // If we have a client section, look there first. If not, look in full text.
   let detectedCnpj = ''
@@ -284,6 +291,109 @@ export function parseClientDataFromPdfText(
     })
   }
 
+  // --- A.1 Inscrição Estadual (IE) do Cliente ---
+  let detectedIE = ''
+  let ieSnippet = ''
+  let ieConfidence: 'high' | 'medium' | 'low' = 'low'
+
+  const ieLabelRegex =
+    /(?:INSCRI[ÇC][ÃA]O ESTADUAL|INSC\.?\s*ESTADUAL|INSC\.?\s*EST\.?|\bIE\b)[:\s]+([0-9.\-–/]{5,20}|ISENTO\b)/i
+
+  for (const line of linesToSearch) {
+    const match = ieLabelRegex.exec(line)
+    if (match && match[1]) {
+      const candidate = match[1].replace(/^(?:[:\-–—]\s*)+/, '').trim()
+      if (candidate && !/^(?:CNPJ|CPF|ENDERE)/i.test(candidate)) {
+        detectedIE = candidate
+        ieSnippet = line
+        ieConfidence = clientSectionText ? 'high' : 'medium'
+        break
+      }
+    }
+  }
+
+  if (detectedIE) {
+    fields.push({
+      key: 'clienteIE',
+      label: 'Inscrição Estadual do Cliente',
+      value: detectedIE,
+      currentValue: currentState.clienteIE || '',
+      snippet: ieSnippet,
+      confidence: ieConfidence,
+      isDifferent:
+        detectedIE.trim().toLowerCase() !== (currentState.clienteIE || '').trim().toLowerCase(),
+    })
+  }
+
+  // --- A.2 Inscrição Municipal (IM) do Cliente ---
+  let detectedIM = ''
+  let imSnippet = ''
+  let imConfidence: 'high' | 'medium' | 'low' = 'low'
+
+  const imLabelRegex =
+    /(?:INSCRI[ÇC][ÃA]O MUNICIPAL|INSC\.?\s*MUNICIPAL|INSC\.?\s*MUN\.?|\bIM\b|CCM)[:\s]+([0-9.\-–/]{4,20}|ISENTO\b)/i
+
+  for (const line of linesToSearch) {
+    const match = imLabelRegex.exec(line)
+    if (match && match[1]) {
+      const candidate = match[1].replace(/^(?:[:\-–—]\s*)+/, '').trim()
+      if (candidate && !/^(?:CNPJ|CPF|ENDERE)/i.test(candidate)) {
+        detectedIM = candidate
+        imSnippet = line
+        imConfidence = clientSectionText ? 'high' : 'medium'
+        break
+      }
+    }
+  }
+
+  if (detectedIM) {
+    fields.push({
+      key: 'clienteIM',
+      label: 'Inscrição Municipal do Cliente',
+      value: detectedIM,
+      currentValue: currentState.clienteIM || '',
+      snippet: imSnippet,
+      confidence: imConfidence,
+      isDifferent:
+        detectedIM.trim().toLowerCase() !== (currentState.clienteIM || '').trim().toLowerCase(),
+    })
+  }
+
+  // --- A.3 Ramo de Atividade / Atividade Econômica do Cliente ---
+  let detectedRamo = ''
+  let ramoSnippet = ''
+  let ramoConfidence: 'high' | 'medium' | 'low' = 'low'
+
+  const ramoLabelRegex =
+    /(?:RAMO DE ATIVIDADE|RAMO DE NEG[ÓO]CIO|RAMO DE ATUA[ÇC][ÃA]O|ATIVIDADE ECON[ÔO]MICA|ATIVIDADE PRINCIPAL|CNAE PRINCIPAL|RAMO)[:\s]+([^\n\r]{4,80})/i
+
+  for (const line of linesToSearch) {
+    const match = ramoLabelRegex.exec(line)
+    if (match && match[1]) {
+      let candidate = match[1].replace(/^(?:[:\-–—]\s*)+/, '').trim()
+      candidate = candidate.split(/\s+(?:CNPJ|CPF|INSCRI|ENDERE|TEL|FONE|E-?MAIL)/i)[0].trim()
+      if (candidate.length >= 4 && !/^(?:CNPJ|CPF)/i.test(candidate)) {
+        detectedRamo = candidate
+        ramoSnippet = line
+        ramoConfidence = clientSectionText ? 'high' : 'medium'
+        break
+      }
+    }
+  }
+
+  if (detectedRamo) {
+    fields.push({
+      key: 'clienteRamo',
+      label: 'Ramo de Atividade do Cliente',
+      value: detectedRamo,
+      currentValue: currentState.clienteRamo || '',
+      snippet: ramoSnippet,
+      confidence: ramoConfidence,
+      isDifferent:
+        detectedRamo.trim().toLowerCase() !== (currentState.clienteRamo || '').trim().toLowerCase(),
+    })
+  }
+
   // --- B. Razão Social / Nome do Cliente ---
   let detectedNome = ''
   let nomeSnippet = ''
@@ -293,14 +403,7 @@ export function parseClientDataFromPdfText(
   const nameLabelRegex =
     /(?:RAZ[ÃA]O SOCIAL|NOME(?:\s*\/\s*RAZ[ÃA]O SOCIAL)?|NOME DO CLIENTE|DESTINAT[ÁA]RIO|TOMADOR(?: DO SERVI[ÇC]O)?|CONSUMIDOR|CLIENTE)[:\s]+([^\n\r]{3,80})/i
 
-  // First inspect client section lines
-  const linesToSearch = clientSectionText
-    ? clientSectionText
-        .split(/\r?\n/)
-        .map((l) => l.trim())
-        .filter(Boolean)
-    : lines
-
+  // Inspect client lines for name
   for (let i = 0; i < linesToSearch.length; i++) {
     const line = linesToSearch[i]
     const match = nameLabelRegex.exec(line)

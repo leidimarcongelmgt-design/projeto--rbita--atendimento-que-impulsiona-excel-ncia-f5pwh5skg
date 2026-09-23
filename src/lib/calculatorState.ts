@@ -79,6 +79,9 @@ export function parseStateFromUrl(search: string): CalculatorState {
 
     clienteNome: parseStr('clienteNome', DEFAULT_CALCULATOR_STATE.clienteNome),
     clienteCnpj: parseStr('clienteCnpj', DEFAULT_CALCULATOR_STATE.clienteCnpj),
+    clienteIE: parseStr('clienteIE', DEFAULT_CALCULATOR_STATE.clienteIE),
+    clienteIM: parseStr('clienteIM', DEFAULT_CALCULATOR_STATE.clienteIM),
+    clienteRamo: parseStr('clienteRamo', DEFAULT_CALCULATOR_STATE.clienteRamo),
     clienteEndereco: parseStr('clienteEndereco', DEFAULT_CALCULATOR_STATE.clienteEndereco),
     clienteCidade: parseStr('clienteCidade', DEFAULT_CALCULATOR_STATE.clienteCidade),
     clienteUf: parseStr('clienteUf', DEFAULT_CALCULATOR_STATE.clienteUf),
@@ -156,6 +159,9 @@ export function serializeStateToUrl(state: CalculatorState): string {
 
   if (state.clienteNome) params.set('clienteNome', state.clienteNome)
   if (state.clienteCnpj) params.set('clienteCnpj', state.clienteCnpj)
+  if (state.clienteIE) params.set('clienteIE', state.clienteIE)
+  if (state.clienteIM) params.set('clienteIM', state.clienteIM)
+  if (state.clienteRamo) params.set('clienteRamo', state.clienteRamo)
   if (state.clienteEndereco) params.set('clienteEndereco', state.clienteEndereco)
   if (state.clienteCidade) params.set('clienteCidade', state.clienteCidade)
   if (state.clienteUf) params.set('clienteUf', state.clienteUf)
