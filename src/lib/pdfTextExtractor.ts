@@ -1,28 +1,52 @@
 import * as pdfjsLib from 'pdfjs-dist'
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import PdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?worker'
 
-// Worker resolution configuration
-// In Vite/browser environments, setting GlobalWorkerOptions.workerSrc with an explicit URL
-// or using a fallback to cdnjs matching the exact pdfjs-dist version.
-const PDFJS_VERSION = pdfjsLib.version || '4.10.38'
+let workerPortOrOptionsConfigured = false
 
-function setupPdfWorker() {
-  if (typeof window === 'undefined' || !pdfjsLib.GlobalWorkerOptions) return
-
-  try {
-    if (pdfWorkerUrl) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
-      return
-    }
-  } catch {
-    // ignore
+/**
+ * Configuração definitiva e auto-contida do worker do PDF.js para Vite / navegador:
+ * Ao invés de depender de `GlobalWorkerOptions.workerSrc` com URL que força fetch de módulo externo,
+ * instanciamos diretamente o Web Worker empacotado pelo Vite com `?worker`:
+ * `import PdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?worker'`
+ * e configuramos `GlobalWorkerOptions.workerPort = new PdfjsWorker()`.
+ *
+ * Benefícios:
+ * 1. O Vite empacota o worker como um script dedicado garantido pelo bundle da aplicação.
+ * 2. NUNCA há chamada a `import()` dinâmico não resolvido em runtime no navegador.
+ * 3. Se por alguma razão Web Workers estiverem restritos no ambiente, há fallback ordenado.
+ */
+export function ensurePdfWorker(): void {
+  if (
+    typeof window === 'undefined' ||
+    !pdfjsLib.GlobalWorkerOptions ||
+    workerPortOrOptionsConfigured
+  ) {
+    return
   }
 
-  // Fallback to reliable CDN matching the exact version
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.mjs`
+  try {
+    if (typeof Worker !== 'undefined') {
+      const workerInstance = new PdfjsWorker()
+      pdfjsLib.GlobalWorkerOptions.workerPort = workerInstance
+      workerPortOrOptionsConfigured = true
+      return
+    }
+  } catch (err) {
+    console.warn('Aviso ao inicializar Worker via workerPort:', err)
+  }
+
+  // Fallback caso instanciar workerPort lance erro no ambiente
+  try {
+    const fallbackUrl = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
+    pdfjsLib.GlobalWorkerOptions.workerSrc = fallbackUrl
+    workerPortOrOptionsConfigured = true
+  } catch (err) {
+    console.warn('Aviso ao inicializar workerSrc de fallback:', err)
+  }
 }
 
-setupPdfWorker()
+// Inicializa o worker no carregamento do módulo
+ensurePdfWorker()
 
 export interface PdfTextExtractionOptions {
   password?: string
@@ -46,6 +70,7 @@ function createDocumentTask(data: ArrayBuffer, password?: string) {
     password: password || undefined,
     useSystemFonts: true,
     isEvalSupported: false,
+    stopAtErrors: false,
   })
 }
 
@@ -61,10 +86,14 @@ export async function extractTextFromPdf(
   const password = options?.password
 
   const attemptExtraction = async (useFallbackWorker = false): Promise<PdfTextExtractionResult> => {
-    if (useFallbackWorker) {
-      // Switch worker to public CDN matching exact version
+    ensurePdfWorker()
+
+    if (useFallbackWorker && pdfjsLib.GlobalWorkerOptions) {
+      // Se o worker principal falhou, tentamos o CDN compatível como último recurso
       try {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.mjs`
+        const fallbackCdn = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '4.10.38'}/pdf.worker.min.mjs`
+        pdfjsLib.GlobalWorkerOptions.workerPort = null
+        pdfjsLib.GlobalWorkerOptions.workerSrc = fallbackCdn
       } catch {
         // ignore
       }
