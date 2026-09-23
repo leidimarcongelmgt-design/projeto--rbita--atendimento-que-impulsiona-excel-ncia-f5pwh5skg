@@ -173,31 +173,48 @@ export function parseClientDataFromPdfText(
   // ---------------------------------------------------------------------------
 
   const ISSUER_HEADER_REGEX =
-    /(?:(?:DADOS\s+DO\s+|IDENTIFICA[ÇC][ÃA]O\s+DO\s+)?PRESTADOR(?:\s+DE\s+SERVI[ÇC]OS)?|(?:DADOS\s+DO\s+|IDENTIFICA[ÇC][ÃA]O\s+DO\s+)?EMITENTE|(?:DADOS\s+DA\s+)?EMPRESA\s+EMISSORA|CEDENTE|BENEFICI[ÁA]RIO|FORNECEDOR|VENDEDOR|LOCADOR|CONTRATADA)\b/i
+    /(?:(?:DADOS\s+DO\s+|IDENTIFICA[ÇC][ÃA]O\s+DO\s+)?PRESTADOR(?:\s+DE\s+SERVI[ÇC]OS?)?|(?:DADOS\s+DO\s+|IDENTIFICA[ÇC][ÃA]O\s+DO\s+)?EMITENTE|(?:DADOS\s+DA\s+)?EMPRESA\s+EMISSORA|CEDENTE|BENEFICI[ÁA]RIO|FORNECEDOR|VENDEDOR|LOCADOR|CONTRATADA)\b/i
 
   const CLIENT_HEADER_REGEX =
-    /(?:(?:DADOS\s+DO\s+|IDENTIFICA[ÇC][ÃA]O\s+DO\s+)?TOMADOR(?:\s+DE\s+SERVI[ÇC]OS)?|(?:DADOS\s+DO\s+|IDENTIFICA[ÇC][ÃA]O\s+DO\s+)?DESTINAT[ÁA]RIO(?:\s*\/\s*REMETENTE)?|(?:DADOS\s+DO\s+)?CLIENTE|SACADO|CONSUMIDOR|PAGADOR|COMPRADOR|LOCAT[ÁA]RIO|CONTRATANTE)\b/i
+    /(?:(?:DADOS\s+DO\s+|IDENTIFICA[ÇC][ÃA]O\s+DO\s+)?TOMADOR(?:\s+DE\s+SERVI[ÇC]OS?)?|(?:DADOS\s+DO\s+|IDENTIFICA[ÇC][ÃA]O\s+DO\s+)?DESTINAT[ÁA]RIO(?:\s*\/\s*REMETENTE)?|(?:DADOS\s+DO\s+)?CLIENTE|SACADO|CONSUMIDOR|PAGADOR|COMPRADOR|LOCAT[ÁA]RIO|CONTRATANTE)\b/i
 
   const SECTION_BOUNDARY_REGEX =
-    /(?:(?:DADOS\s+DO\s+|IDENTIFICA[ÇC][ÃA]O\s+DO\s+)?PRESTADOR(?:\s+DE\s+SERVI[ÇC]OS)?|(?:DADOS\s+DO\s+|IDENTIFICA[ÇC][ÃA]O\s+DO\s+)?EMITENTE|CEDENTE|BENEFICI[ÁA]RIO|FORNECEDOR|CONTRATADA|DADOS\s+DOS\s+SERVI[ÇC]OS|DISCRIMINA[ÇC][ÃA]O\s+DOS\s+SERVI[ÇC]OS|DESCRI[ÇC][ÃA]O\s+DOS\s+PRODUTOS|DADOS\s+DO\s+PRODUTO|C[ÁA]LCULO\s+DO\s+IMPOSTO|DADOS\s+ADICIONAIS|INFORMA[ÇC][ÕO]ES\s+COMPLEMENTARES|VALOR\s+TOTAL|FATURA(?:\s*\/\s*DUPLICATA)?|ITENS\s+DA\s+NOTA|OBSERVA[ÇC][ÕO]ES?)\b/i
+    /(?:(?:DADOS\s+DO\s+|IDENTIFICA[ÇC][ÃA]O\s+DO\s+)?PRESTADOR(?:\s+DE\s+SERVI[ÇC]OS?)?|(?:DADOS\s+DO\s+|IDENTIFICA[ÇC][ÃA]O\s+DO\s+)?EMITENTE|CEDENTE|BENEFICI[ÁA]RIO|FORNECEDOR|CONTRATADA|DADOS\s+DOS\s+SERVI[ÇC]OS|DISCRIMINA[ÇC][ÃA]O\s+DOS\s+SERVI[ÇC]OS|DESCRI[ÇC][ÃA]O\s+DOS\s+PRODUTOS|DADOS\s+DO\s+PRODUTO|C[ÁA]LCULO\s+DO\s+IMPOSTO|DADOS\s+ADICIONAIS|INFORMA[ÇC][ÕO]ES\s+COMPLEMENTARES|VALOR\s+TOTAL|FATURA(?:\s*\/\s*DUPLICATA)?|ITENS\s+DA\s+NOTA|OBSERVA[ÇC][ÕO]ES?)\b/i
 
-  // Find all client block occurrences in the raw text
+  // Find client block occurrences in the raw text.
+  // Note: if there are multiple occurrences of CLIENT_HEADER_REGEX (or nested headers),
+  // we look for a client header and isolate the text until the next section boundary.
   let clientSectionText = ''
   let clientSectionLines: string[] = []
 
-  const clientMatch = CLIENT_HEADER_REGEX.exec(rawText)
-  if (clientMatch) {
-    const startIdx = clientMatch.index
-    const afterClient = rawText.slice(startIdx + clientMatch[0].length)
+  // Global regex search to find the best client header (prioritizing TOMADOR/DESTINATÁRIO)
+  const clientHeaderGlobal = new RegExp(CLIENT_HEADER_REGEX.source, 'gi')
+  let bestClientMatch: RegExpExecArray | null = null
+  let currMatch: RegExpExecArray | null
 
-    // Look for the next section boundary (after at least 30 characters)
-    const nextBoundaryMatch = SECTION_BOUNDARY_REGEX.exec(afterClient.slice(30))
+  while ((currMatch = clientHeaderGlobal.exec(rawText)) !== null) {
+    // If we find TOMADOR or DESTINATÁRIO, strongly prefer it
+    if (/TOMADOR|DESTINAT[ÁA]RIO|SACADO|PAGADOR/i.test(currMatch[0])) {
+      bestClientMatch = currMatch
+      break
+    }
+    if (!bestClientMatch) {
+      bestClientMatch = currMatch
+    }
+  }
+
+  if (bestClientMatch) {
+    const startIdx = bestClientMatch.index
+    const afterClient = rawText.slice(startIdx + bestClientMatch[0].length)
+
+    // Look for the next section boundary (after at least 20 characters)
+    const nextBoundaryMatch = SECTION_BOUNDARY_REGEX.exec(afterClient.slice(20))
     if (nextBoundaryMatch) {
-      const endOffset = 30 + nextBoundaryMatch.index
+      const endOffset = 20 + nextBoundaryMatch.index
       clientSectionText = afterClient.slice(0, endOffset)
     } else {
-      // Limit to 2000 chars of client block
-      clientSectionText = afterClient.slice(0, 2000)
+      // Limit to 2500 chars of client block
+      clientSectionText = afterClient.slice(0, 2500)
     }
 
     clientSectionLines = clientSectionText
@@ -446,9 +463,9 @@ export function parseClientDataFromPdfText(
   const isExcludedGenericTerm = (str: string): boolean => {
     const s = str.trim().toLowerCase()
     if (s.length < 3) return true
-    // Exclude label phrases or system terms
+    // Exclude label phrases or system terms (exact matches)
     if (
-      /^(?:danfe|documento|nota fiscal|nfs-?e|nf-?e|chave de acesso|natureza da opera|protocolo|folha|dossie|dossiê|relat[óo]rio|comprovante|recibo|boleto|fatura|duplicata|dados do|identifica|endere[çc]o|munic[íi]pio|cidade|estado|telefone|e-?mail|cnpj|cpf|inscri[çc][ãa]o|descri[çc][ãa]o|valor|imposto|issqn|icms|pis|cofins|irpj|csll|simples nacional|prestador|emitente|cedente|benefici[áa]rio|tomador|destinat[áa]rio|sacado|consumidor|cliente)$/i.test(
+      /^(?:danfe|documento|nota\s+fiscal|nota\s+fiscal\s+eletr[ôo]nica|nfs-?e|nf-?e|chave\s+de\s+acesso|natureza\s+da\s+opera[çc][ãa]o|protocolo|folha|dossie|dossiê|relat[óo]rio|comprovante|recibo|boleto|fatura|duplicata|dados\s+do|dados\s+da|identifica[çc][ãa]o|endere[çc]o|munic[íi]pio|cidade|estado|telefone|e-?mail|cnpj|cpf|inscri[çc][ãa]o|inscri[çc][ãa]o\s+estadual|inscri[çc][ãa]o\s+municipal|descri[çc][ãa]o|valor|valor\s+total|imposto|issqn|icms|pis|cofins|irpj|csll|simples\s+nacional|prestador(?:\s+de\s+servi[çc]os?)?|emitente|empresa\s+emissora|cedente|benefici[áa]rio|tomador(?:\s+de\s+servi[çc]os?)?|destinat[áa]rio(?:\s*\/\s*remetente)?|sacado|consumidor|cliente|pagador)$/i.test(
         s,
       )
     ) {
@@ -457,6 +474,10 @@ export function parseClientDataFromPdfText(
     // Exclude if it looks like only numbers, punctuation, or dates
     if (/^[\d\s./\-–—,]+$/.test(s)) return true
     if (/^\d{2}[/\-.]\d{2}[/\-.]\d{4}$/.test(s)) return true
+    // Exclude header titles like "DADOS DO TOMADOR DE SERVIÇOS"
+    if (/^(?:dados|identifica[çc][ãa]o)\s+(?:do|da|dos|das)\s+/i.test(s)) {
+      return true
+    }
     // Exclude known current emitter name
     if (currentState.empresaNome && s === currentState.empresaNome.trim().toLowerCase()) {
       return true
@@ -465,37 +486,86 @@ export function parseClientDataFromPdfText(
   }
 
   const cleanNameCandidate = (val: string): string => {
-    let cleaned = val.replace(/^(?:[:\-–—|]\s*)+/, '').trim()
+    let cleaned = val.replace(/^(?:[:\-–—|/]\s*)+/, '').trim()
     // Remove subsequent trailing label blocks like "CNPJ: ...", "Inscrição: ...", "Endereço: ..."
+    // Note: use word boundary before labels to avoid matching inside names
     cleaned = cleaned
-      .split(/\s+(?:CNPJ|CPF|INSCRI|ENDERE|RUA|AV\.|BAIRRO|CEP|TEL|FONE|E-?MAIL|DATA)/i)[0]
+      .split(
+        /\s+(?:\bCNPJ\b|\bCPF\b|\bINSCRI[ÇC][ÃA]O\b|\bENDERE[ÇC]O\b|\bRUA\b|\bAV\b|\bAVENIDA\b|\bBAIRRO\b|\bCEP\b|\bTEL\b|\bTELEFONE\b|\bFONE\b|\bE-?MAIL\b|\bDATA\b)/i,
+      )[0]
       .trim()
     // Strip trailing punctuation
-    cleaned = cleaned.replace(/[;,\-–—]+$/, '').trim()
+    cleaned = cleaned.replace(/[;,\-–—|/]+$/, '').trim()
     return cleaned
+  }
+
+  // Helper to append next line(s) if the company name was wrapped onto subsequent lines in PDF
+  const mergeWrappedNameLines = (
+    baseCandidate: string,
+    sourceLines: string[],
+    startIndex: number,
+  ): string => {
+    let result = baseCandidate
+    // If the base candidate does not end with LTDA / S/A / EPP / ME / etc, or if next line has typical business continuation
+    let idx = startIndex + 1
+    while (idx < sourceLines.length && idx <= startIndex + 2) {
+      const nextRaw = sourceLines[idx].trim()
+      // Stop if next line is a header or label
+      if (
+        ISSUER_HEADER_REGEX.test(nextRaw) ||
+        CLIENT_HEADER_REGEX.test(nextRaw) ||
+        /^(?:CNPJ|CPF|INSCRI|ENDERE|RUA|AV|BAIRRO|CEP|MUNIC|CIDADE|UF|VALOR|DATA)/i.test(nextRaw)
+      ) {
+        break
+      }
+
+      // Check if next line looks like a name continuation (e.g. "INCORPORADORA SPE LTDA", "SPE LTDA", "LTDA", "ME")
+      if (
+        /\b(?:INCORPORADORA|CONSTRUTORA|ENGENHARIA|EMPREENDIMENTOS?|PARTICIPA[ÇC][ÕO]ES|SERVI[ÇC]OS?|COM[ÉE]RCIO|SPE|LTDA|S\/?A|EIRELI|ME|EPP)\b/i.test(
+          nextRaw,
+        ) ||
+        (!/\b(?:LTDA|S\/?A|EIRELI|ME|EPP)\b/i.test(result) &&
+          /^[A-ZÀ-Ÿ0-9\s.&'-]{2,50}$/.test(nextRaw))
+      ) {
+        const continuation = cleanNameCandidate(nextRaw)
+        if (continuation && !isExcludedGenericTerm(continuation)) {
+          result = `${result} ${continuation}`
+          // If we reached LTDA / S/A / EIRELI / etc., stop chaining
+          if (/\b(?:LTDA|S\/?A|EIRELI|ME|EPP)\b/i.test(continuation)) {
+            break
+          }
+        }
+      } else {
+        break
+      }
+      idx++
+    }
+    return result
   }
 
   // Priority 1: High-specificity Client/Tomador/Destinatário/Sacado labeled patterns
   // E.g.: "Tomador do Serviço: EMPRESA CLIENTE LTDA", "Destinatário/Remetente: FULANO DE TAL",
-  // "Nome / Razão Social do Tomador: CLIENTE X", "Sacado: NOME CLIENTE", "Cliente: XYZ S/A"
+  // "Nome / Razão Social do Tomador: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA", "Sacado: NOME CLIENTE"
   const explicitClientNameRegexes = [
-    /(?:TOMADOR(?:\s+DE\s+SERVI[ÇC]OS?)?|DESTINAT[ÁA]RIO(?:\s*\/\s*REMETENTE)?|SACADO|PAGADOR|CONSUMIDOR|CLIENTE|CONTRATANTE)[\s:]+(?:NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|RAZ[ÃA]O\s*SOCIAL)?[:\s\-–—]+([^\n\r]{3,90})/i,
-    /(?:NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|RAZ[ÃA]O\s*SOCIAL)\s+(?:DO\s+)?(?:TOMADOR|DESTINAT[ÁA]RIO|CLIENTE|SACADO|CONSUMIDOR)[:\s\-–—]+([^\n\r]{3,90})/i,
-    /NOME\s+DO\s+CLIENTE[:\s\-–—]+([^\n\r]{3,90})/i,
-    /(?:^|\b)(?:TOMADOR|DESTINAT[ÁA]RIO|SACADO|PAGADOR|CLIENTE)[:\s\-–—]+([^\n\r]{3,90})/i,
+    /(?:TOMADOR(?:\s+DE\s+SERVI[ÇC]OS?)?|DESTINAT[ÁA]RIO(?:\s*\/\s*REMETENTE)?|SACADO|PAGADOR|CONSUMIDOR|CLIENTE|CONTRATANTE)[\s:]+(?:NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|RAZ[ÃA]O\s*SOCIAL)?[:\s\-–—]+([^\n\r]{3,120})/i,
+    /(?:NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|RAZ[ÃA]O\s*SOCIAL)\s+(?:DO\s+)?(?:TOMADOR|DESTINAT[ÁA]RIO|CLIENTE|SACADO|CONSUMIDOR)[:\s\-–—]+([^\n\r]{3,120})/i,
+    /NOME\s+DO\s+CLIENTE[:\s\-–—]+([^\n\r]{3,120})/i,
+    /(?:^|\b)(?:TOMADOR|DESTINAT[ÁA]RIO|SACADO|PAGADOR|CLIENTE)[:\s\-–—]+([^\n\r]{3,120})/i,
   ]
 
   // Priority 1 scan in full text
   for (const regex of explicitClientNameRegexes) {
-    for (const line of lines) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
       // Don't match lines that are clearly PRESTADOR / EMITENTE headers
       if (ISSUER_HEADER_REGEX.test(line) && !CLIENT_HEADER_REGEX.test(line)) {
         continue
       }
       const match = regex.exec(line)
       if (match && match[1]) {
-        const candidate = cleanNameCandidate(match[1])
+        let candidate = cleanNameCandidate(match[1])
         if (!isExcludedGenericTerm(candidate) && candidate.length >= 3) {
+          candidate = mergeWrappedNameLines(candidate, lines, i)
           detectedNome = candidate
           nomeSnippet = line
           nomeConfidence = 'high'
@@ -509,17 +579,18 @@ export function parseClientDataFromPdfText(
   // Priority 2: If we identified a clientSectionText, search inside it for "Nome/Razão Social" or multi-line patterns
   if (!detectedNome && clientSectionLines.length > 0) {
     const clientBlockNameRegex =
-      /(?:RAZ[ÃA]O\s*SOCIAL|NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|NOME\s+EMPRESARIAL|NOME)[:\s\-–—]+([^\n\r]{3,90})/i
+      /(?:RAZ[ÃA]O\s*SOCIAL|NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|NOME\s+EMPRESARIAL|NOME)[:\s\-–—]+([^\n\r]{3,120})/i
 
     for (let i = 0; i < clientSectionLines.length; i++) {
       const line = clientSectionLines[i]
       // Skip if this line explicitly mentions issuer
-      if (ISSUER_HEADER_REGEX.test(line)) continue
+      if (ISSUER_HEADER_REGEX.test(line) && !CLIENT_HEADER_REGEX.test(line)) continue
 
       const match = clientBlockNameRegex.exec(line)
       if (match && match[1]) {
-        const candidate = cleanNameCandidate(match[1])
+        let candidate = cleanNameCandidate(match[1])
         if (!isExcludedGenericTerm(candidate) && candidate.length >= 3) {
+          candidate = mergeWrappedNameLines(candidate, clientSectionLines, i)
           detectedNome = candidate
           nomeSnippet = line
           nomeConfidence = 'high'
@@ -529,7 +600,7 @@ export function parseClientDataFromPdfText(
 
       // Next-line pattern inside client block:
       // Line i: "Razão Social:" or "Nome / Razão Social"
-      // Line i+1: "ALPHA COMERCIO E SERVICOS LTDA"
+      // Line i+1: "RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA"
       if (
         /(?:RAZ[ÃA]O\s*SOCIAL|NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|NOME\s+EMPRESARIAL)[:]?$/i.test(
           line,
@@ -537,8 +608,9 @@ export function parseClientDataFromPdfText(
       ) {
         if (i + 1 < clientSectionLines.length) {
           const nextLine = clientSectionLines[i + 1].trim()
-          const candidate = cleanNameCandidate(nextLine)
+          let candidate = cleanNameCandidate(nextLine)
           if (!isExcludedGenericTerm(candidate) && candidate.length >= 3) {
+            candidate = mergeWrappedNameLines(candidate, clientSectionLines, i + 1)
             detectedNome = candidate
             nomeSnippet = `${line} -> ${nextLine}`
             nomeConfidence = 'high'
@@ -551,16 +623,20 @@ export function parseClientDataFromPdfText(
     // Priority 3: First valid business name or person name line inside client section block
     // (Common in invoices where customer name immediately follows "TOMADOR DE SERVIÇOS")
     if (!detectedNome) {
-      for (let i = 0; i < Math.min(clientSectionLines.length, 6); i++) {
-        const candidate = cleanNameCandidate(clientSectionLines[i])
+      for (let i = 0; i < Math.min(clientSectionLines.length, 8); i++) {
+        const line = clientSectionLines[i]
+        if (ISSUER_HEADER_REGEX.test(line)) continue
+        let candidate = cleanNameCandidate(line)
         if (
           !isExcludedGenericTerm(candidate) &&
           candidate.length >= 4 &&
           /[A-Za-zÀ-ÿ]{3,}/.test(candidate)
         ) {
-          // Check if looks like a company or personal name (Ltda, S/A, ME, EPP, or 2+ capitalized words)
+          candidate = mergeWrappedNameLines(candidate, clientSectionLines, i)
+
+          // Check if looks like a company or personal name (Ltda, SPE, Incorporadora, S/A, ME, EPP, or capitalized words)
           if (
-            /\b(?:LTDA|S\/?A|EIRELI|ME|EPP|SERVI[ÇC]OS|COMERCIO|COM[ÉE]RCIO|INDUSTRIA|IND[ÚU]STRIA)\b/i.test(
+            /\b(?:LTDA|S\/?A|EIRELI|ME|EPP|SPE|INCORPORADORA|CONSTRUTORA|ENGENHARIA|SERVI[ÇC]OS|COMERCIO|COM[ÉE]RCIO|INDUSTRIA|IND[ÚU]STRIA)\b/i.test(
               candidate,
             ) ||
             /^[A-ZÀ-Ÿ][a-zà-ÿ]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ]+)+/.test(candidate) ||
@@ -568,7 +644,7 @@ export function parseClientDataFromPdfText(
           ) {
             detectedNome = candidate
             nomeSnippet = candidate
-            nomeConfidence = 'medium'
+            nomeConfidence = 'high'
             break
           }
         }
@@ -577,7 +653,7 @@ export function parseClientDataFromPdfText(
   }
 
   // Priority 4: Look for name associated with the detected client CNPJ/CPF
-  // If we already detected a client CNPJ, search lines around it (within 3 lines above or below)
+  // If we already detected a client CNPJ, search lines around it (within 4 lines above or below)
   if (!detectedNome && detectedCnpj) {
     const rawCnpjDigits = detectedCnpj.replace(/\D/g, '')
     for (let i = 0; i < lines.length; i++) {
@@ -586,8 +662,9 @@ export function parseClientDataFromPdfText(
         // Inspect line itself for a name preceding or following CNPJ
         const beforeCnpjMatch = /^(.*?)(?:CNPJ|CPF)/i.exec(line)
         if (beforeCnpjMatch) {
-          const cand = cleanNameCandidate(beforeCnpjMatch[1])
+          let cand = cleanNameCandidate(beforeCnpjMatch[1])
           if (!isExcludedGenericTerm(cand) && cand.length >= 4) {
+            cand = mergeWrappedNameLines(cand, lines, i)
             detectedNome = cand
             nomeSnippet = line
             nomeConfidence = 'high'
@@ -595,30 +672,34 @@ export function parseClientDataFromPdfText(
           }
         }
 
-        // Check 2 lines above
-        for (let offset = -1; offset >= -2; offset--) {
+        // Check lines above (up to 4 lines)
+        for (let offset = -1; offset >= -4; offset--) {
           const targetIdx = i + offset
           if (targetIdx >= 0) {
             const candLine = lines[targetIdx]
             // Skip issuer section lines
-            if (ISSUER_HEADER_REGEX.test(candLine)) continue
-            const cand = cleanNameCandidate(candLine)
+            if (ISSUER_HEADER_REGEX.test(candLine) && !CLIENT_HEADER_REGEX.test(candLine)) continue
+            let cand = cleanNameCandidate(candLine)
             if (!isExcludedGenericTerm(cand) && cand.length >= 4 && /[A-Za-zÀ-ÿ]{3,}/.test(cand)) {
+              cand = mergeWrappedNameLines(cand, lines, targetIdx)
               detectedNome = cand
               nomeSnippet = candLine
-              nomeConfidence = 'medium'
+              nomeConfidence = 'high'
               break
             }
           }
         }
         if (detectedNome) break
 
-        // Check 1 line below
-        if (i + 1 < lines.length) {
-          const candLine = lines[i + 1]
-          if (!ISSUER_HEADER_REGEX.test(candLine)) {
-            const cand = cleanNameCandidate(candLine)
+        // Check lines below (up to 3 lines)
+        for (let offset = 1; offset <= 3; offset++) {
+          const targetIdx = i + offset
+          if (targetIdx < lines.length) {
+            const candLine = lines[targetIdx]
+            if (ISSUER_HEADER_REGEX.test(candLine) && !CLIENT_HEADER_REGEX.test(candLine)) continue
+            let cand = cleanNameCandidate(candLine)
             if (!isExcludedGenericTerm(cand) && cand.length >= 4 && /[A-Za-zÀ-ÿ]{3,}/.test(cand)) {
+              cand = mergeWrappedNameLines(cand, lines, targetIdx)
               detectedNome = cand
               nomeSnippet = candLine
               nomeConfidence = 'medium'
@@ -635,17 +716,18 @@ export function parseClientDataFromPdfText(
   // making sure NOT to pick the emitter/prestador name
   if (!detectedNome) {
     const fallbackNameRegex =
-      /(?:RAZ[ÃA]O\s*SOCIAL|NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|NOME\s+EMPRESARIAL)[:\s\-–—]+([^\n\r]{3,90})/i
+      /(?:RAZ[ÃA]O\s*SOCIAL|NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|NOME\s+EMPRESARIAL)[:\s\-–—]+([^\n\r]{3,120})/i
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
       // Skip issuer sections
-      if (ISSUER_HEADER_REGEX.test(line)) continue
+      if (ISSUER_HEADER_REGEX.test(line) && !CLIENT_HEADER_REGEX.test(line)) continue
 
       const match = fallbackNameRegex.exec(line)
       if (match && match[1]) {
-        const candidate = cleanNameCandidate(match[1])
+        let candidate = cleanNameCandidate(match[1])
         if (!isExcludedGenericTerm(candidate) && candidate.length >= 3) {
+          candidate = mergeWrappedNameLines(candidate, lines, i)
           detectedNome = candidate
           nomeSnippet = line
           nomeConfidence = 'medium'
@@ -661,8 +743,9 @@ export function parseClientDataFromPdfText(
       ) {
         if (i + 1 < lines.length) {
           const nextLine = lines[i + 1].trim()
-          const candidate = cleanNameCandidate(nextLine)
+          let candidate = cleanNameCandidate(nextLine)
           if (!isExcludedGenericTerm(candidate) && candidate.length >= 3) {
+            candidate = mergeWrappedNameLines(candidate, lines, i + 1)
             detectedNome = candidate
             nomeSnippet = `${line} -> ${nextLine}`
             nomeConfidence = 'medium'
@@ -673,18 +756,20 @@ export function parseClientDataFromPdfText(
     }
   }
 
-  // Priority 6: Fallback for single-entity documents with no section markers
-  // (Preserve current fallback behavior when document has only one identifiable business name)
-  if (!detectedNome && !clientSectionText) {
-    for (const line of lines) {
-      if (ISSUER_HEADER_REGEX.test(line)) continue
+  // Priority 6: Specific company entity detection (e.g. SPE LTDA / INCORPORADORA / LTDA / S/A)
+  // when not located by explicit labels, strictly excluding issuer lines and current empresaNome
+  if (!detectedNome) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      if (ISSUER_HEADER_REGEX.test(line) && !CLIENT_HEADER_REGEX.test(line)) continue
       if (
-        /\b(?:LTDA|S\/?A|EIRELI|ME|EPP)\b/i.test(line) &&
+        /\b(?:SPE\s+LTDA|INCORPORADORA|LTDA|S\/?A|EIRELI|ME|EPP)\b/i.test(line) &&
         !isExcludedGenericTerm(line) &&
-        line.length <= 80
+        line.length <= 120
       ) {
-        const cand = cleanNameCandidate(line)
+        let cand = cleanNameCandidate(line)
         if (!isExcludedGenericTerm(cand) && cand.length >= 4) {
+          cand = mergeWrappedNameLines(cand, lines, i)
           detectedNome = cand
           nomeSnippet = line
           nomeConfidence = 'low'
