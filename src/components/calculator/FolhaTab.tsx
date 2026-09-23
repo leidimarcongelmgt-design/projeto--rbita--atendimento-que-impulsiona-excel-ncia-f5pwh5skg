@@ -9,6 +9,7 @@ import { CurrencyInput } from './CurrencyInput'
 import { formatBRL } from '@/lib/calculatorState'
 import { Users, ArrowRight, CheckCircle2, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ImportXlsxButton } from './ImportXlsxButton'
 
 interface FolhaTabProps {
   state: CalculatorState
@@ -39,20 +40,23 @@ export const FolhaTab: React.FC<FolhaTabProps> = ({ state, computed, onChange, o
               </CardDescription>
             </div>
 
-            {/* Toggle switch */}
-            <div className="flex items-center space-x-3 bg-slate-50 p-2.5 rounded-lg border border-slate-200 self-start sm:self-auto">
-              <Switch
-                id="usarCalcFolha"
-                checked={isEnabled}
-                onCheckedChange={(checked) => onChange({ usarCalcFolha: checked ? 1 : 0 })}
-                className="data-[state=checked]:bg-[#1E3A5F]"
-              />
-              <Label
-                htmlFor="usarCalcFolha"
-                className="text-sm font-semibold cursor-pointer text-slate-800"
-              >
-                {isEnabled ? 'Cálculo Ativo' : 'Cálculo Desativado'}
-              </Label>
+            {/* Controles do Cabeçalho: Importar XLSX Discreto + Toggle */}
+            <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">
+              <ImportXlsxButton onImport={onChange} variant="discrete" />
+              <div className="flex items-center space-x-3 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                <Switch
+                  id="usarCalcFolha"
+                  checked={isEnabled}
+                  onCheckedChange={(checked) => onChange({ usarCalcFolha: checked ? 1 : 0 })}
+                  className="data-[state=checked]:bg-[#1E3A5F]"
+                />
+                <Label
+                  htmlFor="usarCalcFolha"
+                  className="text-sm font-semibold cursor-pointer text-slate-800"
+                >
+                  {isEnabled ? 'Cálculo Ativo' : 'Cálculo Desativado'}
+                </Label>
+              </div>
             </div>
           </div>
         </CardHeader>
