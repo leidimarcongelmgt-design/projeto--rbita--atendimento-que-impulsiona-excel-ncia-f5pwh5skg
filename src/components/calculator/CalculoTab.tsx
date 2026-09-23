@@ -7,7 +7,6 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Calculator, Sparkles, AlertCircle, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { ImportXlsxButton } from './ImportXlsxButton'
 
 interface CalculoTabProps {
   state: CalculatorState
@@ -40,11 +39,6 @@ export const CalculoTab: React.FC<CalculoTabProps> = ({
                 Estrutura analítica de receitas, custos, despesas operacionais e apuração do
                 resultado.
               </CardDescription>
-            </div>
-
-            {/* Ações de Topo: Botão Importar XLSX em Destaque */}
-            <div className="flex items-center gap-2 self-start sm:self-auto">
-              <ImportXlsxButton onImport={onChange} variant="prominent" />
             </div>
           </div>
 
