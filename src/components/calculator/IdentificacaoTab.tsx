@@ -5,19 +5,17 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Upload, Trash2, Eye, EyeOff, Building2, ArrowRight, UserCheck } from 'lucide-react'
+import { Upload, Trash2, Eye, EyeOff, Building2, FileText } from 'lucide-react'
 
 interface IdentificacaoTabProps {
   state: CalculatorState
   onChange: (patch: Partial<CalculatorState>) => void
-  onNavigateTab: (tab: CalculatorState['tab']) => void
   onGenerateDocument: () => void
 }
 
 export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
   state,
   onChange,
-  onNavigateTab,
   onGenerateDocument,
 }) => {
   const companyFileRef = useRef<HTMLInputElement>(null)
@@ -326,22 +324,13 @@ export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
           </div>
 
           {/* Navegação e Ações */}
-          <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onNavigateTab('cliente')}
-              className="w-full sm:w-auto text-xs h-9 text-[#1E3A5F] hover:bg-slate-50 gap-2 border-[#1E3A5F]/30"
-            >
-              <UserCheck className="w-3.5 h-3.5" /> Ir para Dados do Cliente{' '}
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Button>
+          <div className="mt-8 pt-6 border-t border-slate-100 flex items-center justify-end">
             <Button
               type="button"
               onClick={onGenerateDocument}
-              className="w-full sm:w-auto bg-[#1E3A5F] hover:bg-[#16304F] text-white px-6 h-9 text-xs font-semibold shadow-sm"
+              className="w-full sm:w-auto bg-[#1E3A5F] hover:bg-[#16304F] text-white px-6 h-9 text-xs font-semibold shadow-sm gap-2"
             >
-              Gerar Documento
+              <FileText className="w-4 h-4" /> Gerar Documento
             </Button>
           </div>
         </CardContent>

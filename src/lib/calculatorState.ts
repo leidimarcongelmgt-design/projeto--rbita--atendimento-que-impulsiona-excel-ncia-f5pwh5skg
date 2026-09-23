@@ -21,11 +21,8 @@ export function parseStateFromUrl(search: string): CalculatorState {
     return val !== null ? val : def
   }
 
-  const tabParam = params.get('tab')
-  let tab: CalculatorState['tab'] = DEFAULT_CALCULATOR_STATE.tab
-  if (tabParam === 'identificacao' || tabParam === 'cliente') {
-    tab = tabParam
-  }
+  // Apenas 'identificacao' é aceito; qualquer outro (como 'cliente' ou legado) faz fallback seguro para 'identificacao'
+  const tab: CalculatorState['tab'] = 'identificacao'
 
   return {
     tab,
@@ -34,48 +31,14 @@ export function parseStateFromUrl(search: string): CalculatorState {
     logoHeight: parseNum('logoHeight', DEFAULT_CALCULATOR_STATE.logoHeight),
     logoRatio: parseBinary('logoRatio', DEFAULT_CALCULATOR_STATE.logoRatio),
     logoControls: parseBinary('logoControls', DEFAULT_CALCULATOR_STATE.logoControls),
-    clientLogoWidth: parseNum('clientLogoWidth', DEFAULT_CALCULATOR_STATE.clientLogoWidth),
-    clientLogoHeight: parseNum('clientLogoHeight', DEFAULT_CALCULATOR_STATE.clientLogoHeight),
-    clientLogoRatio: parseBinary('clientLogoRatio', DEFAULT_CALCULATOR_STATE.clientLogoRatio),
-    clientLogoControls: parseBinary(
-      'clientLogoControls',
-      DEFAULT_CALCULATOR_STATE.clientLogoControls,
-    ),
 
     logoData: parseStr('logoData', DEFAULT_CALCULATOR_STATE.logoData),
-    clientLogoData: parseStr('clientLogoData', DEFAULT_CALCULATOR_STATE.clientLogoData),
 
     empresaNome: parseStr('empresaNome', DEFAULT_CALCULATOR_STATE.empresaNome),
     empresaCnpj: parseStr('empresaCnpj', DEFAULT_CALCULATOR_STATE.empresaCnpj),
     empresaEndereco: parseStr('empresaEndereco', DEFAULT_CALCULATOR_STATE.empresaEndereco),
     empresaCidade: parseStr('empresaCidade', DEFAULT_CALCULATOR_STATE.empresaCidade),
     empresaUf: parseStr('empresaUf', DEFAULT_CALCULATOR_STATE.empresaUf),
-
-    clienteNome: parseStr('clienteNome', DEFAULT_CALCULATOR_STATE.clienteNome),
-    clienteCnpj: parseStr('clienteCnpj', DEFAULT_CALCULATOR_STATE.clienteCnpj),
-    clienteIE: parseStr('clienteIE', DEFAULT_CALCULATOR_STATE.clienteIE),
-    clienteIM: parseStr('clienteIM', DEFAULT_CALCULATOR_STATE.clienteIM),
-    clienteRamo: parseStr('clienteRamo', DEFAULT_CALCULATOR_STATE.clienteRamo),
-    clienteEndereco: parseStr('clienteEndereco', DEFAULT_CALCULATOR_STATE.clienteEndereco),
-    clienteCidade: parseStr('clienteCidade', DEFAULT_CALCULATOR_STATE.clienteCidade),
-    clienteUf: parseStr('clienteUf', DEFAULT_CALCULATOR_STATE.clienteUf),
-
-    // Client Contacts
-    contFinNome: parseStr('contFinNome', DEFAULT_CALCULATOR_STATE.contFinNome),
-    contFinTelefone: parseStr('contFinTelefone', DEFAULT_CALCULATOR_STATE.contFinTelefone),
-    contFinEmail: parseStr('contFinEmail', DEFAULT_CALCULATOR_STATE.contFinEmail),
-    contEstoqueNome: parseStr('contEstoqueNome', DEFAULT_CALCULATOR_STATE.contEstoqueNome),
-    contEstoqueTelefone: parseStr(
-      'contEstoqueTelefone',
-      DEFAULT_CALCULATOR_STATE.contEstoqueTelefone,
-    ),
-    contEstoqueEmail: parseStr('contEstoqueEmail', DEFAULT_CALCULATOR_STATE.contEstoqueEmail),
-    contRhNome: parseStr('contRhNome', DEFAULT_CALCULATOR_STATE.contRhNome),
-    contRhTelefone: parseStr('contRhTelefone', DEFAULT_CALCULATOR_STATE.contRhTelefone),
-    contRhEmail: parseStr('contRhEmail', DEFAULT_CALCULATOR_STATE.contRhEmail),
-    contLegalNome: parseStr('contLegalNome', DEFAULT_CALCULATOR_STATE.contLegalNome),
-    contLegalTelefone: parseStr('contLegalTelefone', DEFAULT_CALCULATOR_STATE.contLegalTelefone),
-    contLegalEmail: parseStr('contLegalEmail', DEFAULT_CALCULATOR_STATE.contLegalEmail),
 
     periodoInicio: parseStr('periodoInicio', DEFAULT_CALCULATOR_STATE.periodoInicio),
     periodoFim: parseStr('periodoFim', DEFAULT_CALCULATOR_STATE.periodoFim),
@@ -97,42 +60,13 @@ export function serializeStateToUrl(state: CalculatorState): string {
   params.set('logoRatio', String(state.logoRatio))
   params.set('logoControls', String(state.logoControls))
 
-  setNum('clientLogoWidth', state.clientLogoWidth)
-  setNum('clientLogoHeight', state.clientLogoHeight)
-  params.set('clientLogoRatio', String(state.clientLogoRatio))
-  params.set('clientLogoControls', String(state.clientLogoControls))
-
   if (state.logoData) params.set('logoData', state.logoData)
-  if (state.clientLogoData) params.set('clientLogoData', state.clientLogoData)
 
   if (state.empresaNome) params.set('empresaNome', state.empresaNome)
   if (state.empresaCnpj) params.set('empresaCnpj', state.empresaCnpj)
   if (state.empresaEndereco) params.set('empresaEndereco', state.empresaEndereco)
   if (state.empresaCidade) params.set('empresaCidade', state.empresaCidade)
   if (state.empresaUf) params.set('empresaUf', state.empresaUf)
-
-  if (state.clienteNome) params.set('clienteNome', state.clienteNome)
-  if (state.clienteCnpj) params.set('clienteCnpj', state.clienteCnpj)
-  if (state.clienteIE) params.set('clienteIE', state.clienteIE)
-  if (state.clienteIM) params.set('clienteIM', state.clienteIM)
-  if (state.clienteRamo) params.set('clienteRamo', state.clienteRamo)
-  if (state.clienteEndereco) params.set('clienteEndereco', state.clienteEndereco)
-  if (state.clienteCidade) params.set('clienteCidade', state.clienteCidade)
-  if (state.clienteUf) params.set('clienteUf', state.clienteUf)
-
-  // Client Contacts
-  if (state.contFinNome) params.set('contFinNome', state.contFinNome)
-  if (state.contFinTelefone) params.set('contFinTelefone', state.contFinTelefone)
-  if (state.contFinEmail) params.set('contFinEmail', state.contFinEmail)
-  if (state.contEstoqueNome) params.set('contEstoqueNome', state.contEstoqueNome)
-  if (state.contEstoqueTelefone) params.set('contEstoqueTelefone', state.contEstoqueTelefone)
-  if (state.contEstoqueEmail) params.set('contEstoqueEmail', state.contEstoqueEmail)
-  if (state.contRhNome) params.set('contRhNome', state.contRhNome)
-  if (state.contRhTelefone) params.set('contRhTelefone', state.contRhTelefone)
-  if (state.contRhEmail) params.set('contRhEmail', state.contRhEmail)
-  if (state.contLegalNome) params.set('contLegalNome', state.contLegalNome)
-  if (state.contLegalTelefone) params.set('contLegalTelefone', state.contLegalTelefone)
-  if (state.contLegalEmail) params.set('contLegalEmail', state.contLegalEmail)
 
   return `?${params.toString()}`
 }

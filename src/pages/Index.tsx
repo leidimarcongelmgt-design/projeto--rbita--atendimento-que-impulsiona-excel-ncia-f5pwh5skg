@@ -1,38 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useState, useEffect, useCallback } from 'react'
 import { CalculatorState, DEFAULT_CALCULATOR_STATE } from '@/types/calculator'
 import { parseStateFromUrl, serializeStateToUrl } from '@/lib/calculatorState'
 import { Header } from '@/components/calculator/Header'
 import { IdentificacaoTab } from '@/components/calculator/IdentificacaoTab'
-import { ClienteTab } from '@/components/calculator/ClienteTab'
 import { DocumentView } from '@/components/calculator/DocumentView'
 import { toast } from 'sonner'
-import {
-  AttachedPdf,
-  loadPersistedPdf,
-  savePdfFile,
-  clearAttachedPdf,
-  clearAllAttachedPdfs,
-  PdfDocumentCategory,
-} from '@/lib/pdfStorage'
 
 export default function Index() {
-  const _location = useLocation()
-
   // Initialize state strictly from URL query parameters
   const [state, setState] = useState<CalculatorState>(() => {
     return parseStateFromUrl(window.location.search)
-  })
-
-  // Attached PDFs stored in session/memory
-  const [attachedCnpjPdf, setAttachedCnpjPdf] = useState<AttachedPdf | null>(() => {
-    return loadPersistedPdf('cnpj')
-  })
-  const [attachedIePdf, setAttachedIePdf] = useState<AttachedPdf | null>(() => {
-    return loadPersistedPdf('ie')
-  })
-  const [attachedImPdf, setAttachedImPdf] = useState<AttachedPdf | null>(() => {
-    return loadPersistedPdf('im')
   })
 
   const [hasCopied, setHasCopied] = useState(false)
@@ -65,61 +42,14 @@ export default function Index() {
     })
   }, [])
 
-  // PDF handlers
-  const handleUploadPdf = useCallback(
-    async (file: File, category: PdfDocumentCategory): Promise<ArrayBuffer | null> => {
-      if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
-        toast.error('Por favor, selecione um arquivo no formato PDF (.pdf).')
-        return null
-      }
-      try {
-        const buffer = await file.arrayBuffer()
-        const saved = await savePdfFile(file, category)
-        if (category === 'cnpj') setAttachedCnpjPdf(saved)
-        else if (category === 'ie') setAttachedIePdf(saved)
-        else if (category === 'im') setAttachedImPdf(saved)
-
-        const categoryLabels: Record<PdfDocumentCategory, string> = {
-          cnpj: 'PDF do Cartão CNPJ',
-          ie: 'PDF da Inscrição Estadual',
-          im: 'PDF da Inscrição Municipal',
-        }
-        toast.success(`${categoryLabels[category]} "${file.name}" importado com sucesso!`)
-        return buffer
-      } catch {
-        toast.error('Erro ao ler o arquivo PDF.')
-        return null
-      }
-    },
-    [],
-  )
-
-  const handleRemovePdf = useCallback((category: PdfDocumentCategory) => {
-    clearAttachedPdf(category)
-    if (category === 'cnpj') {
-      setAttachedCnpjPdf(null)
-      toast.info('PDF do CNPJ removido.')
-    } else if (category === 'ie') {
-      setAttachedIePdf(null)
-      toast.info('PDF da Inscrição Estadual removido.')
-    } else if (category === 'im') {
-      setAttachedImPdf(null)
-      toast.info('PDF da Inscrição Municipal removido.')
-    }
-  }, [])
-
   // Reset all parameters to reference defaults ("Nova Consulta")
   const handleReset = useCallback(() => {
     const nextState = { ...DEFAULT_CALCULATOR_STATE }
     setState(nextState)
     setIsDocumentMode(false)
-    clearAllAttachedPdfs()
-    setAttachedCnpjPdf(null)
-    setAttachedIePdf(null)
-    setAttachedImPdf(null)
     const newQuery = serializeStateToUrl(nextState)
     window.history.replaceState(null, '', `${window.location.pathname}${newQuery}`)
-    toast.info('Valores e documentos anexos redefinidos para os padrões da referência.')
+    toast.info('Valores redefinidos para os padrões da referência.')
   }, [])
 
   // Copy current URL to clipboard with confirmation toast
@@ -156,35 +86,14 @@ export default function Index() {
 
       <div className="max-w-[1100px] w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1">
         {isDocumentMode ? (
-          <DocumentView
-            state={state}
-            onBack={() => setIsDocumentMode(false)}
-            attachedCnpjPdf={attachedCnpjPdf}
-            attachedIePdf={attachedIePdf}
-            attachedImPdf={attachedImPdf}
-          />
+          <DocumentView state={state} onBack={() => setIsDocumentMode(false)} />
         ) : (
           <div>
             {state.tab === 'identificacao' && (
               <IdentificacaoTab
                 state={state}
                 onChange={updateState}
-                onNavigateTab={handleTabChange}
                 onGenerateDocument={() => setIsDocumentMode(true)}
-              />
-            )}
-
-            {state.tab === 'cliente' && (
-              <ClienteTab
-                state={state}
-                onChange={updateState}
-                onNavigateTab={handleTabChange}
-                onGenerateDocument={() => setIsDocumentMode(true)}
-                attachedCnpjPdf={attachedCnpjPdf}
-                attachedIePdf={attachedIePdf}
-                attachedImPdf={attachedImPdf}
-                onUploadPdf={handleUploadPdf}
-                onRemovePdf={handleRemovePdf}
               />
             )}
           </div>
