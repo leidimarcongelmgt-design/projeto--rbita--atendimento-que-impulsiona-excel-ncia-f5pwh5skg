@@ -1,13 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useLocation } from 'react-router-dom'
-import { CalculatorState, DEFAULT_CALCULATOR_STATE, computeFinancials } from '@/types/calculator'
+import { CalculatorState, DEFAULT_CALCULATOR_STATE } from '@/types/calculator'
 import { parseStateFromUrl, serializeStateToUrl } from '@/lib/calculatorState'
 import { Header } from '@/components/calculator/Header'
 import { IdentificacaoTab } from '@/components/calculator/IdentificacaoTab'
 import { ClienteTab } from '@/components/calculator/ClienteTab'
-import { CalculoTab } from '@/components/calculator/CalculoTab'
-import { TributosTab } from '@/components/calculator/TributosTab'
-import { FolhaTab } from '@/components/calculator/FolhaTab'
 import { DocumentView } from '@/components/calculator/DocumentView'
 import { toast } from 'sonner'
 import {
@@ -67,11 +64,6 @@ export default function Index() {
       return nextState
     })
   }, [])
-
-  // Calculate live financials
-  const computed = useMemo(() => {
-    return computeFinancials(state)
-  }, [state])
 
   // PDF handlers
   const handleUploadPdf = useCallback(
@@ -166,7 +158,6 @@ export default function Index() {
         {isDocumentMode ? (
           <DocumentView
             state={state}
-            computed={computed}
             onBack={() => setIsDocumentMode(false)}
             attachedCnpjPdf={attachedCnpjPdf}
             attachedIePdf={attachedIePdf}
@@ -194,32 +185,6 @@ export default function Index() {
                 attachedImPdf={attachedImPdf}
                 onUploadPdf={handleUploadPdf}
                 onRemovePdf={handleRemovePdf}
-              />
-            )}
-            {state.tab === 'calculo' && (
-              <CalculoTab
-                state={state}
-                computed={computed}
-                onChange={updateState}
-                onNavigateTab={handleTabChange}
-              />
-            )}
-
-            {state.tab === 'tributos' && (
-              <TributosTab
-                state={state}
-                computed={computed}
-                onChange={updateState}
-                onNavigateTab={handleTabChange}
-              />
-            )}
-
-            {state.tab === 'folha' && (
-              <FolhaTab
-                state={state}
-                computed={computed}
-                onChange={updateState}
-                onNavigateTab={handleTabChange}
               />
             )}
           </div>

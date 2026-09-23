@@ -23,9 +23,6 @@ export const Header: React.FC<HeaderProps> = ({
   const tabs: { id: CalculatorState['tab']; label: string }[] = [
     { id: 'identificacao', label: 'Identificação' },
     { id: 'cliente', label: 'Cliente' },
-    { id: 'calculo', label: 'Cálculo' },
-    { id: 'tributos', label: 'Tributos' },
-    { id: 'folha', label: 'Folha de Pagamento' },
   ]
 
   return (
@@ -41,7 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
               DOSSIÊ DO CLIENTE
             </h1>
             <p className="text-xs text-slate-500 font-normal">
-              Receita, despesas, tributos e folha de pagamento
+              Identificação do emissor e cadastro completo do cliente
             </p>
           </div>
         </div>

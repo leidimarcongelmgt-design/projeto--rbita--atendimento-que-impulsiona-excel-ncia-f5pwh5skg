@@ -1,6 +1,5 @@
 import React from 'react'
-import { CalculatorState, ComputedFinancials } from '@/types/calculator'
-import { formatBRL, formatPercent } from '@/lib/calculatorState'
+import { CalculatorState } from '@/types/calculator'
 import { Button } from '@/components/ui/button'
 import {
   ArrowLeft,
@@ -12,13 +11,13 @@ import {
   Mail,
   User,
   Users,
+  MapPin,
+  Briefcase,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { AttachedPdf, formatFileSize } from '@/lib/pdfStorage'
 
 interface DocumentViewProps {
   state: CalculatorState
-  computed: ComputedFinancials
   onBack: () => void
   attachedCnpjPdf?: AttachedPdf | null
   attachedIePdf?: AttachedPdf | null
@@ -27,14 +26,11 @@ interface DocumentViewProps {
 
 export const DocumentView: React.FC<DocumentViewProps> = ({
   state,
-  computed,
   onBack,
   attachedCnpjPdf,
   attachedIePdf,
   attachedImPdf,
 }) => {
-  const isLucro = computed.resultadoExercicio >= 0
-
   const handlePrint = () => {
     window.print()
   }
@@ -173,228 +169,78 @@ export const DocumentView: React.FC<DocumentViewProps> = ({
           <div className="mt-6 pt-4 border-t border-slate-100">
             <div>
               <h1 className="text-xl font-bold uppercase tracking-wide text-[#1E3A5F]">
-                Demonstrativo de Resultado e Folha de Pagamento
+                Dossiê Cadastral do Cliente
               </h1>
               <p className="text-xs text-slate-500">
-                Relatório analítico gerencial e apuração fiscal consolidada
+                Ficha cadastral completa, identificação fiscal e contatos operacionais
               </p>
             </div>
           </div>
         </div>
 
-        {/* 1. SEÇÃO: DRE (DEMONSTRAÇÃO DO RESULTADO DO EXERCÍCIO) */}
+        {/* 1. SEÇÃO: DADOS CADASTRAIS DO CLIENTE */}
         <div className="mb-8 print-break-inside-avoid">
-          <div className="flex items-center justify-between border-b border-slate-300 pb-2 mb-3">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-[#1E3A5F]">
-              1. Demonstração do Resultado do Exercício (DRE)
+          <div className="flex items-center gap-2 border-b border-slate-200 pb-2 mb-3">
+            <Building2 className="w-4 h-4 text-[#1E3A5F]" />
+            <h2 className="text-xs font-bold uppercase tracking-wider text-[#1E3A5F]">
+              1. Dados Cadastrais e Inscrições do Cliente
             </h2>
-            <span className="text-xs text-slate-500">Valores em Reais (BRL)</span>
           </div>
 
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-slate-200 text-slate-500 text-left">
-                <th className="py-2 font-semibold">Descrição da Rubrica</th>
-                <th className="py-2 text-center w-24">Regra</th>
-                <th className="py-2 text-right w-36">Valor</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              <tr>
-                <td className="py-2 font-medium text-slate-800">(+) Receita Bruta</td>
-                <td className="py-2 text-center text-slate-400">Faturamento</td>
-                <td className="py-2 text-right font-semibold text-slate-900 tabular-nums">
-                  {formatBRL(state.receita)}
-                </td>
-              </tr>
-              <tr>
-                <td className="py-2 text-slate-700">(−) Deduções da Receita Bruta</td>
-                <td className="py-2 text-center text-slate-400">Impostos / Desc.</td>
-                <td className="py-2 text-right text-slate-800 tabular-nums">
-                  {formatBRL(state.deducoes)}
-                </td>
-              </tr>
-              <tr className="bg-slate-50 font-semibold">
-                <td className="py-2 text-slate-900">(=) Receita Líquida</td>
-                <td className="py-2 text-center text-slate-400">Subtotal</td>
-                <td className="py-2 text-right text-slate-900 tabular-nums">
-                  {formatBRL(computed.receitaLiquida)}
-                </td>
-              </tr>
-              <tr>
-                <td className="py-2 text-slate-700">(−) CMV / CPV / CSP</td>
-                <td className="py-2 text-center text-slate-400">Custos Diretos</td>
-                <td className="py-2 text-right text-slate-800 tabular-nums">
-                  {formatBRL(state.cmv)}
-                </td>
-              </tr>
-              <tr className="bg-slate-50 font-semibold">
-                <td className="py-2 text-slate-900">(=) Resultado Bruto</td>
-                <td className="py-2 text-center text-slate-400">Lucro Bruto</td>
-                <td className="py-2 text-right text-slate-900 tabular-nums">
-                  {formatBRL(computed.resultadoBruto)}
-                </td>
-              </tr>
-              <tr>
-                <td className="py-2 text-slate-700">(−) Despesas Administrativas</td>
-                <td className="py-2 text-center text-slate-400">Operacionais</td>
-                <td className="py-2 text-right text-slate-800 tabular-nums">
-                  {formatBRL(state.despAdm)}
-                </td>
-              </tr>
-              <tr>
-                <td className="py-2 text-slate-700">
-                  (−) Despesas com Folha de Pagamento
-                  {state.usarCalcFolha === 1 && (
-                    <span className="text-[10px] text-blue-600 font-normal ml-1">
-                      (detalhado abaixo)
-                    </span>
-                  )}
-                </td>
-                <td className="py-2 text-center text-slate-400">Pessoal</td>
-                <td className="py-2 text-right text-slate-800 tabular-nums">
-                  {formatBRL(computed.despFolhaEfetiva)}
-                </td>
-              </tr>
-              <tr>
-                <td className="py-2 text-slate-700">
-                  (−) Provisão de Tributos sobre o Resultado
-                  {state.usarCalcTrib === 1 && (
-                    <span className="text-[10px] text-purple-600 font-normal ml-1">
-                      (calculado: {formatPercent(state.tribAliq)})
-                    </span>
-                  )}
-                </td>
-                <td className="py-2 text-center text-slate-400">Impostos</td>
-                <td className="py-2 text-right text-slate-800 tabular-nums">
-                  {formatBRL(computed.tributosEfetivo)}
-                </td>
-              </tr>
-              <tr>
-                <td className="py-2 text-slate-700">(+/−) Resultado Financeiro Líquido</td>
-                <td className="py-2 text-center text-slate-400">Financeiro</td>
-                <td className="py-2 text-right text-slate-800 tabular-nums">
-                  {formatBRL(state.resFinanceiro)}
-                </td>
-              </tr>
-              <tr
-                className={cn(
-                  'border-t-2 font-bold text-sm',
-                  isLucro ? 'bg-emerald-50/60 text-[#2E7D32]' : 'bg-rose-50/60 text-[#C62828]',
-                )}
-              >
-                <td className="py-3 pl-2">(=) Resultado Líquido do Exercício</td>
-                <td className="py-3 text-center uppercase text-xs">
-                  {isLucro ? 'Lucro' : 'Prejuízo'}
-                </td>
-                <td className="py-3 pr-2 text-right text-base tabular-nums">
-                  {formatBRL(computed.resultadoExercicio)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        {/* 2. SEÇÃO: TRIBUTOS E FOLHA (DUAS COLUNAS COMPACTAS) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8 print-break-inside-avoid">
-          {/* Box de Tributos */}
-          <div className="border border-slate-200 rounded p-4 bg-slate-50/40">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[#1E3A5F] mb-3 border-b border-slate-200 pb-1">
-              2. Apuração Fiscal e Tributária
-            </h3>
-            {state.usarCalcTrib === 1 ? (
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-slate-600">Base de Cálculo Adotada:</span>
-                  <span className="font-semibold text-slate-800 tabular-nums">
-                    {formatBRL(state.tribBase)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-600">Alíquota Efetiva:</span>
-                  <span className="font-semibold text-slate-800 tabular-nums">
-                    {formatPercent(state.tribAliq)}
-                  </span>
-                </div>
-                <div className="flex justify-between border-t border-slate-200 pt-1.5 font-bold text-purple-900">
-                  <span>Total Provisão Tributária:</span>
-                  <span className="tabular-nums">{formatBRL(computed.tributosCalculados)}</span>
-                </div>
-              </div>
-            ) : (
-              <div className="text-xs text-slate-500 py-2">
-                <p>Tributos apurados por lançamento manual direto:</p>
-                <p className="font-bold text-slate-800 mt-1">{formatBRL(state.tributos)}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs bg-slate-50/50 p-4 rounded border border-slate-200">
+            <div>
+              <span className="text-slate-500 block text-[11px]">Razão Social / Nome</span>
+              <span className="font-semibold text-slate-800 text-sm">
+                {state.clienteNome || '—'}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[11px]">CNPJ / CPF</span>
+              <span className="font-semibold text-slate-800 tabular-nums">
+                {state.clienteCnpj || '—'}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[11px]">Inscrição Estadual (IE)</span>
+              <span className="font-medium text-slate-800 tabular-nums">
+                {state.clienteIE || '—'}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[11px]">
+                Inscrição Municipal (IM / CCM)
+              </span>
+              <span className="font-medium text-slate-800 tabular-nums">
+                {state.clienteIM || '—'}
+              </span>
+            </div>
+            {state.clienteRamo && (
+              <div className="sm:col-span-2">
+                <span className="text-slate-500 block text-[11px] flex items-center gap-1">
+                  <Briefcase className="w-3 h-3 text-slate-400" /> Ramo de Atividade / CNAE
+                  Principal
+                </span>
+                <span className="font-medium text-slate-800">{state.clienteRamo}</span>
               </div>
             )}
-          </div>
-
-          {/* Box de Folha de Pagamento */}
-          <div className="border border-slate-200 rounded p-4 bg-slate-50/40">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[#1E3A5F] mb-3 border-b border-slate-200 pb-1">
-              3. Composição da Folha de Pagamento
-            </h3>
-            {state.usarCalcFolha === 1 ? (
-              <div className="space-y-1.5 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-slate-600">Salários Base:</span>
-                  <span className="font-medium text-slate-800 tabular-nums">
-                    {formatBRL(computed.folhaCalculada.salarios)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-600">INSS Patronal ({state.folhaInss}%):</span>
-                  <span className="font-medium text-slate-800 tabular-nums">
-                    {formatBRL(computed.folhaCalculada.inssValor)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-600">FGTS ({state.folhaFgts}%):</span>
-                  <span className="font-medium text-slate-800 tabular-nums">
-                    {formatBRL(computed.folhaCalculada.fgtsValor)}
-                  </span>
-                </div>
-                {state.folhaOutros > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Outros Benefícios/Encargos:</span>
-                    <span className="font-medium text-slate-800 tabular-nums">
-                      {formatBRL(computed.folhaCalculada.outros)}
-                    </span>
-                  </div>
-                )}
-                {state.folha13 === 1 && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Provisão 13º Salário (1/12):</span>
-                    <span className="font-medium text-slate-800 tabular-nums">
-                      {formatBRL(computed.folhaCalculada.decimoTerceiroValor)}
-                    </span>
-                  </div>
-                )}
-                {state.folhaFerias === 1 && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Provisão Férias (1/12):</span>
-                    <span className="font-medium text-slate-800 tabular-nums">
-                      {formatBRL(computed.folhaCalculada.feriasValor)}
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between border-t border-slate-200 pt-1.5 font-bold text-[#1E3A5F]">
-                  <span>Total Custo de Pessoal:</span>
-                  <span className="tabular-nums">
-                    {formatBRL(computed.folhaCalculada.totalFolha)}
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <div className="text-xs text-slate-500 py-2">
-                <p>Despesa de folha de pagamento informada manualmente:</p>
-                <p className="font-bold text-slate-800 mt-1">{formatBRL(state.despFolha)}</p>
+            {(state.clienteEndereco || state.clienteCidade || state.clienteUf) && (
+              <div className="sm:col-span-2">
+                <span className="text-slate-500 block text-[11px] flex items-center gap-1">
+                  <MapPin className="w-3 h-3 text-slate-400" /> Endereço Completo
+                </span>
+                <span className="font-medium text-slate-800">
+                  {state.clienteEndereco || ''}
+                  {state.clienteEndereco && (state.clienteCidade || state.clienteUf) && ' — '}
+                  {state.clienteCidade || ''}
+                  {state.clienteCidade && state.clienteUf && ' - '}
+                  {state.clienteUf || ''}
+                </span>
               </div>
             )}
           </div>
         </div>
 
-        {/* 3. SEÇÃO: CONTATOS DO CLIENTE (Renderizado se algum campo estiver preenchido) */}
+        {/* 2. SEÇÃO: CONTATOS DO CLIENTE (Renderizado se algum campo estiver preenchido) */}
         {(state.contFinNome ||
           state.contFinTelefone ||
           state.contFinEmail ||
@@ -411,7 +257,7 @@ export const DocumentView: React.FC<DocumentViewProps> = ({
             <div className="flex items-center gap-2 border-b border-slate-200 pb-2 mb-3">
               <Users className="w-4 h-4 text-[#1E3A5F]" />
               <h3 className="text-xs font-bold uppercase tracking-wider text-[#1E3A5F]">
-                4. Contatos Responsáveis do Cliente
+                2. Contatos Responsáveis do Cliente
               </h3>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
@@ -526,16 +372,14 @@ export const DocumentView: React.FC<DocumentViewProps> = ({
           </div>
         )}
 
-        {/* 4. ASSINATURAS DO DOCUMENTO */}
+        {/* 3. ASSINATURAS DO DOCUMENTO */}
         <div className="mt-16 pt-8 border-t border-slate-200 print-break-inside-avoid">
           {' '}
           <div className="grid grid-cols-2 gap-12 text-center text-xs">
             <div>
               <div className="border-b border-slate-400 w-3/4 mx-auto mb-2"></div>
-              <p className="font-bold text-slate-800">
-                {state.empresaNome || 'Responsável Financeiro'}
-              </p>
-              <p className="text-slate-500">Emissor / Contador Responsável</p>
+              <p className="font-bold text-slate-800">{state.empresaNome || 'Empresa Emissora'}</p>
+              <p className="text-slate-500">Emissor / Responsável</p>
             </div>
             <div>
               <div className="border-b border-slate-400 w-3/4 mx-auto mb-2"></div>

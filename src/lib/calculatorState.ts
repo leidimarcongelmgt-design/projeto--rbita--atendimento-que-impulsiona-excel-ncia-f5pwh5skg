@@ -23,37 +23,11 @@ export function parseStateFromUrl(search: string): CalculatorState {
 
   const tabParam = params.get('tab')
   let tab: CalculatorState['tab'] = DEFAULT_CALCULATOR_STATE.tab
-  if (
-    tabParam === 'identificacao' ||
-    tabParam === 'cliente' ||
-    tabParam === 'calculo' ||
-    tabParam === 'tributos' ||
-    tabParam === 'folha'
-  ) {
+  if (tabParam === 'identificacao' || tabParam === 'cliente') {
     tab = tabParam
   }
 
   return {
-    receita: parseNum('receita', DEFAULT_CALCULATOR_STATE.receita),
-    deducoes: parseNum('deducoes', DEFAULT_CALCULATOR_STATE.deducoes),
-    cmv: parseNum('cmv', DEFAULT_CALCULATOR_STATE.cmv),
-    despAdm: parseNum('despAdm', DEFAULT_CALCULATOR_STATE.despAdm),
-    despFolha: parseNum('despFolha', DEFAULT_CALCULATOR_STATE.despFolha),
-    tributos: parseNum('tributos', DEFAULT_CALCULATOR_STATE.tributos),
-    resFinanceiro: parseNum('resFinanceiro', DEFAULT_CALCULATOR_STATE.resFinanceiro),
-
-    tribBase: parseNum('tribBase', DEFAULT_CALCULATOR_STATE.tribBase),
-    tribAliq: parseNum('tribAliq', DEFAULT_CALCULATOR_STATE.tribAliq),
-    usarCalcTrib: parseBinary('usarCalcTrib', DEFAULT_CALCULATOR_STATE.usarCalcTrib),
-
-    folhaSalarios: parseNum('folhaSalarios', DEFAULT_CALCULATOR_STATE.folhaSalarios),
-    folhaInss: parseNum('folhaInss', DEFAULT_CALCULATOR_STATE.folhaInss),
-    folhaFgts: parseNum('folhaFgts', DEFAULT_CALCULATOR_STATE.folhaFgts),
-    folhaOutros: parseNum('folhaOutros', DEFAULT_CALCULATOR_STATE.folhaOutros),
-    folha13: parseBinary('folha13', DEFAULT_CALCULATOR_STATE.folha13),
-    folhaFerias: parseBinary('folhaFerias', DEFAULT_CALCULATOR_STATE.folhaFerias),
-    usarCalcFolha: parseBinary('usarCalcFolha', DEFAULT_CALCULATOR_STATE.usarCalcFolha),
-
     tab,
 
     logoWidth: parseNum('logoWidth', DEFAULT_CALCULATOR_STATE.logoWidth),
@@ -115,26 +89,6 @@ export function serializeStateToUrl(state: CalculatorState): string {
   const setNum = (key: string, val: number) => {
     params.set(key, String(Number.isFinite(val) ? val : 0))
   }
-
-  setNum('receita', state.receita)
-  setNum('deducoes', state.deducoes)
-  setNum('cmv', state.cmv)
-  setNum('despAdm', state.despAdm)
-  setNum('despFolha', state.despFolha)
-  setNum('tributos', state.tributos)
-  setNum('resFinanceiro', state.resFinanceiro)
-
-  setNum('tribBase', state.tribBase)
-  setNum('tribAliq', state.tribAliq)
-  params.set('usarCalcTrib', String(state.usarCalcTrib))
-
-  setNum('folhaSalarios', state.folhaSalarios)
-  setNum('folhaInss', state.folhaInss)
-  setNum('folhaFgts', state.folhaFgts)
-  setNum('folhaOutros', state.folhaOutros)
-  params.set('folha13', String(state.folha13))
-  params.set('folhaFerias', String(state.folhaFerias))
-  params.set('usarCalcFolha', String(state.usarCalcFolha))
 
   params.set('tab', state.tab)
 

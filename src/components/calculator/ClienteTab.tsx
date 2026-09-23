@@ -19,6 +19,7 @@ import {
   Sparkles,
   Loader2,
   ArrowRight,
+  ArrowLeft,
   Users,
   DollarSign,
   Boxes,
@@ -938,17 +939,17 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
             <Button
               type="button"
               variant="outline"
-              onClick={() => onNavigateTab('calculo')}
+              onClick={() => onNavigateTab('identificacao')}
               className="w-full sm:w-auto text-xs h-9 text-slate-700 gap-2"
             >
-              Ir para Cálculo da DRE <ArrowRight className="w-3.5 h-3.5" />
+              <ArrowLeft className="w-3.5 h-3.5" /> Voltar para Identificação
             </Button>
             <Button
               type="button"
               onClick={onGenerateDocument}
               className="w-full sm:w-auto bg-[#1E3A5F] hover:bg-[#16304F] text-white px-6 h-9 text-xs font-semibold shadow-sm"
             >
-              Visualizar Documento Final
+              Gerar Documento
             </Button>
           </div>
         </CardContent>
