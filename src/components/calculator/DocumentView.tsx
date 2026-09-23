@@ -21,7 +21,6 @@ interface DocumentViewProps {
   state: CalculatorState
   computed: ComputedFinancials
   onBack: () => void
-  attachedPdf?: AttachedPdf | null
   attachedCnpjPdf?: AttachedPdf | null
   attachedIePdf?: AttachedPdf | null
   attachedImPdf?: AttachedPdf | null
@@ -31,7 +30,6 @@ export const DocumentView: React.FC<DocumentViewProps> = ({
   state,
   computed,
   onBack,
-  attachedPdf,
   attachedCnpjPdf,
   attachedIePdf,
   attachedImPdf,
@@ -568,25 +566,12 @@ export const DocumentView: React.FC<DocumentViewProps> = ({
         </div>
 
         {/* Anexos PDF Referenciados */}
-        {(attachedPdf || attachedCnpjPdf || attachedIePdf || attachedImPdf) && (
+        {(attachedCnpjPdf || attachedIePdf || attachedImPdf) && (
           <div className="mt-8 pt-4 border-t border-slate-100 space-y-2">
             <p className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
               Documentos Anexos Arquivados Digitalmente:
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-              {attachedPdf && (
-                <div className="flex items-center justify-between text-slate-600 bg-slate-50 p-2.5 rounded border border-slate-200/70">
-                  <div className="flex items-center gap-2 truncate">
-                    <FileText className="w-3.5 h-3.5 text-[#1E3A5F] shrink-0" />
-                    <span className="truncate">
-                      <strong>Principal:</strong> {attachedPdf.name}
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-slate-400 shrink-0 ml-2">
-                    {formatFileSize(attachedPdf.size)}
-                  </span>
-                </div>
-              )}
               {attachedCnpjPdf && (
                 <div className="flex items-center justify-between text-slate-600 bg-slate-50 p-2.5 rounded border border-slate-200/70">
                   <div className="flex items-center gap-2 truncate">

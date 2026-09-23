@@ -1,4 +1,4 @@
-export type PdfDocumentCategory = 'principal' | 'cnpj' | 'ie' | 'im'
+export type PdfDocumentCategory = 'cnpj' | 'ie' | 'im'
 
 export interface AttachedPdf {
   name: string
@@ -10,23 +10,16 @@ export interface AttachedPdf {
 
 // In-memory references for the current runtime
 const memoryPdfs: Record<PdfDocumentCategory, AttachedPdf | null> = {
-  principal: null,
   cnpj: null,
   ie: null,
   im: null,
 }
 
-export function getMemoryPdf(category: PdfDocumentCategory = 'principal'): AttachedPdf | null {
+export function getMemoryPdf(category: PdfDocumentCategory): AttachedPdf | null {
   return memoryPdfs[category]
 }
 
-const getStorageKeys = (category: PdfDocumentCategory = 'principal') => {
-  if (category === 'principal') {
-    return {
-      meta: 'dossie_attached_pdf_meta',
-      data: 'dossie_attached_pdf_base64',
-    }
-  }
+const getStorageKeys = (category: PdfDocumentCategory) => {
   return {
     meta: `dossie_attached_pdf_${category}_meta`,
     data: `dossie_attached_pdf_${category}_base64`,
@@ -47,7 +40,7 @@ export function formatFileSize(bytes: number): string {
 /**
  * Load PDF from memory or restore from sessionStorage if available
  */
-export function loadPersistedPdf(category: PdfDocumentCategory = 'principal'): AttachedPdf | null {
+export function loadPersistedPdf(category: PdfDocumentCategory): AttachedPdf | null {
   if (memoryPdfs[category]) {
     return memoryPdfs[category]
   }
@@ -105,10 +98,7 @@ export function loadPersistedPdf(category: PdfDocumentCategory = 'principal'): A
 /**
  * Store a newly imported PDF file under specified category
  */
-export async function savePdfFile(
-  file: File,
-  category: PdfDocumentCategory = 'principal',
-): Promise<AttachedPdf> {
+export async function savePdfFile(file: File, category: PdfDocumentCategory): Promise<AttachedPdf> {
   const current = memoryPdfs[category]
   if (current?.blobUrl) {
     URL.revokeObjectURL(current.blobUrl)
@@ -167,7 +157,7 @@ export async function savePdfFile(
 /**
  * Remove attached PDF of specific category and cleanup resources
  */
-export function clearAttachedPdf(category: PdfDocumentCategory = 'principal'): void {
+export function clearAttachedPdf(category: PdfDocumentCategory): void {
   const current = memoryPdfs[category]
   if (current?.blobUrl) {
     URL.revokeObjectURL(current.blobUrl)
@@ -187,7 +177,17 @@ export function clearAttachedPdf(category: PdfDocumentCategory = 'principal'): v
  * Clear all attached PDFs (for reset / nova consulta)
  */
 export function clearAllAttachedPdfs(): void {
-  const categories: PdfDocumentCategory[] = ['principal', 'cnpj', 'ie', 'im']
+  // Limpa também as chaves legadas do documento principal se existirem na sessão
+  if (typeof sessionStorage !== 'undefined') {
+    try {
+      sessionStorage.removeItem('dossie_attached_pdf_meta')
+      sessionStorage.removeItem('dossie_attached_pdf_base64')
+    } catch {
+      // ignore
+    }
+  }
+
+  const categories: PdfDocumentCategory[] = ['cnpj', 'ie', 'im']
   for (const cat of categories) {
     clearAttachedPdf(cat)
   }
@@ -198,7 +198,7 @@ export function clearAllAttachedPdfs(): void {
  */
 export async function getAttachedPdfArrayBuffer(
   attached: AttachedPdf,
-  category: PdfDocumentCategory = attached.category || 'principal',
+  category: PdfDocumentCategory = attached.category || 'cnpj',
 ): Promise<ArrayBuffer | null> {
   // Try fetching from blobUrl first
   if (attached.blobUrl) {

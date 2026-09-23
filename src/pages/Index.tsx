@@ -28,9 +28,6 @@ export default function Index() {
   })
 
   // Attached PDFs stored in session/memory
-  const [attachedPdf, setAttachedPdf] = useState<AttachedPdf | null>(() => {
-    return loadPersistedPdf('principal')
-  })
   const [attachedCnpjPdf, setAttachedCnpjPdf] = useState<AttachedPdf | null>(() => {
     return loadPersistedPdf('cnpj')
   })
@@ -78,10 +75,7 @@ export default function Index() {
 
   // PDF handlers
   const handleUploadPdf = useCallback(
-    async (
-      file: File,
-      category: PdfDocumentCategory = 'principal',
-    ): Promise<ArrayBuffer | null> => {
+    async (file: File, category: PdfDocumentCategory): Promise<ArrayBuffer | null> => {
       if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
         toast.error('Por favor, selecione um arquivo no formato PDF (.pdf).')
         return null
@@ -89,13 +83,11 @@ export default function Index() {
       try {
         const buffer = await file.arrayBuffer()
         const saved = await savePdfFile(file, category)
-        if (category === 'principal') setAttachedPdf(saved)
-        else if (category === 'cnpj') setAttachedCnpjPdf(saved)
+        if (category === 'cnpj') setAttachedCnpjPdf(saved)
         else if (category === 'ie') setAttachedIePdf(saved)
         else if (category === 'im') setAttachedImPdf(saved)
 
         const categoryLabels: Record<PdfDocumentCategory, string> = {
-          principal: 'PDF Principal',
           cnpj: 'PDF do Cartão CNPJ',
           ie: 'PDF da Inscrição Estadual',
           im: 'PDF da Inscrição Municipal',
@@ -110,12 +102,9 @@ export default function Index() {
     [],
   )
 
-  const handleRemovePdf = useCallback((category: PdfDocumentCategory = 'principal') => {
+  const handleRemovePdf = useCallback((category: PdfDocumentCategory) => {
     clearAttachedPdf(category)
-    if (category === 'principal') {
-      setAttachedPdf(null)
-      toast.info('Documento PDF principal removido.')
-    } else if (category === 'cnpj') {
+    if (category === 'cnpj') {
       setAttachedCnpjPdf(null)
       toast.info('PDF do CNPJ removido.')
     } else if (category === 'ie') {
@@ -133,7 +122,6 @@ export default function Index() {
     setState(nextState)
     setIsDocumentMode(false)
     clearAllAttachedPdfs()
-    setAttachedPdf(null)
     setAttachedCnpjPdf(null)
     setAttachedIePdf(null)
     setAttachedImPdf(null)
@@ -180,7 +168,6 @@ export default function Index() {
             state={state}
             computed={computed}
             onBack={() => setIsDocumentMode(false)}
-            attachedPdf={attachedPdf}
             attachedCnpjPdf={attachedCnpjPdf}
             attachedIePdf={attachedIePdf}
             attachedImPdf={attachedImPdf}
@@ -202,12 +189,11 @@ export default function Index() {
                 onChange={updateState}
                 onNavigateTab={handleTabChange}
                 onGenerateDocument={() => setIsDocumentMode(true)}
-                attachedPdf={attachedPdf}
-                onUploadPdf={handleUploadPdf}
-                onRemovePdf={handleRemovePdf}
                 attachedCnpjPdf={attachedCnpjPdf}
                 attachedIePdf={attachedIePdf}
                 attachedImPdf={attachedImPdf}
+                onUploadPdf={handleUploadPdf}
+                onRemovePdf={handleRemovePdf}
               />
             )}
             {state.tab === 'calculo' && (
