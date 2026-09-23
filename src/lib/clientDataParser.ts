@@ -474,9 +474,10 @@ export function parseClientDataFromPdfText(
 
   /**
    * Limpa e padroniza a descrição ou código + descrição de CNAE / Ramo de Atividade.
-   * Remove rótulos residuais como PRINCIPAL, SECUNDÁRIA, CNAE, ATIVIDADE ECONÔMICA,
+   * Remove rótulos residuais como "CÓDIGO E DESCRIÇÃO DA ATIVIDADE ECONÔMICA PRINCIPAL",
+   * "ATIVIDADE ECONÔMICA PRINCIPAL", "CNAE PRINCIPAL", etc.,
    * pontuações no início/fim, mantendo o código (ex: 41.10-7-00 ou 4110-7/00 ou 41.10-7)
-   * e sua respectiva descrição textual.
+   * e sua respectiva descrição textual ("código - descrição").
    */
   const cleanRamoValue = (raw: string): string => {
     if (!raw) return ''
@@ -485,7 +486,7 @@ export function parseClientDataFromPdfText(
     // 1. Cortar outros campos conhecidos que possam vir colados no final da linha
     cleaned = cleaned
       .split(
-        /\s+(?:\b(?:CNPJ|CPF|INSCRI[ÇC][ÃA]O|INSC|ENDERE[ÇC]O|LOGRADOURO|TEL|TELEFONE|FONE|E-?MAIL|VALOR|DATA)\b\s*[:\-–—|/])/i,
+        /\s+(?:\b(?:C[ÓO]DIGO\s+E\s+DESCRI[ÇC][ÃA]O\s+DA\s+ATIVIDADE\s+ECON[ÔO]MICA\s+SECUND[ÁA]RIA|ATIVIDADE\s+ECON[ÔO]MICA\s+SECUND[ÁA]RIA|CNAE\s+SECUND[ÁA]RI[AO]|CNPJ|CPF|INSCRI[ÇC][ÃA]O|INSC|ENDERE[ÇC]O|LOGRADOURO|TEL|TELEFONE|FONE|E-?MAIL|VALOR|DATA)\b\s*[:\-–—|/])/i,
       )[0]
       .trim()
 
@@ -493,6 +494,15 @@ export function parseClientDataFromPdfText(
     let prev = ''
     while (prev !== cleaned) {
       prev = cleaned
+
+      // Remove prefixos de cabeçalho do Cartão CNPJ e afins
+      // Ex: "CÓDIGO E DESCRIÇÃO DA ATIVIDADE ECONÔMICA PRINCIPAL", "CÓDIGO E DESCRIÇÃO DO CNAE"
+      cleaned = cleaned
+        .replace(
+          /^(?:C[ÓO]DIGO\s+E\s+DESCRI[ÇC][ÃA]O\s+(?:DAS?\s+)?(?:ATIVIDADES?\s+ECON[ÔO]MICAS?|CNAE)(?:\s+PRINCIPAL)?[\s:]*)+/i,
+          '',
+        )
+        .trim()
 
       // Remove prefixos de cabeçalho de ramo/cnae
       cleaned = cleaned
@@ -517,7 +527,14 @@ export function parseClientDataFromPdfText(
     // 3. Remover marcadores secundários no final se sobrarem
     cleaned = cleaned.replace(/\s*[:\-–—|/._()[\]\s]+$/, '').trim()
 
-    // 4. Normalizar espaços múltiplos
+    // 4. Normalizar separador entre código e descrição: garantir espaço hífen espaço
+    // Ex: "41.10-7-00-Incorporação" -> "41.10-7-00 - Incorporação"
+    cleaned = cleaned.replace(
+      /^(\d{2}[.\s]?\d{2}[-\s]?\d(?:[-\s]?\d{2})?)\s*[-–—:]\s*(.+)$/,
+      '$1 - $2',
+    )
+
+    // 5. Normalizar espaços múltiplos
     cleaned = cleaned.replace(/\s{2,}/g, ' ').trim()
 
     return cleaned
@@ -533,20 +550,22 @@ export function parseClientDataFromPdfText(
       .replace(/^[;,:.\-–—|/\\_()[\]\s]+/, '')
       .replace(/[;,:.\-–—|/\\_()[\]\s]+$/, '')
     if (!s) return true
-    return /^(?:principal|secund[áa]ri[ao]|prim[áa]ri[ao]|cnae|cnae\s+principal|cnae\s+secund[áa]ri[ao]|atividade|atividade\s+econ[ôo]mica|ramo|ramo\s+de\s+atividade)$/i.test(
+    return /^(?:principal|secund[áa]ri[ao]|prim[áa]ri[ao]|cnae|cnae\s+principal|cnae\s+secund[áa]ri[ao]|atividade|atividade\s+principal|atividade\s+econ[ôo]mica|atividade\s+econ[ôo]mica\s+principal|c[óo]digo\s+e\s+descri[çc][ãa]o\s+da\s+atividade\s+econ[ôo]mica\s+principal|c[óo]digo\s+e\s+descri[çc][ãa]o\s+da\s+atividade\s+econ[ôo]mica|c[óo]digo\s+e\s+descri[çc][ãa]o|ramo|ramo\s+de\s+atividade)$/i.test(
       s,
     )
   }
 
   // Regex para linha contendo CNAE (com código numérico como 41.10-7-00, 4110-7/00, 41.10-7 ou descrição rica)
   const cnaeCodeWithDescRegex =
-    /(?:(?:CNAE(?:\s+PRINCIPAL)?|ATIVIDADE\s+ECON[ÔO]MICA(?:\s+PRINCIPAL)?|RAMO(?:\s+DE\s+ATIVIDADE)?)[\s:]+)?(\d{2}[.\s]?\d{2}[-\s]?\d(?:[-\s]?\d{2})?|\d{4,7})\s*[-–—:]\s*([A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9\s/.,&()'-]{3,})/i
+    /(?:(?:(?:C[ÓO]DIGO\s+E\s+DESCRI[ÇC][ÃA]O\s+DA\s+)?ATIVIDADE\s+ECON[ÔO]MICA(?:\s+PRINCIPAL)?|CNAE(?:\s+PRINCIPAL)?|RAMO(?:\s+DE\s+ATIVIDADE)?)[\s:]+)?(\d{2}[.\s]?\d{2}[-\s]?\d(?:[-\s]?\d{2})?|\d{4,7})\s*[-–—:]\s*([A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9\s/.,&()'-]{3,})/i
 
+  // Regex para rótulos explícitos de Ramo de Atividade / Atividade Principal (inline com valor na mesma linha)
   const ramoExplicitLabelRegex =
-    /(?:RAMO\s+DE\s+ATIVIDADE|RAMO\s+DE\s+NEG[ÓO]CIO|RAMO\s+DE\s+ATUA[ÇC][ÃA]O|ATIVIDADE\s+ECON[ÔO]MICA(?:\s+PRINCIPAL)?|ATIVIDADE\s+PRINCIPAL|CNAE(?:\s+PRINCIPAL)?|RAMO)[:\s]+([^\n\r]{3,120})/i
+    /(?:C[ÓO]DIGO\s+E\s+DESCRI[ÇC][ÃA]O\s+DA\s+ATIVIDADE\s+ECON[ÔO]MICA\s+PRINCIPAL|C[ÓO]DIGO\s+E\s+DESCRI[ÇC][ÃA]O\s+DO\s+CNAE\s+PRINCIPAL|RAMO\s+DE\s+ATIVIDADE|RAMO\s+DE\s+NEG[ÓO]CIO|RAMO\s+DE\s+ATUA[ÇC][ÃA]O|ATIVIDADE\s+ECON[ÔO]MICA\s+PRINCIPAL|ATIVIDADE\s+ECON[ÔO]MICA|ATIVIDADE\s+PRINCIPAL|CNAE\s+PRINCIPAL|CNAE|RAMO)[:\s]+([^\n\r]{3,160})/i
 
+  // Regex para linha contendo apenas o rótulo de cabeçalho da atividade (valor virá na próxima linha)
   const ramoLabelHeaderOnlyRegex =
-    /^(?:RAMO\s+DE\s+ATIVIDADE|RAMO\s+DE\s+NEG[ÓO]CIO|RAMO\s+DE\s+ATUA[ÇC][ÃA]O|ATIVIDADE\s+ECON[ÔO]MICA|ATIVIDADE\s+ECON[ÔO]MICA\s+PRINCIPAL|ATIVIDADE\s+PRINCIPAL|CNAE|CNAE\s+PRINCIPAL|RAMO)[:\-–—]?$/i
+    /^(?:C[ÓO]DIGO\s+E\s+DESCRI[ÇC][ÃA]O\s+DA\s+ATIVIDADE\s+ECON[ÔO]MICA\s+PRINCIPAL|C[ÓO]DIGO\s+E\s+DESCRI[ÇC][ÃA]O\s+DO\s+CNAE\s+PRINCIPAL|C[ÓO]DIGO\s+E\s+DESCRI[ÇC][ÃA]O\s+DA\s+ATIVIDADE\s+ECON[ÔO]MICA|RAMO\s+DE\s+ATIVIDADE|RAMO\s+DE\s+NEG[ÓO]CIO|RAMO\s+DE\s+ATUA[ÇC][ÃA]O|ATIVIDADE\s+ECON[ÔO]MICA\s+PRINCIPAL|ATIVIDADE\s+ECON[ÔO]MICA|ATIVIDADE\s+PRINCIPAL|CNAE\s+PRINCIPAL|CNAE|RAMO)[:\-–—]?$/i
 
   // 1. Prioridade Máxima: Procurar CNAE Principal com código e descrição estruturados
   // dentro das linhas prioritárias (seção do cliente ou linhas gerais se não isolada)
@@ -554,9 +573,10 @@ export function parseClientDataFromPdfText(
     const line = linesToSearch[i]
     if (ISSUER_HEADER_REGEX.test(line) && !CLIENT_HEADER_REGEX.test(line)) continue
 
-    // Verifica se a linha possui menção explícita a PRINCIPAL + CNAE
-    if (/PRINCIPAL/i.test(line) && /(?:CNAE|ATIVIDADE|RAMO|\d{2}\.\d{2})/i.test(line)) {
-      // Exemplo: "Atividade Econômica Principal: 41.10-7-00 - Incorporação de empreendimentos imobiliários"
+    // Verifica se a linha possui menção explícita a PRINCIPAL + CNAE / ATIVIDADE / CÓDIGO
+    if (/PRINCIPAL/i.test(line) && /(?:CNAE|ATIVIDADE|RAMO|C[ÓO]DIGO|\d{2}\.\d{2})/i.test(line)) {
+      // Exemplo 1: "CÓDIGO E DESCRIÇÃO DA ATIVIDADE ECONÔMICA PRINCIPAL: 41.10-7-00 - Incorporação de empreendimentos imobiliários"
+      // ou "Atividade Econômica Principal: 41.10-7-00 - Incorporação de empreendimentos imobiliários"
       // ou "CNAE PRINCIPAL: 41.10-7-00 - Incorporação de empreendimentos imobiliários"
       const cnaeMatch = cnaeCodeWithDescRegex.exec(line)
       if (cnaeMatch) {
@@ -564,7 +584,7 @@ export function parseClientDataFromPdfText(
         if (fullCandidate && !isBareRamoMarker(fullCandidate) && fullCandidate.length >= 5) {
           detectedRamo = fullCandidate
           ramoSnippet = line
-          ramoConfidence = clientSectionText ? 'high' : 'medium'
+          ramoConfidence = 'high'
           break
         }
       }
@@ -576,21 +596,24 @@ export function parseClientDataFromPdfText(
         if (cleaned && !isBareRamoMarker(cleaned) && cleaned.length >= 4) {
           detectedRamo = cleaned
           ramoSnippet = line
-          ramoConfidence = clientSectionText ? 'high' : 'medium'
+          ramoConfidence = 'high'
           break
         }
       }
 
-      // Se a linha contém apenas o rótulo/marcador "CNAE PRINCIPAL" ou "PRINCIPAL"
+      // Se a linha contém apenas o rótulo/marcador "CÓDIGO E DESCRIÇÃO DA ATIVIDADE ECONÔMICA PRINCIPAL" ou "CNAE PRINCIPAL"
       // e o valor real está na linha seguinte (i + 1)
       if (i + 1 < linesToSearch.length) {
         const nextLine = linesToSearch[i + 1].trim()
-        const cleanedNext = cleanRamoValue(nextLine)
-        if (cleanedNext && !isBareRamoMarker(cleanedNext) && cleanedNext.length >= 5) {
-          detectedRamo = cleanedNext
-          ramoSnippet = `${line} -> ${nextLine}`
-          ramoConfidence = 'high'
-          break
+        // Ignorar se a próxima linha for outro cabeçalho como ATIVIDADE SECUNDÁRIA
+        if (!/SECUND[ÁA]RI[AO]/i.test(nextLine)) {
+          const cleanedNext = cleanRamoValue(nextLine)
+          if (cleanedNext && !isBareRamoMarker(cleanedNext) && cleanedNext.length >= 5) {
+            detectedRamo = cleanedNext
+            ramoSnippet = `${line} -> ${nextLine}`
+            ramoConfidence = 'high'
+            break
+          }
         }
       }
     }
@@ -704,7 +727,9 @@ export function parseClientDataFromPdfText(
   if (detectedRamo) {
     fields.push({
       key: 'clienteRamo',
-      label: 'Ramo de Atividade do Cliente',
+      label: isCnpjCardMode
+        ? 'Código e Descrição da Atividade Econômica Principal'
+        : 'Ramo de Atividade do Cliente',
       value: detectedRamo,
       currentValue: currentState.clienteRamo || '',
       snippet: ramoSnippet,
@@ -1601,9 +1626,11 @@ export function parseClientDataFromPdfText(
     })
   }
 
-  // Se for Cartão CNPJ (docType === 'cnpj'), restringir os campos apenas ao CNPJ e Nome Empresarial/Razão Social
+  // Se for Cartão CNPJ (docType === 'cnpj'), restringir os campos ao CNPJ, Nome Empresarial e Ramo de Atividade (Atividade Principal)
   const finalFields = isCnpjCardMode
-    ? fields.filter((f) => f.key === 'clienteCnpj' || f.key === 'clienteNome')
+    ? fields.filter(
+        (f) => f.key === 'clienteCnpj' || f.key === 'clienteNome' || f.key === 'clienteRamo',
+      )
     : fields
 
   return {

@@ -1037,7 +1037,7 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
                         }
                         className="w-full text-xs h-7.5 bg-blue-50 text-[#1E3A5F] hover:bg-blue-100 font-medium gap-1"
                       >
-                        <Sparkles className="w-3 h-3 text-blue-600" /> Reextrair CNPJ / Razão
+                        <Sparkles className="w-3 h-3 text-blue-600" /> Reextrair CNPJ / Atividade
                       </Button>
                     </div>
                   ) : (
@@ -1047,7 +1047,7 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
                         Nenhum Cartão CNPJ anexado
                       </p>
                       <p className="text-[11px] text-slate-400 mt-0.5">
-                        Importe para ler CNPJ e Razão Social
+                        Importe para ler CNPJ, Razão e Atividade Principal
                       </p>
                     </div>
                   )}

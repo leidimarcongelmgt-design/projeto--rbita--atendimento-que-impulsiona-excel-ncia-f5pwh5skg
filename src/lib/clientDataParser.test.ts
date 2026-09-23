@@ -447,7 +447,7 @@ export function runClientParserSelfCheck(): { passed: boolean; results: string[]
     results.push(`FALHA: Cenário 21 - obteve ramo: "${ramo21}"`)
   }
 
-  // Teste 22: Extração direcionada de Cartão CNPJ (somente CNPJ e Nome Empresarial)
+  // Teste 22: Extração direcionada de Cartão CNPJ com Atividade Econômica Principal em linha separada
   const testCnpjCard = `
     REPÚBLICA FEDERATIVA DO BRASIL
     CADASTRO NACIONAL DA PESSOA JURÍDICA
@@ -460,6 +460,8 @@ export function runClientParserSelfCheck(): { passed: boolean; results: string[]
     ESTRELA RESIDENCIAL
     CÓDIGO E DESCRIÇÃO DA ATIVIDADE ECONÔMICA PRINCIPAL
     41.10-7-00 - Incorporação de empreendimentos imobiliários
+    CÓDIGO E DESCRIÇÃO DAS ATIVIDADES ECONÔMICAS SECUNDÁRIAS
+    68.10-2-02 - Aluguel de imóveis próprios
     ENDEREÇO
     RUA DAS FLORES, 500
   `
@@ -474,16 +476,24 @@ export function runClientParserSelfCheck(): { passed: boolean; results: string[]
   )
   const n22 = r22.fields.find((f) => f.key === 'clienteNome')?.value
   const c22 = r22.fields.find((f) => f.key === 'clienteCnpj')?.value
-  const other22 = r22.fields.find((f) => f.key !== 'clienteNome' && f.key !== 'clienteCnpj')
+  const ramo22 = r22.fields.find((f) => f.key === 'clienteRamo')?.value
+  const other22 = r22.fields.find(
+    (f) => f.key !== 'clienteNome' && f.key !== 'clienteCnpj' && f.key !== 'clienteRamo',
+  )
   if (
     n22 === 'RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA' &&
     c22 === '45.987.654/0001-88' &&
+    ramo22 === '41.10-7-00 - Incorporação de empreendimentos imobiliários' &&
     !other22
   ) {
-    results.push('OK: Cenário 22 (Cartão CNPJ - extração estrita de CNPJ e Nome Empresarial)')
+    results.push(
+      'OK: Cenário 22 (Cartão CNPJ - extração de CNPJ, Nome Empresarial e Atividade Econômica Principal em linhas separadas)',
+    )
   } else {
     passed = false
-    results.push(`FALHA: Cenário 22 - n: ${n22}, c: ${c22}, outro: ${other22?.key}`)
+    results.push(
+      `FALHA: Cenário 22 - n: ${n22}, c: ${c22}, ramo: ${ramo22}, outro: ${other22?.key}`,
+    )
   }
 
   // Teste 23: Extração direcionada de Inscrição Estadual (docType === 'ie')
@@ -537,6 +547,98 @@ export function runClientParserSelfCheck(): { passed: boolean; results: string[]
   } else {
     passed = false
     results.push(`FALHA: Cenário 24 - im: ${im24}, count: ${r24.fields.length}`)
+  }
+
+  // Teste 25: Cartão CNPJ com rótulo e valor na mesma linha e atividades secundárias posteriores
+  const testCnpjCardSameLine = `
+    REPÚBLICA FEDERATIVA DO BRASIL
+    CADASTRO NACIONAL DA PESSOA JURÍDICA
+    NÚMERO DE INSCRIÇÃO: 45.987.654/0001-88
+    NOME EMPRESARIAL: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA
+    CÓDIGO E DESCRIÇÃO DA ATIVIDADE ECONÔMICA PRINCIPAL: 41.10-7-00 - Incorporação de empreendimentos imobiliários
+    CÓDIGO E DESCRIÇÃO DAS ATIVIDADES ECONÔMICAS SECUNDÁRIAS: 68.10-2-02 - Aluguel de imóveis próprios
+  `
+  const r25 = parseClientDataFromPdfText(
+    testCnpjCardSameLine,
+    DEFAULT_CALCULATOR_STATE,
+    true,
+    1,
+    undefined,
+    false,
+    'cnpj',
+  )
+  const n25 = r25.fields.find((f) => f.key === 'clienteNome')?.value
+  const c25 = r25.fields.find((f) => f.key === 'clienteCnpj')?.value
+  const ramo25 = r25.fields.find((f) => f.key === 'clienteRamo')?.value
+  if (
+    n25 === 'RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA' &&
+    c25 === '45.987.654/0001-88' &&
+    ramo25 === '41.10-7-00 - Incorporação de empreendimentos imobiliários'
+  ) {
+    results.push(
+      'OK: Cenário 25 (Cartão CNPJ - rótulo e valor na mesma linha com secundárias posteriores)',
+    )
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 25 - n: ${n25}, c: ${c25}, ramo: "${ramo25}"`)
+  }
+
+  // Teste 26: Cartão CNPJ simplificado/consulta web (rótulo "ATIVIDADE ECONÔMICA PRINCIPAL" sem "CÓDIGO E DESCRIÇÃO")
+  const testCnpjCardSimplified = `
+    COMPROVANTE DE INSCRIÇÃO E DE SITUAÇÃO CADASTRAL
+    CNPJ: 45.987.654/0001-88
+    RAZÃO SOCIAL: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA
+    ATIVIDADE ECONÔMICA PRINCIPAL
+    41.10-7-00 - Incorporação de empreendimentos imobiliários
+    SITUAÇÃO CADASTRAL: ATIVA
+  `
+  const r26 = parseClientDataFromPdfText(
+    testCnpjCardSimplified,
+    DEFAULT_CALCULATOR_STATE,
+    true,
+    1,
+    undefined,
+    false,
+    'cnpj',
+  )
+  const ramo26 = r26.fields.find((f) => f.key === 'clienteRamo')?.value
+  const n26 = r26.fields.find((f) => f.key === 'clienteNome')?.value
+  const c26 = r26.fields.find((f) => f.key === 'clienteCnpj')?.value
+  if (
+    ramo26 === '41.10-7-00 - Incorporação de empreendimentos imobiliários' &&
+    n26 === 'RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA' &&
+    c26 === '45.987.654/0001-88'
+  ) {
+    results.push(
+      'OK: Cenário 26 (Cartão CNPJ simplificado - Atividade Principal em linhas separadas)',
+    )
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 26 - n: ${n26}, c: ${c26}, ramo: "${ramo26}"`)
+  }
+
+  // Teste 27: Rótulo "CÓDIGO E DESCRIÇÃO DA ATIVIDADE ECONÔMICA PRINCIPAL" sem hífen com espaços no código
+  const testCnpjCardFormatVariance = `
+    NÚMERO DE INSCRIÇÃO: 45.987.654/0001-88
+    NOME EMPRESARIAL: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA
+    CÓDIGO E DESCRIÇÃO DA ATIVIDADE ECONÔMICA PRINCIPAL
+    41.10-7-00-Incorporação de empreendimentos imobiliários
+  `
+  const r27 = parseClientDataFromPdfText(
+    testCnpjCardFormatVariance,
+    DEFAULT_CALCULATOR_STATE,
+    true,
+    1,
+    undefined,
+    false,
+    'cnpj',
+  )
+  const ramo27 = r27.fields.find((f) => f.key === 'clienteRamo')?.value
+  if (ramo27 === '41.10-7-00 - Incorporação de empreendimentos imobiliários') {
+    results.push('OK: Cenário 27 (Cartão CNPJ - normalização de espaçamento "código - descrição")')
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 27 - ramo: "${ramo27}"`)
   }
 
   return { passed, results }
