@@ -60,7 +60,6 @@ const DEFAULT_EMPRESAS_COL_WIDTHS: { [key: string]: number } = {
   regimeTrib: 140,
   ramoAtividade: 200,
   zona: 110,
-  numFunc: 100,
   filial: 90,
   contabil: 110,
   entrada: 100,
@@ -75,7 +74,6 @@ const MIN_EMPRESAS_COL_WIDTHS: { [key: string]: number } = {
   regimeTrib: 90,
   ramoAtividade: 110,
   zona: 70,
-  numFunc: 70,
   filial: 60,
   contabil: 80,
   entrada: 80,
@@ -301,9 +299,8 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                   </CardTitle>
                 </div>
                 <CardDescription className="text-slate-500 mt-1">
-                  Importe planilhas Excel (.xlsx ou .xls) com as 10 colunas padrão (EMPRESAS, CNPJ,
-                  REGIME TRIB., RAMO DE ATIVIDADE 2, ZONA, Nº FUNC., FILIAL, CONTÁBIL, ENTRADA,
-                  GRUPO).
+                  Importe planilhas Excel (.xlsx ou .xls) com as 9 colunas padrão (EMPRESAS, CNPJ,
+                  REGIME TRIB., RAMO DE ATIVIDADE 2, ZONA, FILIAL, CONTÁBIL, ENTRADA, GRUPO).
                 </CardDescription>
               </div>
 
@@ -348,11 +345,11 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                 <div className="flex items-center gap-2">
                   <Info className="w-4 h-4 text-purple-900" />
                   <span className="text-xs font-semibold text-slate-800 uppercase tracking-wide">
-                    Estrutura esperada do cabeçalho da planilha (10 colunas)
+                    Estrutura esperada do cabeçalho da planilha (9 colunas)
                   </span>
                 </div>
                 <span className="text-[11px] text-slate-500">
-                  Pesos gerenciados nas abas dedicadas de Dpto. Pessoal e Dpto. Fiscal
+                  Nº FUNC. e Pesos gerenciados nas abas dedicadas de Dpto. Pessoal e Dpto. Fiscal
                 </span>
               </div>
 
@@ -453,7 +450,7 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
               </div>
             </div>
 
-            {/* Tabela com as 10 Colunas */}
+            {/* Tabela com as 9 Colunas */}
             {empresas.length === 0 ? (
               <div className="border border-dashed border-slate-300 rounded-lg p-12 text-center bg-slate-50/50">
                 <div className="w-12 h-12 rounded-full bg-slate-200/80 flex items-center justify-center mx-auto mb-3 text-slate-500">
@@ -461,9 +458,9 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                 </div>
                 <h3 className="text-sm font-semibold text-slate-800">Nenhuma empresa importada</h3>
                 <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 mb-5">
-                  Clique no botão abaixo para carregar uma planilha Excel com as 10 colunas padrão
-                  (EMPRESAS, CNPJ, REGIME TRIB., RAMO DE ATIVIDADE 2, ZONA, Nº FUNC., FILIAL,
-                  CONTÁBIL, ENTRADA e GRUPO).
+                  Clique no botão abaixo para carregar uma planilha Excel com as 9 colunas padrão
+                  (EMPRESAS, CNPJ, REGIME TRIB., RAMO DE ATIVIDADE 2, ZONA, FILIAL, CONTÁBIL,
+                  ENTRADA e GRUPO).
                 </p>
                 <Button
                   type="button"
@@ -538,7 +535,7 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                     <tbody className="divide-y divide-slate-200 bg-white">
                       {filteredAndSortedEmpresas.length === 0 ? (
                         <tr>
-                          <td colSpan={12} className="py-8 text-center text-slate-500">
+                          <td colSpan={11} className="py-8 text-center text-slate-500">
                             Nenhum registro encontrado para o filtro "{searchQuery}".
                           </td>
                         </tr>
@@ -580,12 +577,6 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                               title={empresa.zona}
                             >
                               {empresa.zona || '—'}
-                            </td>
-                            <td
-                              className="py-2.5 px-3 text-right font-mono text-slate-800 border-r border-slate-100 truncate"
-                              title={empresa.numFunc !== '' ? String(empresa.numFunc) : '—'}
-                            >
-                              {empresa.numFunc !== '' ? empresa.numFunc : '—'}
                             </td>
                             <td
                               className="py-2.5 px-3 text-slate-700 border-r border-slate-100 truncate"

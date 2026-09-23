@@ -42,8 +42,9 @@ export function clearDptoPessoalStorage(): void {
 }
 
 /**
- * Constrói lista inicial ou sincronizada a partir das Empresas existentes
- * Preserva números de funcionários que o usuário já possa ter editado
+ * Constrói lista inicial ou sincronizada a partir das Empresas existentes.
+ * Preserva números de funcionários que o usuário já possa ter editado localmente.
+ * Se não houver edição prévia, entra com numFunc vazio (ou numFunc legado se porventura presente no registro de empresa).
  */
 export function syncFromEmpresas(
   empresas: EmpresaRow[],
@@ -62,10 +63,18 @@ export function syncFromEmpresas(
     .map((emp, index) => {
       const key = emp.empresas.trim().toLowerCase()
       const existing = existingMap.get(key)
+
+      let numFuncVal: number | string = ''
+      if (existing) {
+        numFuncVal = existing.numFunc
+      } else if (emp.numFunc !== '' && emp.numFunc !== null && emp.numFunc !== undefined) {
+        numFuncVal = emp.numFunc
+      }
+
       return {
         id: existing?.id || `dpto-sync-${Date.now()}-${index}`,
         empresa: emp.empresas.trim(),
-        numFunc: existing ? existing.numFunc : (emp.numFunc ?? ''),
+        numFunc: numFuncVal,
       }
     })
 }

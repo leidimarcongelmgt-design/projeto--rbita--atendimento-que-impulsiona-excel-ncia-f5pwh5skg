@@ -88,14 +88,15 @@ export function clearEmpresasStorage(): void {
 }
 
 /**
- * Mapeia cabeçalhos da planilha para as propriedades de EmpresaRow (10 colunas).
- * Colunas de PESO são explicitamente ignoradas na aba Empresas (os pesos vivem na aba Dpto. Fiscal).
+ * Mapeia cabeçalhos da planilha para as propriedades de EmpresaRow (9 colunas ativas).
+ * Colunas de PESO e Nº FUNC. são explicitamente ignoradas na aba Empresas
+ * (os pesos vivem na aba Dpto. Fiscal e o Nº FUNC. é gerenciado exclusivamente na aba Dpto. Pessoal - Pesos).
  */
 export function mapHeadersToFields(headers: string[]): {
-  mapping: Map<number, keyof Omit<EmpresaRow, 'id' | 'peso1' | 'peso2'>>
+  mapping: Map<number, keyof Omit<EmpresaRow, 'id' | 'numFunc' | 'peso1' | 'peso2'>>
   unrecognizedColumns: string[]
 } {
-  const mapping = new Map<number, keyof Omit<EmpresaRow, 'id' | 'peso1' | 'peso2'>>()
+  const mapping = new Map<number, keyof Omit<EmpresaRow, 'id' | 'numFunc' | 'peso1' | 'peso2'>>()
   const unrecognizedColumns: string[] = []
 
   headers.forEach((rawHeader, colIdx) => {
@@ -132,9 +133,14 @@ export function mapHeadersToFields(headers: string[]): {
       normalized === 'n func' ||
       normalized === 'num func' ||
       normalized === 'numero de funcionarios' ||
-      normalized === 'qtd func'
+      normalized === 'qtd func' ||
+      normalized === 'nº func' ||
+      normalized === 'nº func.' ||
+      normalized === 'colaboradores' ||
+      normalized === 'empregados'
     ) {
-      mapping.set(colIdx, 'numFunc')
+      // Coluna Nº FUNC. é ignorada na aba Empresas sem erro (gerenciada no Dpto. Pessoal)
+      return
     } else if (
       normalized === 'peso' ||
       normalized === 'peso 1' ||
@@ -213,13 +219,12 @@ export async function parseEmpresasFile(file: File): Promise<{
       continue
     }
 
-    const rowObj: Partial<Omit<EmpresaRow, 'peso1' | 'peso2'>> = {
+    const rowObj: Partial<Omit<EmpresaRow, 'numFunc' | 'peso1' | 'peso2'>> = {
       empresas: '',
       cnpj: '',
       regimeTrib: '',
       ramoAtividade: '',
       zona: '',
-      numFunc: '',
       filial: '',
       contabil: '',
       entrada: '',
@@ -257,7 +262,6 @@ export async function parseEmpresasFile(file: File): Promise<{
       regimeTrib: (rowObj.regimeTrib || '').toString().trim(),
       ramoAtividade: (rowObj.ramoAtividade || '').toString().trim(),
       zona: (rowObj.zona || '').toString().trim(),
-      numFunc: rowObj.numFunc ?? '',
       filial: (rowObj.filial || '').toString().trim(),
       contabil: (rowObj.contabil || '').toString().trim(),
       entrada: (rowObj.entrada || '').toString().trim(),
