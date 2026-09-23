@@ -1,6 +1,8 @@
 export interface DptoPessoalRow {
   id: string
   empresa: string
+  cnpj?: string
+  zona?: string
   numFunc: number | string
 }
 

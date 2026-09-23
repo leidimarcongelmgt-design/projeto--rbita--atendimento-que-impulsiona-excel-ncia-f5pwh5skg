@@ -2,6 +2,7 @@ export interface DptoFiscalRow {
   id: string
   empresa: string
   cnpj?: string
+  zona?: string
   peso: number | string
 }
 

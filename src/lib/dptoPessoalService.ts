@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx'
 import { DptoPessoalRow, DptoImportResult } from '@/types/dptoPessoal'
 import { EmpresaRow } from '@/types/empresa'
-import { normalizeHeader } from '@/lib/empresasService'
+import { normalizeHeader, formatCNPJ, cleanCNPJ } from '@/lib/empresasService'
 
 export const DPTO_PESSOAL_STORAGE_KEY = 'orbita_dpto_pessoal'
 
@@ -43,26 +43,36 @@ export function clearDptoPessoalStorage(): void {
 
 /**
  * Constrói lista inicial ou sincronizada a partir das Empresas existentes.
- * Preserva números de funcionários que o usuário já possa ter editado localmente.
+ * Copia nome, CNPJ e Zona das empresas. Preserva edições locais já feitas na aba Dpto. Pessoal.
  * Se não houver edição prévia, entra com numFunc vazio (ou numFunc legado se porventura presente no registro de empresa).
  */
 export function syncFromEmpresas(
   empresas: EmpresaRow[],
   existingDpto: DptoPessoalRow[],
 ): DptoPessoalRow[] {
-  const existingMap = new Map<string, DptoPessoalRow>()
+  const existingMapByCnpj = new Map<string, DptoPessoalRow>()
+  const existingMapByName = new Map<string, DptoPessoalRow>()
+
   for (const row of existingDpto) {
+    if (row.cnpj) {
+      const clean = cleanCNPJ(row.cnpj)
+      if (clean) existingMapByCnpj.set(clean, row)
+    }
     const key = row.empresa.trim().toLowerCase()
     if (key) {
-      existingMap.set(key, row)
+      existingMapByName.set(key, row)
     }
   }
 
   return empresas
     .filter((emp) => emp.empresas && emp.empresas.trim() !== '')
     .map((emp, index) => {
-      const key = emp.empresas.trim().toLowerCase()
-      const existing = existingMap.get(key)
+      const cleanCnpjVal = emp.cnpj ? cleanCNPJ(emp.cnpj) : ''
+      const nameKey = emp.empresas.trim().toLowerCase()
+
+      const existing =
+        (cleanCnpjVal ? existingMapByCnpj.get(cleanCnpjVal) : undefined) ||
+        existingMapByName.get(nameKey)
 
       let numFuncVal: number | string = ''
       if (existing) {
@@ -71,9 +81,18 @@ export function syncFromEmpresas(
         numFuncVal = emp.numFunc
       }
 
+      let zonaVal = ''
+      if (existing && existing.zona !== undefined && existing.zona !== '') {
+        zonaVal = existing.zona
+      } else if (emp.zona !== '' && emp.zona !== null && emp.zona !== undefined) {
+        zonaVal = String(emp.zona).trim()
+      }
+
       return {
         id: existing?.id || `dpto-sync-${Date.now()}-${index}`,
         empresa: emp.empresas.trim(),
+        cnpj: emp.cnpj ? formatCNPJ(emp.cnpj) : existing?.cnpj || '',
+        zona: zonaVal,
         numFunc: numFuncVal,
       }
     })
@@ -83,14 +102,20 @@ export function syncFromEmpresas(
  * Mapeia cabeçalhos para colunas de Dpto. Pessoal:
  * - EMPRESAS (ou variações: empresa, razao social, nome)
  * - Nº FUNC. (ou variações: func, num func, numero de funcionarios, qtd func)
+ * - CNPJ (opcional, para identificação e correspondência)
+ * - ZONA (opcional, variações: zona, zona 2, etc.)
  */
 export function mapDptoHeaders(headers: string[]): {
   empresaColIdx: number
   numFuncColIdx: number
+  cnpjColIdx: number
+  zonaColIdx: number
   unrecognizedColumns: string[]
 } {
   let empresaColIdx = -1
   let numFuncColIdx = -1
+  let cnpjColIdx = -1
+  let zonaColIdx = -1
   const unrecognizedColumns: string[] = []
 
   headers.forEach((rawHeader, colIdx) => {
@@ -117,12 +142,22 @@ export function mapDptoHeaders(headers: string[]): {
         normalized === 'empregados')
     ) {
       numFuncColIdx = colIdx
+    } else if (
+      cnpjColIdx === -1 &&
+      (normalized === 'cnpj' || normalized === 'cnpj cpf' || normalized === 'cpf cnpj')
+    ) {
+      cnpjColIdx = colIdx
+    } else if (
+      zonaColIdx === -1 &&
+      (normalized === 'zona' || normalized.startsWith('zona ') || normalized.startsWith('zona'))
+    ) {
+      zonaColIdx = colIdx
     } else {
       unrecognizedColumns.push(rawHeader)
     }
   })
 
-  return { empresaColIdx, numFuncColIdx, unrecognizedColumns }
+  return { empresaColIdx, numFuncColIdx, cnpjColIdx, zonaColIdx, unrecognizedColumns }
 }
 
 /**
@@ -153,7 +188,8 @@ export async function parseDptoPessoalFile(file: File): Promise<{
   }
 
   const headerRow = (rawData[0] || []).map((c) => String(c ?? ''))
-  const { empresaColIdx, numFuncColIdx, unrecognizedColumns } = mapDptoHeaders(headerRow)
+  const { empresaColIdx, numFuncColIdx, cnpjColIdx, zonaColIdx, unrecognizedColumns } =
+    mapDptoHeaders(headerRow)
 
   // Se não identificou coluna de empresa, não é possível associar o número
   if (empresaColIdx === -1) {
@@ -172,6 +208,8 @@ export async function parseDptoPessoalFile(file: File): Promise<{
 
     const rawEmpresa = rawRow[empresaColIdx]
     const rawNumFunc = numFuncColIdx !== -1 ? rawRow[numFuncColIdx] : ''
+    const rawCnpj = cnpjColIdx !== -1 ? rawRow[cnpjColIdx] : ''
+    const rawZona = zonaColIdx !== -1 ? rawRow[zonaColIdx] : ''
 
     const empresaStr = (rawEmpresa ?? '').toString().trim()
     if (!empresaStr) {
@@ -191,10 +229,15 @@ export async function parseDptoPessoalFile(file: File): Promise<{
       numFuncVal = !isNaN(parsedNum) ? parsedNum : String(rawNumFunc).trim()
     }
 
+    const cnpjStr = rawCnpj ? formatCNPJ(String(rawCnpj).trim()) : ''
+    const zonaStr = rawZona !== null && rawZona !== undefined ? String(rawZona).trim() : ''
+
     const id = `dpto-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 7)}`
     rows.push({
       id,
       empresa: empresaStr,
+      cnpj: cnpjStr,
+      zona: zonaStr,
       numFunc: numFuncVal,
     })
   }
@@ -203,7 +246,7 @@ export async function parseDptoPessoalFile(file: File): Promise<{
 }
 
 /**
- * Mescla novos registros com existentes (replace ou append/merge por nome da empresa)
+ * Mescla novos registros com existentes (replace ou append/merge por nome ou CNPJ da empresa)
  */
 export function mergeDptoRows(
   existing: DptoPessoalRow[],
@@ -222,9 +265,15 @@ export function mergeDptoRows(
   }
 
   const nameMap = new Map<string, number>()
+  const cnpjMap = new Map<string, number>()
+
   const result: DptoPessoalRow[] = existing.map((r, idx) => {
     const key = r.empresa.trim().toLowerCase()
     if (key) nameMap.set(key, idx)
+    if (r.cnpj) {
+      const clean = cleanCNPJ(r.cnpj)
+      if (clean) cnpjMap.set(clean, idx)
+    }
     return { ...r }
   })
 
@@ -232,20 +281,31 @@ export function mergeDptoRows(
   let updatedCount = 0
 
   for (const item of incoming) {
-    const key = item.empresa.trim().toLowerCase()
-    if (key && nameMap.has(key)) {
-      const idx = nameMap.get(key)!
-      result[idx] = {
-        ...result[idx],
-        numFunc: item.numFunc,
+    const nameKey = item.empresa.trim().toLowerCase()
+    const cleanCnpj = item.cnpj ? cleanCNPJ(item.cnpj) : ''
+
+    let targetIdx: number | undefined
+    if (cleanCnpj && cnpjMap.has(cleanCnpj)) {
+      targetIdx = cnpjMap.get(cleanCnpj)
+    } else if (nameKey && nameMap.has(nameKey)) {
+      targetIdx = nameMap.get(nameKey)
+    }
+
+    if (targetIdx !== undefined) {
+      result[targetIdx] = {
+        ...result[targetIdx],
+        numFunc: item.numFunc !== '' ? item.numFunc : result[targetIdx].numFunc,
+        zona:
+          item.zona !== undefined && item.zona !== '' ? item.zona : result[targetIdx].zona || '',
+        cnpj: item.cnpj || result[targetIdx].cnpj || '',
       }
       updatedCount++
     } else {
       result.push(item)
       addedCount++
-      if (key) {
-        nameMap.set(key, result.length - 1)
-      }
+      const newIdx = result.length - 1
+      if (nameKey) nameMap.set(nameKey, newIdx)
+      if (cleanCnpj) cnpjMap.set(cleanCnpj, newIdx)
     }
   }
 

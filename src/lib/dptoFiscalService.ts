@@ -43,7 +43,7 @@ export function clearDptoFiscalStorage(): void {
 
 /**
  * Constrói lista a partir das Empresas existentes da aba Empresas.
- * Copia nome + CNPJ das empresas. Preserva pesos que o usuário já possa ter editado localmente.
+ * Copia nome, CNPJ e Zona das empresas. Preserva edições locais já feitas na aba Dpto. Fiscal.
  * Se não houver edição prévia, entra com peso vazio (ou usa peso legado se porventura presente).
  */
 export function syncFiscalFromEmpresas(
@@ -83,10 +83,18 @@ export function syncFiscalFromEmpresas(
         pesoVal = emp.peso2
       }
 
+      let zonaVal = ''
+      if (existing && existing.zona !== undefined && existing.zona !== '') {
+        zonaVal = existing.zona
+      } else if (emp.zona !== '' && emp.zona !== null && emp.zona !== undefined) {
+        zonaVal = String(emp.zona).trim()
+      }
+
       return {
         id: existing?.id || `fiscal-sync-${Date.now()}-${index}`,
         empresa: emp.empresas.trim(),
         cnpj: emp.cnpj ? formatCNPJ(emp.cnpj) : existing?.cnpj || '',
+        zona: zonaVal,
         peso: pesoVal,
       }
     })
@@ -97,16 +105,19 @@ export function syncFiscalFromEmpresas(
  * - EMPRESAS (empresa, razao social, nome)
  * - PESO (peso fiscal, peso 1, peso1, peso)
  * - CNPJ (opcional, para mapeamento tolerante)
+ * - ZONA (opcional, variações: zona, zona 2, etc.)
  */
 export function mapFiscalHeaders(headers: string[]): {
   empresaColIdx: number
   pesoColIdx: number
   cnpjColIdx: number
+  zonaColIdx: number
   unrecognizedColumns: string[]
 } {
   let empresaColIdx = -1
   let pesoColIdx = -1
   let cnpjColIdx = -1
+  let zonaColIdx = -1
   const unrecognizedColumns: string[] = []
 
   headers.forEach((rawHeader, colIdx) => {
@@ -137,12 +148,17 @@ export function mapFiscalHeaders(headers: string[]): {
       (normalized === 'cnpj' || normalized === 'cnpj cpf' || normalized === 'cpf cnpj')
     ) {
       cnpjColIdx = colIdx
+    } else if (
+      zonaColIdx === -1 &&
+      (normalized === 'zona' || normalized.startsWith('zona ') || normalized.startsWith('zona'))
+    ) {
+      zonaColIdx = colIdx
     } else {
       unrecognizedColumns.push(rawHeader)
     }
   })
 
-  return { empresaColIdx, pesoColIdx, cnpjColIdx, unrecognizedColumns }
+  return { empresaColIdx, pesoColIdx, cnpjColIdx, zonaColIdx, unrecognizedColumns }
 }
 
 /**
@@ -173,7 +189,8 @@ export async function parseDptoFiscalFile(file: File): Promise<{
   }
 
   const headerRow = (rawData[0] || []).map((c) => String(c ?? ''))
-  const { empresaColIdx, pesoColIdx, cnpjColIdx, unrecognizedColumns } = mapFiscalHeaders(headerRow)
+  const { empresaColIdx, pesoColIdx, cnpjColIdx, zonaColIdx, unrecognizedColumns } =
+    mapFiscalHeaders(headerRow)
 
   // Se não identificou coluna de empresa, não é possível associar
   if (empresaColIdx === -1) {
@@ -193,6 +210,7 @@ export async function parseDptoFiscalFile(file: File): Promise<{
     const rawEmpresa = rawRow[empresaColIdx]
     const rawPeso = pesoColIdx !== -1 ? rawRow[pesoColIdx] : ''
     const rawCnpj = cnpjColIdx !== -1 ? rawRow[cnpjColIdx] : ''
+    const rawZona = zonaColIdx !== -1 ? rawRow[zonaColIdx] : ''
 
     const empresaStr = (rawEmpresa ?? '').toString().trim()
     if (!empresaStr) {
@@ -209,12 +227,14 @@ export async function parseDptoFiscalFile(file: File): Promise<{
     }
 
     const cnpjStr = rawCnpj ? formatCNPJ(String(rawCnpj).trim()) : ''
+    const zonaStr = rawZona !== null && rawZona !== undefined ? String(rawZona).trim() : ''
 
     const id = `fiscal-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 7)}`
     rows.push({
       id,
       empresa: empresaStr,
       cnpj: cnpjStr,
+      zona: zonaStr,
       peso: pesoVal,
     })
   }
@@ -271,7 +291,9 @@ export function mergeDptoFiscalRows(
     if (targetIdx !== undefined) {
       result[targetIdx] = {
         ...result[targetIdx],
-        peso: item.peso,
+        peso: item.peso !== '' ? item.peso : result[targetIdx].peso,
+        zona:
+          item.zona !== undefined && item.zona !== '' ? item.zona : result[targetIdx].zona || '',
         cnpj: item.cnpj || result[targetIdx].cnpj || '',
       }
       updatedCount++
