@@ -256,7 +256,7 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
     onRowsChange([])
     setLastImportSummary(null)
     setClearDialogOpen(false)
-    toast.info('Lista do Departamento Pessoal limpa com sucesso.')
+    toast.info('Lista de Pesos limpa com sucesso.')
   }
 
   // Alternar ordenação
@@ -329,9 +329,7 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
               <div>
                 <div className="flex items-center gap-2">
                   <Users className="w-5 h-5 text-[#1E3A5F]" />
-                  <CardTitle className="text-lg font-bold text-slate-900">
-                    Departamento Pessoal
-                  </CardTitle>
+                  <CardTitle className="text-lg font-bold text-slate-900">PESOS</CardTitle>
                 </div>
                 <CardDescription className="text-slate-500 mt-1">
                   Gerencie exclusivamente as informações de Nº de Funcionários por empresa.
@@ -524,9 +522,7 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
                 <div className="w-12 h-12 rounded-full bg-slate-200/80 flex items-center justify-center mx-auto mb-3 text-slate-500">
                   <Users className="w-6 h-6" />
                 </div>
-                <h3 className="text-sm font-semibold text-slate-800">
-                  Nenhum registro de Departamento Pessoal
-                </h3>
+                <h3 className="text-sm font-semibold text-slate-800">Nenhum registro de Pesos</h3>
                 <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 mb-5">
                   Importe uma planilha contendo apenas as colunas EMPRESAS e Nº FUNC., carregue as
                   empresas já existentes na aba Empresas ou adicione manualmente.
@@ -702,7 +698,7 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
                 Como deseja importar a nova planilha?
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500 pt-1">
-                Já existem {rows.length} empresa(s) cadastradas no DPTO. PESSOAL. A planilha contém{' '}
+                Já existem {rows.length} empresa(s) cadastradas em PESOS. A planilha contém{' '}
                 {pendingFileRows?.rows.length ?? 0} registro(s) com informações de Nº de
                 Funcionários.
               </DialogDescription>
@@ -711,7 +707,7 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
             <div className="py-3 text-xs text-slate-600 space-y-2">
               <div className="p-3 rounded-md bg-slate-50 border border-slate-200">
                 <span className="font-semibold text-slate-800 block mb-0.5">Substituir tudo</span>
-                Apaga os registros atuais do DPTO. PESSOAL e mantém apenas os novos registros.
+                Apaga os registros atuais de PESOS e mantém apenas os novos registros.
               </div>
               <div className="p-3 rounded-md bg-slate-50 border border-slate-200">
                 <span className="font-semibold text-slate-800 block mb-0.5">
@@ -755,7 +751,7 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-slate-900">
-                Adicionar Empresa ao DPTO. PESSOAL
+                Adicionar Empresa em PESOS
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500 pt-1">
                 Cadastre o nome da empresa e o respectivo número de funcionários.
@@ -818,7 +814,7 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle className="text-base font-bold text-slate-900">
-                Limpar registros do DPTO. PESSOAL?
+                Limpar registros de PESOS?
               </AlertDialogTitle>
               <AlertDialogDescription className="text-xs text-slate-500 pt-1">
                 Essa ação removerá todas as {rows.length} empresas e seus respectivos números de
