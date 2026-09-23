@@ -1,6 +1,8 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react'
 import { EmpresaRow, EMPRESA_COLUMNS, EmpresaColumnKey } from '@/types/empresa'
 import { parseEmpresasFile, mergeEmpresas, saveEmpresasToStorage } from '@/lib/empresasService'
+import { useResizableColumns, RESIZABLE_STORAGE_KEYS } from '@/hooks/use-resizable-columns'
+import { ResizableTh } from '@/components/calculator/ResizableTh'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -50,8 +52,46 @@ type SortConfig = {
   direction: 'asc' | 'desc'
 } | null
 
+// Larguras padrão e mínimas recomendadas para as colunas da aba Empresas
+const DEFAULT_EMPRESAS_COL_WIDTHS: { [key: string]: number } = {
+  index: 48,
+  empresas: 240,
+  cnpj: 160,
+  regimeTrib: 140,
+  ramoAtividade: 200,
+  zona: 110,
+  numFunc: 100,
+  filial: 90,
+  contabil: 110,
+  entrada: 100,
+  grupo: 120,
+  acoes: 64,
+}
+
+const MIN_EMPRESAS_COL_WIDTHS: { [key: string]: number } = {
+  index: 40,
+  empresas: 130,
+  cnpj: 120,
+  regimeTrib: 90,
+  ramoAtividade: 110,
+  zona: 70,
+  numFunc: 70,
+  filial: 60,
+  contabil: 80,
+  entrada: 80,
+  grupo: 80,
+  acoes: 50,
+}
+
 export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasChange }) => {
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Hook de controle de largura das colunas redimensionáveis com persistência em sessionStorage
+  const { widths, startResize, isDraggingRef } = useResizableColumns(
+    RESIZABLE_STORAGE_KEYS.EMPRESAS,
+    DEFAULT_EMPRESAS_COL_WIDTHS,
+    MIN_EMPRESAS_COL_WIDTHS,
+  )
 
   // Estados de busca e ordenação
   const [searchQuery, setSearchQuery] = useState('')
@@ -437,43 +477,62 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
             ) : (
               <div className="rounded-lg border border-slate-200 overflow-hidden shadow-xs">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
+                  <table className="w-full text-left border-collapse text-xs table-fixed">
                     <thead>
                       <tr className="bg-[#380638] text-white select-none">
-                        <th className="py-2.5 px-3 font-semibold text-center w-12 border-r border-purple-950/40">
+                        <ResizableTh
+                          width={widths.index}
+                          minWidth={MIN_EMPRESAS_COL_WIDTHS.index}
+                          resizable={true}
+                          onResizeStart={(e) => startResize(e, 'index')}
+                          className="py-2.5 px-3 font-semibold text-center border-r border-purple-950/40"
+                        >
                           #
-                        </th>
+                        </ResizableTh>
                         {EMPRESA_COLUMNS.map((col) => {
                           const isSorted = sortConfig?.key === col.key
                           return (
-                            <th
+                            <ResizableTh
                               key={col.key}
-                              onClick={() => handleSort(col.key)}
-                              className={`py-2.5 px-3 font-bold uppercase tracking-wider cursor-pointer hover:bg-purple-900/60 transition-colors border-r border-purple-950/40 whitespace-nowrap ${
+                              width={widths[col.key]}
+                              minWidth={MIN_EMPRESAS_COL_WIDTHS[col.key]}
+                              resizable={true}
+                              onResizeStart={(e) => startResize(e, col.key)}
+                              onHeaderClick={() => handleSort(col.key)}
+                              isDraggingRef={isDraggingRef}
+                              className={`py-2.5 px-3 font-bold uppercase tracking-wider cursor-pointer hover:bg-purple-900/60 transition-colors border-r border-purple-950/40 whitespace-nowrap overflow-hidden ${
                                 col.numeric ? 'text-right' : 'text-left'
                               }`}
                               title={col.tooltip || `Clique para ordenar por ${col.label}`}
                             >
                               <div
-                                className={`inline-flex items-center gap-1.5 ${
+                                className={`inline-flex items-center gap-1.5 w-full overflow-hidden ${
                                   col.numeric ? 'justify-end' : 'justify-start'
                                 }`}
                               >
-                                <span>{col.label}</span>
+                                <span className="truncate">{col.label}</span>
                                 {isSorted ? (
                                   sortConfig.direction === 'asc' ? (
-                                    <ArrowUp className="w-3.5 h-3.5 text-yellow-300" />
+                                    <ArrowUp className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
                                   ) : (
-                                    <ArrowDown className="w-3.5 h-3.5 text-yellow-300" />
+                                    <ArrowDown className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
                                   )
                                 ) : (
-                                  <ArrowUpDown className="w-3 h-3 text-purple-300 opacity-60" />
+                                  <ArrowUpDown className="w-3 h-3 text-purple-300 opacity-60 flex-shrink-0" />
                                 )}
                               </div>
-                            </th>
+                            </ResizableTh>
                           )
                         })}
-                        <th className="py-2.5 px-3 font-semibold text-center w-12">Ações</th>
+                        <th
+                          style={{
+                            width: `${widths.acoes}px`,
+                            minWidth: `${MIN_EMPRESAS_COL_WIDTHS.acoes}px`,
+                          }}
+                          className="py-2.5 px-3 font-semibold text-center select-none"
+                        >
+                          Ações
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 bg-white">
@@ -489,43 +548,67 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                             key={empresa.id}
                             className="hover:bg-slate-50 transition-colors group"
                           >
-                            <td className="py-2.5 px-3 text-center text-slate-400 font-mono text-[11px] border-r border-slate-100">
+                            <td className="py-2.5 px-3 text-center text-slate-400 font-mono text-[11px] border-r border-slate-100 truncate">
                               {index + 1}
                             </td>
                             <td
-                              className="py-2.5 px-3 font-medium text-slate-900 border-r border-slate-100 whitespace-nowrap max-w-[220px] truncate"
+                              className="py-2.5 px-3 font-medium text-slate-900 border-r border-slate-100 truncate"
                               title={empresa.empresas}
                             >
                               {empresa.empresas || '—'}
                             </td>
-                            <td className="py-2.5 px-3 font-mono text-slate-700 border-r border-slate-100 whitespace-nowrap">
+                            <td
+                              className="py-2.5 px-3 font-mono text-slate-700 border-r border-slate-100 truncate"
+                              title={empresa.cnpj}
+                            >
                               {empresa.cnpj || '—'}
                             </td>
-                            <td className="py-2.5 px-3 text-slate-700 border-r border-slate-100 whitespace-nowrap">
+                            <td
+                              className="py-2.5 px-3 text-slate-700 border-r border-slate-100 truncate"
+                              title={empresa.regimeTrib}
+                            >
                               {empresa.regimeTrib || '—'}
                             </td>
                             <td
-                              className="py-2.5 px-3 text-slate-700 border-r border-slate-100 whitespace-nowrap max-w-[180px] truncate"
+                              className="py-2.5 px-3 text-slate-700 border-r border-slate-100 truncate"
                               title={empresa.ramoAtividade}
                             >
                               {empresa.ramoAtividade || '—'}
                             </td>
-                            <td className="py-2.5 px-3 text-slate-700 border-r border-slate-100 whitespace-nowrap">
+                            <td
+                              className="py-2.5 px-3 text-slate-700 border-r border-slate-100 truncate"
+                              title={empresa.zona}
+                            >
                               {empresa.zona || '—'}
                             </td>
-                            <td className="py-2.5 px-3 text-right font-mono text-slate-800 border-r border-slate-100 whitespace-nowrap">
+                            <td
+                              className="py-2.5 px-3 text-right font-mono text-slate-800 border-r border-slate-100 truncate"
+                              title={empresa.numFunc !== '' ? String(empresa.numFunc) : '—'}
+                            >
                               {empresa.numFunc !== '' ? empresa.numFunc : '—'}
                             </td>
-                            <td className="py-2.5 px-3 text-slate-700 border-r border-slate-100 whitespace-nowrap">
+                            <td
+                              className="py-2.5 px-3 text-slate-700 border-r border-slate-100 truncate"
+                              title={empresa.filial}
+                            >
                               {empresa.filial || '—'}
                             </td>
-                            <td className="py-2.5 px-3 text-slate-700 border-r border-slate-100 whitespace-nowrap">
+                            <td
+                              className="py-2.5 px-3 text-slate-700 border-r border-slate-100 truncate"
+                              title={empresa.contabil}
+                            >
                               {empresa.contabil || '—'}
                             </td>
-                            <td className="py-2.5 px-3 text-slate-700 border-r border-slate-100 whitespace-nowrap">
+                            <td
+                              className="py-2.5 px-3 text-slate-700 border-r border-slate-100 truncate"
+                              title={empresa.entrada}
+                            >
                               {empresa.entrada || '—'}
                             </td>
-                            <td className="py-2.5 px-3 text-slate-700 border-r border-slate-100 whitespace-nowrap">
+                            <td
+                              className="py-2.5 px-3 text-slate-700 border-r border-slate-100 truncate"
+                              title={empresa.grupo}
+                            >
                               {empresa.grupo || '—'}
                             </td>
                             <td className="py-2.5 px-3 text-center whitespace-nowrap">

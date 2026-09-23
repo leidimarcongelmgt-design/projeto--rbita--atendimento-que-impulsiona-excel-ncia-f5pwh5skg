@@ -13,6 +13,7 @@ import { DptoFiscalRow } from '@/types/dptoFiscal'
 import { loadEmpresasFromStorage, clearEmpresasStorage } from '@/lib/empresasService'
 import { loadDptoPessoalFromStorage, clearDptoPessoalStorage } from '@/lib/dptoPessoalService'
 import { loadDptoFiscalFromStorage, clearDptoFiscalStorage } from '@/lib/dptoFiscalService'
+import { clearAllResizableColumnWidths } from '@/hooks/use-resizable-columns'
 import { toast } from 'sonner'
 
 export default function Index() {
@@ -76,6 +77,7 @@ export default function Index() {
     clearEmpresasStorage()
     clearDptoPessoalStorage()
     clearDptoFiscalStorage()
+    clearAllResizableColumnWidths()
     setIsDocumentMode(false)
     const newQuery = serializeStateToUrl(nextState)
     window.history.replaceState(null, '', `${window.location.pathname}${newQuery}`)

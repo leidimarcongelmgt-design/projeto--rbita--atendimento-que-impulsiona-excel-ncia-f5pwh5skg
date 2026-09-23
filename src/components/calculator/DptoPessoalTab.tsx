@@ -7,6 +7,8 @@ import {
   saveDptoPessoalToStorage,
   syncFromEmpresas,
 } from '@/lib/dptoPessoalService'
+import { useResizableColumns, RESIZABLE_STORAGE_KEYS } from '@/hooks/use-resizable-columns'
+import { ResizableTh } from '@/components/calculator/ResizableTh'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -62,8 +64,29 @@ type SortConfig = {
   direction: 'asc' | 'desc'
 } | null
 
+const DEFAULT_DPTO_PESSOAL_COL_WIDTHS: { [key: string]: number } = {
+  index: 48,
+  empresa: 480,
+  numFunc: 220,
+  acoes: 64,
+}
+
+const MIN_DPTO_PESSOAL_COL_WIDTHS: { [key: string]: number } = {
+  index: 40,
+  empresa: 150,
+  numFunc: 100,
+  acoes: 50,
+}
+
 export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChange, empresas }) => {
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Hook de controle de larguras com persistência em sessionStorage
+  const { widths, startResize, isDraggingRef } = useResizableColumns(
+    RESIZABLE_STORAGE_KEYS.DPTO_PESSOAL,
+    DEFAULT_DPTO_PESSOAL_COL_WIDTHS,
+    MIN_DPTO_PESSOAL_COL_WIDTHS,
+  )
 
   // Busca e ordenação
   const [searchQuery, setSearchQuery] = useState('')
@@ -565,49 +588,73 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
             ) : (
               <div className="rounded-lg border border-slate-200 overflow-hidden shadow-xs">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
+                  <table className="w-full text-left border-collapse text-xs table-fixed">
                     <thead>
                       <tr className="bg-[#380638] text-white select-none">
-                        <th className="py-2.5 px-3 font-semibold text-center w-12 border-r border-purple-950/40">
+                        <ResizableTh
+                          width={widths.index}
+                          minWidth={MIN_DPTO_PESSOAL_COL_WIDTHS.index}
+                          resizable={true}
+                          onResizeStart={(e) => startResize(e, 'index')}
+                          className="py-2.5 px-3 font-semibold text-center border-r border-purple-950/40"
+                        >
                           #
-                        </th>
-                        <th
-                          onClick={() => handleSort('empresa')}
-                          className="py-2.5 px-3 font-bold uppercase tracking-wider cursor-pointer hover:bg-purple-900/60 transition-colors border-r border-purple-950/40"
+                        </ResizableTh>
+                        <ResizableTh
+                          width={widths.empresa}
+                          minWidth={MIN_DPTO_PESSOAL_COL_WIDTHS.empresa}
+                          resizable={true}
+                          onResizeStart={(e) => startResize(e, 'empresa')}
+                          onHeaderClick={() => handleSort('empresa')}
+                          isDraggingRef={isDraggingRef}
+                          className="py-2.5 px-3 font-bold uppercase tracking-wider cursor-pointer hover:bg-purple-900/60 transition-colors border-r border-purple-950/40 overflow-hidden"
                           title="Clique para ordenar por Empresa"
                         >
-                          <div className="inline-flex items-center gap-1.5">
-                            <span>EMPRESAS</span>
+                          <div className="inline-flex items-center gap-1.5 w-full overflow-hidden">
+                            <span className="truncate">EMPRESAS</span>
                             {sortConfig?.field === 'empresa' ? (
                               sortConfig.direction === 'asc' ? (
-                                <ArrowUp className="w-3.5 h-3.5 text-yellow-300" />
+                                <ArrowUp className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
                               ) : (
-                                <ArrowDown className="w-3.5 h-3.5 text-yellow-300" />
+                                <ArrowDown className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
                               )
                             ) : (
-                              <ArrowUpDown className="w-3 h-3 text-purple-300 opacity-60" />
+                              <ArrowUpDown className="w-3 h-3 text-purple-300 opacity-60 flex-shrink-0" />
                             )}
                           </div>
-                        </th>
-                        <th
-                          onClick={() => handleSort('numFunc')}
-                          className="py-2.5 px-3 font-bold uppercase tracking-wider cursor-pointer hover:bg-purple-900/60 transition-colors border-r border-purple-950/40 text-right w-56"
+                        </ResizableTh>
+                        <ResizableTh
+                          width={widths.numFunc}
+                          minWidth={MIN_DPTO_PESSOAL_COL_WIDTHS.numFunc}
+                          resizable={true}
+                          onResizeStart={(e) => startResize(e, 'numFunc')}
+                          onHeaderClick={() => handleSort('numFunc')}
+                          isDraggingRef={isDraggingRef}
+                          className="py-2.5 px-3 font-bold uppercase tracking-wider cursor-pointer hover:bg-purple-900/60 transition-colors border-r border-purple-950/40 text-right overflow-hidden"
                           title="Clique para ordenar por Nº de Funcionários"
                         >
-                          <div className="inline-flex items-center justify-end gap-1.5 w-full">
-                            <span>Nº FUNC.</span>
+                          <div className="inline-flex items-center justify-end gap-1.5 w-full overflow-hidden">
+                            <span className="truncate">Nº FUNC.</span>
                             {sortConfig?.field === 'numFunc' ? (
                               sortConfig.direction === 'asc' ? (
-                                <ArrowUp className="w-3.5 h-3.5 text-yellow-300" />
+                                <ArrowUp className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
                               ) : (
-                                <ArrowDown className="w-3.5 h-3.5 text-yellow-300" />
+                                <ArrowDown className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
                               )
                             ) : (
-                              <ArrowUpDown className="w-3 h-3 text-purple-300 opacity-60" />
+                              <ArrowUpDown className="w-3 h-3 text-purple-300 opacity-60 flex-shrink-0" />
                             )}
                           </div>
+                        </ResizableTh>
+                        <th
+                          style={{
+                            width: `${widths.acoes}px`,
+                            minWidth: `${MIN_DPTO_PESSOAL_COL_WIDTHS.acoes}px`,
+                          }}
+                          className="py-2.5 px-3 font-semibold text-center select-none"
+                        >
+                          Ações
                         </th>
-                        <th className="py-2.5 px-3 font-semibold text-center w-16">Ações</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 bg-white">
@@ -620,23 +667,23 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
                       ) : (
                         filteredAndSortedRows.map((row, index) => (
                           <tr key={row.id} className="hover:bg-slate-50 transition-colors group">
-                            <td className="py-2.5 px-3 text-center text-slate-400 font-mono text-[11px] border-r border-slate-100">
+                            <td className="py-2.5 px-3 text-center text-slate-400 font-mono text-[11px] border-r border-slate-100 truncate">
                               {index + 1}
                             </td>
-                            <td className="py-2 px-3 border-r border-slate-100">
+                            <td className="py-2 px-3 border-r border-slate-100 overflow-hidden">
                               <Input
                                 value={row.empresa}
                                 onChange={(e) => handleEmpresaChange(row.id, e.target.value)}
-                                className="h-8 text-xs font-medium text-slate-900 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white"
+                                className="h-8 text-xs font-medium text-slate-900 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
                                 placeholder="Nome da empresa"
                               />
                             </td>
-                            <td className="py-2 px-3 border-r border-slate-100 text-right">
+                            <td className="py-2 px-3 border-r border-slate-100 text-right overflow-hidden">
                               <Input
                                 type="text"
                                 value={row.numFunc}
                                 onChange={(e) => handleNumFuncChange(row.id, e.target.value)}
-                                className="h-8 text-xs text-right font-mono font-semibold text-slate-900 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white"
+                                className="h-8 text-xs text-right font-mono font-semibold text-slate-900 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
                                 placeholder="0"
                               />
                             </td>
@@ -665,14 +712,14 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
                     {filteredAndSortedRows.length > 0 && (
                       <tfoot>
                         <tr className="bg-slate-100 font-semibold text-slate-800 border-t-2 border-slate-300">
-                          <td className="py-2.5 px-3 text-center text-slate-500 font-mono text-[11px]">
+                          <td className="py-2.5 px-3 text-center text-slate-500 font-mono text-[11px] truncate">
                             Σ
                           </td>
-                          <td className="py-2.5 px-3 uppercase tracking-wider text-[11px] text-slate-600">
+                          <td className="py-2.5 px-3 uppercase tracking-wider text-[11px] text-slate-600 truncate">
                             Total Geral ({filteredAndSortedRows.length} empresa
                             {filteredAndSortedRows.length === 1 ? '' : 's'})
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-sm text-[#1E3A5F]">
+                          <td className="py-2.5 px-3 text-right font-mono text-sm text-[#1E3A5F] truncate">
                             {filteredAndSortedRows
                               .reduce((acc, r) => {
                                 const val =
