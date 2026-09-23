@@ -300,25 +300,237 @@ export function parseClientDataFromPdfText(
     })
   }
 
-  // --- A.3 Ramo de Atividade / Atividade Econômica do Cliente ---
+  // --- A.3 Ramo de Atividade / Atividade Econômica / CNAE do Cliente ---
   let detectedRamo = ''
   let ramoSnippet = ''
   let ramoConfidence: 'high' | 'medium' | 'low' = 'low'
 
-  const ramoLabelRegex =
-    /(?:RAMO DE ATIVIDADE|RAMO DE NEG[ÓO]CIO|RAMO DE ATUA[ÇC][ÃA]O|ATIVIDADE ECON[ÔO]MICA|ATIVIDADE PRINCIPAL|CNAE PRINCIPAL|RAMO)[:\s]+([^\n\r]{4,80})/i
+  /**
+   * Limpa e padroniza a descrição ou código + descrição de CNAE / Ramo de Atividade.
+   * Remove rótulos residuais como PRINCIPAL, SECUNDÁRIA, CNAE, ATIVIDADE ECONÔMICA,
+   * pontuações no início/fim, mantendo o código (ex: 41.10-7-00 ou 4110-7/00 ou 41.10-7)
+   * e sua respectiva descrição textual.
+   */
+  const cleanRamoValue = (raw: string): string => {
+    if (!raw) return ''
+    let cleaned = raw.replace(/[\r\n\t]+/g, ' ').trim()
 
-  for (const line of linesToSearch) {
-    const match = ramoLabelRegex.exec(line)
-    if (match && match[1]) {
-      let candidate = match[1].replace(/^(?:[:\-–—]\s*)+/, '').trim()
-      candidate = candidate.split(/\s+(?:CNPJ|CPF|INSCRI|ENDERE|TEL|FONE|E-?MAIL)/i)[0].trim()
-      if (candidate.length >= 4 && !/^(?:CNPJ|CPF)/i.test(candidate)) {
-        detectedRamo = candidate
-        ramoSnippet = line
-        ramoConfidence = clientSectionText ? 'high' : 'medium'
-        break
+    // 1. Cortar outros campos conhecidos que possam vir colados no final da linha
+    cleaned = cleaned
+      .split(
+        /\s+(?:\b(?:CNPJ|CPF|INSCRI[ÇC][ÃA]O|INSC|ENDERE[ÇC]O|LOGRADOURO|TEL|TELEFONE|FONE|E-?MAIL|VALOR|DATA)\b\s*[:\-–—|/])/i,
+      )[0]
+      .trim()
+
+    // 2. Remover repetidamente marcadores e rótulos no início
+    let prev = ''
+    while (prev !== cleaned) {
+      prev = cleaned
+
+      // Remove prefixos de cabeçalho de ramo/cnae
+      cleaned = cleaned
+        .replace(
+          /^(?:(?:RAMO\s+DE\s+ATIVIDADE|RAMO\s+DE\s+NEG[ÓO]CIO|RAMO\s+DE\s+ATUA[ÇC][ÃA]O|ATIVIDADE\s+ECON[ÔO]MICA(?:\s+DO\s+TOMADOR|\s+DO\s+CLIENTE)?|RAMO|CNAE)[\s:]+)+/i,
+          '',
+        )
+        .trim()
+
+      // Remove marcadores qualificadores de atividade (PRINCIPAL, SECUND[ÁA]RI[AO], etc.)
+      cleaned = cleaned
+        .replace(/^(?:PRINCIPAL|SECUND[ÁA]RI[AO]|PRIM[ÁA]RI[AO])\b\s*[:\-–—|/]*\s*/i, '')
+        .trim()
+
+      // Remove rótulo CNAE se ainda preceder o código
+      cleaned = cleaned.replace(/^CNAE\b\s*[:\-–—|/]*\s*/i, '').trim()
+
+      // Remove pontuações e símbolos residuais no início
+      cleaned = cleaned.replace(/^(?:[:\-–—|/._()[\]]\s*)+/, '').trim()
+    }
+
+    // 3. Remover marcadores secundários no final se sobrarem
+    cleaned = cleaned.replace(/\s*[:\-–—|/._()[\]\s]+$/, '').trim()
+
+    // 4. Normalizar espaços múltiplos
+    cleaned = cleaned.replace(/\s{2,}/g, ' ').trim()
+
+    return cleaned
+  }
+
+  /**
+   * Determina se o valor de ramo é meramente um marcador/rótulo (ex: "principal", "secundária", "cnae", etc.)
+   */
+  const isBareRamoMarker = (val: string): boolean => {
+    const s = val
+      .trim()
+      .toLowerCase()
+      .replace(/^[;,:.\-–—|/\\_()[\]\s]+/, '')
+      .replace(/[;,:.\-–—|/\\_()[\]\s]+$/, '')
+    if (!s) return true
+    return /^(?:principal|secund[áa]ri[ao]|prim[áa]ri[ao]|cnae|cnae\s+principal|cnae\s+secund[áa]ri[ao]|atividade|atividade\s+econ[ôo]mica|ramo|ramo\s+de\s+atividade)$/i.test(
+      s,
+    )
+  }
+
+  // Regex para linha contendo CNAE (com código numérico como 41.10-7-00, 4110-7/00, 41.10-7 ou descrição rica)
+  const cnaeCodeWithDescRegex =
+    /(?:(?:CNAE(?:\s+PRINCIPAL)?|ATIVIDADE\s+ECON[ÔO]MICA(?:\s+PRINCIPAL)?|RAMO(?:\s+DE\s+ATIVIDADE)?)[\s:]+)?(\d{2}[.\s]?\d{2}[-\s]?\d(?:[-\s]?\d{2})?|\d{4,7})\s*[-–—:]\s*([A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9\s/.,&()'-]{3,})/i
+
+  const ramoExplicitLabelRegex =
+    /(?:RAMO\s+DE\s+ATIVIDADE|RAMO\s+DE\s+NEG[ÓO]CIO|RAMO\s+DE\s+ATUA[ÇC][ÃA]O|ATIVIDADE\s+ECON[ÔO]MICA(?:\s+PRINCIPAL)?|ATIVIDADE\s+PRINCIPAL|CNAE(?:\s+PRINCIPAL)?|RAMO)[:\s]+([^\n\r]{3,120})/i
+
+  const ramoLabelHeaderOnlyRegex =
+    /^(?:RAMO\s+DE\s+ATIVIDADE|RAMO\s+DE\s+NEG[ÓO]CIO|RAMO\s+DE\s+ATUA[ÇC][ÃA]O|ATIVIDADE\s+ECON[ÔO]MICA|ATIVIDADE\s+ECON[ÔO]MICA\s+PRINCIPAL|ATIVIDADE\s+PRINCIPAL|CNAE|CNAE\s+PRINCIPAL|RAMO)[:\-–—]?$/i
+
+  // 1. Prioridade Máxima: Procurar CNAE Principal com código e descrição estruturados
+  // dentro das linhas prioritárias (seção do cliente ou linhas gerais se não isolada)
+  for (let i = 0; i < linesToSearch.length; i++) {
+    const line = linesToSearch[i]
+    if (ISSUER_HEADER_REGEX.test(line) && !CLIENT_HEADER_REGEX.test(line)) continue
+
+    // Verifica se a linha possui menção explícita a PRINCIPAL + CNAE
+    if (/PRINCIPAL/i.test(line) && /(?:CNAE|ATIVIDADE|RAMO|\d{2}\.\d{2})/i.test(line)) {
+      // Exemplo: "Atividade Econômica Principal: 41.10-7-00 - Incorporação de empreendimentos imobiliários"
+      // ou "CNAE PRINCIPAL: 41.10-7-00 - Incorporação de empreendimentos imobiliários"
+      const cnaeMatch = cnaeCodeWithDescRegex.exec(line)
+      if (cnaeMatch) {
+        const fullCandidate = cleanRamoValue(line)
+        if (fullCandidate && !isBareRamoMarker(fullCandidate) && fullCandidate.length >= 5) {
+          detectedRamo = fullCandidate
+          ramoSnippet = line
+          ramoConfidence = clientSectionText ? 'high' : 'medium'
+          break
+        }
       }
+
+      // Se a linha tem rótulo e valor inline
+      const labelMatch = ramoExplicitLabelRegex.exec(line)
+      if (labelMatch && labelMatch[1]) {
+        let cleaned = cleanRamoValue(labelMatch[1])
+        if (cleaned && !isBareRamoMarker(cleaned) && cleaned.length >= 4) {
+          detectedRamo = cleaned
+          ramoSnippet = line
+          ramoConfidence = clientSectionText ? 'high' : 'medium'
+          break
+        }
+      }
+
+      // Se a linha contém apenas o rótulo/marcador "CNAE PRINCIPAL" ou "PRINCIPAL"
+      // e o valor real está na linha seguinte (i + 1)
+      if (i + 1 < linesToSearch.length) {
+        const nextLine = linesToSearch[i + 1].trim()
+        const cleanedNext = cleanRamoValue(nextLine)
+        if (cleanedNext && !isBareRamoMarker(cleanedNext) && cleanedNext.length >= 5) {
+          detectedRamo = cleanedNext
+          ramoSnippet = `${line} -> ${nextLine}`
+          ramoConfidence = 'high'
+          break
+        }
+      }
+    }
+  }
+
+  // 2. Prioridade 2: Linha com rótulo "CNAE" ou "Atividade Econômica" em geral
+  if (!detectedRamo) {
+    for (let i = 0; i < linesToSearch.length; i++) {
+      const line = linesToSearch[i]
+      if (ISSUER_HEADER_REGEX.test(line) && !CLIENT_HEADER_REGEX.test(line)) continue
+
+      // Descartar linhas de CNAE SECUNDÁRIA quando houver opção principal
+      if (/SECUND[ÁA]RI[AO]/i.test(line) && !/PRINCIPAL/i.test(line)) continue
+
+      // Inline match
+      const match = ramoExplicitLabelRegex.exec(line)
+      if (match && match[1]) {
+        let candidate = cleanRamoValue(match[1])
+
+        // Se o candidato for apenas a palavra "principal" ou marcador vazio, verificar linha seguinte
+        if (isBareRamoMarker(candidate) || candidate.length < 4) {
+          if (i + 1 < linesToSearch.length) {
+            const nextCandidate = cleanRamoValue(linesToSearch[i + 1])
+            if (nextCandidate && !isBareRamoMarker(nextCandidate) && nextCandidate.length >= 4) {
+              candidate = nextCandidate
+              ramoSnippet = `${line} -> ${linesToSearch[i + 1]}`
+            }
+          }
+        }
+
+        if (
+          candidate &&
+          !isBareRamoMarker(candidate) &&
+          candidate.length >= 4 &&
+          !/^(?:CNPJ|CPF)/i.test(candidate)
+        ) {
+          detectedRamo = candidate
+          if (!ramoSnippet) ramoSnippet = line
+          ramoConfidence = clientSectionText ? 'high' : 'medium'
+          break
+        }
+      }
+
+      // Header-only na linha i e valor na linha i + 1
+      if (ramoLabelHeaderOnlyRegex.test(line)) {
+        if (i + 1 < linesToSearch.length) {
+          let nextLine = linesToSearch[i + 1].trim()
+          let candidate = cleanRamoValue(nextLine)
+
+          // Se a próxima linha ainda for apenas o marcador "principal" (ex: Linha 1: "CNAE", Linha 2: "Principal", Linha 3: "41.10-7-00...")
+          if (isBareRamoMarker(candidate)) {
+            if (i + 2 < linesToSearch.length) {
+              const line3 = linesToSearch[i + 2].trim()
+              const cand3 = cleanRamoValue(line3)
+              if (cand3 && !isBareRamoMarker(cand3) && cand3.length >= 4) {
+                candidate = cand3
+                ramoSnippet = `${line} -> ${nextLine} -> ${line3}`
+              }
+            }
+          }
+
+          if (
+            candidate &&
+            !isBareRamoMarker(candidate) &&
+            candidate.length >= 4 &&
+            !/^(?:CNPJ|CPF)/i.test(candidate)
+          ) {
+            detectedRamo = candidate
+            if (!ramoSnippet) ramoSnippet = `${line} -> ${nextLine}`
+            ramoConfidence = clientSectionText ? 'high' : 'medium'
+            break
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Prioridade 3: Identificação de código CNAE solto (ex: "41.10-7-00 - Incorporação...")
+  // mesmo sem rótulo explícito, dentro da seção do cliente
+  if (!detectedRamo && clientSectionLines.length > 0) {
+    for (const line of clientSectionLines) {
+      if (ISSUER_HEADER_REGEX.test(line)) continue
+      if (/SECUND[ÁA]RI[AO]/i.test(line)) continue
+
+      const codeMatch = cnaeCodeWithDescRegex.exec(line)
+      if (codeMatch) {
+        const cleaned = cleanRamoValue(line)
+        if (
+          cleaned &&
+          !isBareRamoMarker(cleaned) &&
+          cleaned.length >= 8 &&
+          !/^(?:CNPJ|CPF)/i.test(cleaned)
+        ) {
+          detectedRamo = cleaned
+          ramoSnippet = line
+          ramoConfidence = 'medium'
+          break
+        }
+      }
+    }
+  }
+
+  // Sanitização final do ramo detectado para garantir que nunca seja a palavra "principal" ou rótulos
+  if (detectedRamo) {
+    detectedRamo = cleanRamoValue(detectedRamo)
+    if (isBareRamoMarker(detectedRamo)) {
+      detectedRamo = ''
     }
   }
 

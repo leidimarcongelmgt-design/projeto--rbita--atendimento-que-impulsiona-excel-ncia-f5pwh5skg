@@ -368,5 +368,84 @@ export function runClientParserSelfCheck(): { passed: boolean; results: string[]
     results.push(`FALHA: Cenário 17 - obteve nome: ${n17}, cnpj: ${c17}`)
   }
 
+  // Teste 18: CNAE com marcador "PRINCIPAL" na mesma linha
+  // Deve extrair "41.10-7-00 - Incorporação de empreendimentos imobiliários" limpando o marcador "PRINCIPAL"
+  const testInvoice18 = `
+    PRESTADOR DE SERVIÇOS
+    Razão Social: ENGENHARIA PRESTADORA LTDA
+    CNPJ: 11.222.333/0001-44
+
+    TOMADOR DE SERVIÇOS
+    Razão Social: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA
+    CNPJ: 45.987.654/0001-88
+    Atividade Econômica Principal: 41.10-7-00 - Incorporação de empreendimentos imobiliários
+  `
+  const r18 = parseClientDataFromPdfText(testInvoice18, DEFAULT_CALCULATOR_STATE)
+  const ramo18 = r18.fields.find((f) => f.key === 'clienteRamo')?.value
+  if (ramo18 === '41.10-7-00 - Incorporação de empreendimentos imobiliários') {
+    results.push('OK: Cenário 18 (CNAE com marcador PRINCIPAL na mesma linha isolado e limpo)')
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 18 - obteve ramo: "${ramo18}"`)
+  }
+
+  // Teste 19: CNAE rótulo e valor em linhas separadas (ex: CNAE PRINCIPAL em uma linha e código + descrição na seguinte)
+  const testInvoice19 = `
+    TOMADOR DE SERVIÇOS
+    Nome Empresarial: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA
+    CNPJ: 45.987.654/0001-88
+    CNAE PRINCIPAL:
+    41.10-7-00 - Incorporação de empreendimentos imobiliários
+  `
+  const r19 = parseClientDataFromPdfText(testInvoice19, DEFAULT_CALCULATOR_STATE)
+  const ramo19 = r19.fields.find((f) => f.key === 'clienteRamo')?.value
+  if (ramo19 === '41.10-7-00 - Incorporação de empreendimentos imobiliários') {
+    results.push('OK: Cenário 19 (CNAE rótulo e valor em linhas separadas)')
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 19 - obteve ramo: "${ramo19}"`)
+  }
+
+  // Teste 20: Múltiplas linhas de CNAE (principal + secundárias) - deve selecionar a principal
+  const testInvoice20 = `
+    IDENTIFICAÇÃO DO TOMADOR
+    Razão Social: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA
+    CNPJ: 45.987.654/0001-88
+    CNAE SECUNDÁRIA: 68.10-2-02 - Aluguel de imóveis próprios
+    CNAE PRINCIPAL: 41.10-7-00 - Incorporação de empreendimentos imobiliários
+    CNAE SECUNDÁRIA: 68.21-8-01 - Corretagem na compra e venda de imóveis
+  `
+  const r20 = parseClientDataFromPdfText(testInvoice20, DEFAULT_CALCULATOR_STATE)
+  const ramo20 = r20.fields.find((f) => f.key === 'clienteRamo')?.value
+  if (ramo20 === '41.10-7-00 - Incorporação de empreendimentos imobiliários') {
+    results.push('OK: Cenário 20 (Múltiplos CNAEs - principal priorizada e secundárias ignoradas)')
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 20 - obteve ramo: "${ramo20}"`)
+  }
+
+  // Teste 21: Valor chegando como palavra isolada "principal" com a atividade real na linha seguinte
+  const testInvoice21 = `
+    PRESTADOR DE SERVIÇOS
+    Razão Social: SERVIÇOS DE AUDITORIA LTDA
+    CNPJ: 02.345.678/0001-90
+
+    TOMADOR DE SERVIÇOS
+    Razão Social: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA
+    CNPJ: 45.987.654/0001-88
+    Atividade Econômica: Principal
+    41.10-7-00 - Incorporação de empreendimentos imobiliários
+  `
+  const r21 = parseClientDataFromPdfText(testInvoice21, DEFAULT_CALCULATOR_STATE)
+  const ramo21 = r21.fields.find((f) => f.key === 'clienteRamo')?.value
+  if (ramo21 === '41.10-7-00 - Incorporação de empreendimentos imobiliários') {
+    results.push(
+      'OK: Cenário 21 (Valor como bare "principal" resolvido para atividade da linha seguinte)',
+    )
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 21 - obteve ramo: "${ramo21}"`)
+  }
+
   return { passed, results }
 }
