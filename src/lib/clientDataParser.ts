@@ -165,42 +165,56 @@ export function parseClientDataFromPdfText(
     .map((l) => l.trim())
     .filter(Boolean)
 
-  // 1. Locate Client Section or prioritize lines after client labels
-  // Common Brazilian invoices / documents partition issuer vs client
-  // Issuer labels: PRESTADOR, EMITENTE, CEDENTE, VENDEDOR, FORNECEDOR
-  // Client labels: TOMADOR, DESTINATÁRIO, DESTINATARIO, CLIENTE, SACADO, CONSUMIDOR, COMPRADOR, CONTRATANTE
+  // ---------------------------------------------------------------------------
+  // 1. Section Identification & Document Segmentation
+  // Brazilian documents (NF-e, NFS-e, Boletos, Faturas, Contratos) typically have:
+  // - Issuer section: PRESTADOR (DE SERVIÇOS), EMITENTE, CEDENTE, BENEFICIÁRIO, FORNECEDOR, VENDEDOR, CONTRATADA
+  // - Client section: TOMADOR (DE SERVIÇOS), DESTINATÁRIO / REMETENTE, DADOS DO CLIENTE, CLIENTE, SACADO, CONSUMIDOR, PAGADOR, CONTRATANTE
+  // ---------------------------------------------------------------------------
 
-  // Let's create an indexed search for client-specific blocks
-  const clientHeaderRegex =
-    /(?:TOMADOR(?: DE SERVI[ÇC]OS)?|DESTINAT[ÁA]RIO(?:\s*\/\s*REMETENTE)?|DADOS DO CLIENTE|CLIENTE|SACADO|CONSUMIDOR|CONTRATANTE)/i
-  const issuerHeaderRegex =
-    /(?:PRESTADOR(?: DE SERVI[ÇC]OS)?|EMITENTE|DADOS DA EMPRESA|CEDENTE|FORNECEDOR)/i
+  const ISSUER_HEADER_REGEX =
+    /(?:(?:DADOS\s+DO\s+|IDENTIFICA[ÇC][ÃA]O\s+DO\s+)?PRESTADOR(?:\s+DE\s+SERVI[ÇC]OS)?|(?:DADOS\s+DO\s+|IDENTIFICA[ÇC][ÃA]O\s+DO\s+)?EMITENTE|(?:DADOS\s+DA\s+)?EMPRESA\s+EMISSORA|CEDENTE|BENEFICI[ÁA]RIO|FORNECEDOR|VENDEDOR|LOCADOR|CONTRATADA)\b/i
 
+  const CLIENT_HEADER_REGEX =
+    /(?:(?:DADOS\s+DO\s+|IDENTIFICA[ÇC][ÃA]O\s+DO\s+)?TOMADOR(?:\s+DE\s+SERVI[ÇC]OS)?|(?:DADOS\s+DO\s+|IDENTIFICA[ÇC][ÃA]O\s+DO\s+)?DESTINAT[ÁA]RIO(?:\s*\/\s*REMETENTE)?|(?:DADOS\s+DO\s+)?CLIENTE|SACADO|CONSUMIDOR|PAGADOR|COMPRADOR|LOCAT[ÁA]RIO|CONTRATANTE)\b/i
+
+  const SECTION_BOUNDARY_REGEX =
+    /(?:(?:DADOS\s+DO\s+|IDENTIFICA[ÇC][ÃA]O\s+DO\s+)?PRESTADOR(?:\s+DE\s+SERVI[ÇC]OS)?|(?:DADOS\s+DO\s+|IDENTIFICA[ÇC][ÃA]O\s+DO\s+)?EMITENTE|CEDENTE|BENEFICI[ÁA]RIO|FORNECEDOR|CONTRATADA|DADOS\s+DOS\s+SERVI[ÇC]OS|DISCRIMINA[ÇC][ÃA]O\s+DOS\s+SERVI[ÇC]OS|DESCRI[ÇC][ÃA]O\s+DOS\s+PRODUTOS|DADOS\s+DO\s+PRODUTO|C[ÁA]LCULO\s+DO\s+IMPOSTO|DADOS\s+ADICIONAIS|INFORMA[ÇC][ÕO]ES\s+COMPLEMENTARES|VALOR\s+TOTAL|FATURA(?:\s*\/\s*DUPLICATA)?|ITENS\s+DA\s+NOTA|OBSERVA[ÇC][ÕO]ES?)\b/i
+
+  // Find all client block occurrences in the raw text
   let clientSectionText = ''
-  let clientSectionStartIdx = -1
+  let clientSectionLines: string[] = []
 
-  const clientMatch = clientHeaderRegex.exec(rawText)
+  const clientMatch = CLIENT_HEADER_REGEX.exec(rawText)
   if (clientMatch) {
-    clientSectionStartIdx = clientMatch.index
-    // Find next issuer header or end of page/document
-    const afterClient = rawText.slice(clientSectionStartIdx)
-    const nextIssuerMatch = issuerHeaderRegex.exec(afterClient.slice(100))
-    if (nextIssuerMatch) {
-      clientSectionText = afterClient.slice(0, nextIssuerMatch.index + 100)
+    const startIdx = clientMatch.index
+    const afterClient = rawText.slice(startIdx + clientMatch[0].length)
+
+    // Look for the next section boundary (after at least 30 characters)
+    const nextBoundaryMatch = SECTION_BOUNDARY_REGEX.exec(afterClient.slice(30))
+    if (nextBoundaryMatch) {
+      const endOffset = 30 + nextBoundaryMatch.index
+      clientSectionText = afterClient.slice(0, endOffset)
     } else {
-      clientSectionText = afterClient.slice(0, 1500)
+      // Limit to 2000 chars of client block
+      clientSectionText = afterClient.slice(0, 2000)
     }
+
+    clientSectionLines = clientSectionText
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean)
   }
 
-  const linesToSearch = clientSectionText
-    ? clientSectionText
-        .split(/\r?\n/)
-        .map((l) => l.trim())
-        .filter(Boolean)
-    : lines
+  // Also collect lines that explicitly match client/issuer in line-by-line inspection
+  const linesToSearch = clientSectionLines.length > 0 ? clientSectionLines : lines
 
   // --- A. CNPJ / CPF do Cliente ---
-  // If we have a client section, look there first. If not, look in full text.
+  // When multiple CNPJs exist (e.g. Issuer + Customer), ensure we pick the client's CNPJ.
+  // We prioritize:
+  // 1. CNPJ/CPF found inside the isolated clientSectionText
+  // 2. CNPJ/CPF explicitly labeled with Tomador/Destinatário/Sacado/Cliente in line
+  // 3. Fallback: all valid CNPJs/CPFs in document, discarding the one belonging to the issuer / empresaCnpj or issuer section
   let detectedCnpj = ''
   let cnpjSnippet = ''
   let cnpjConfidence: 'high' | 'medium' | 'low' = 'medium'
@@ -211,6 +225,10 @@ export function parseClientDataFromPdfText(
   // Try to find CNPJ/CPF inside client section first
   const searchInText = (text: string, isClientScope: boolean) => {
     let match: RegExpExecArray | null
+    // Reset regex indices
+    cnpjMaskedRegex.lastIndex = 0
+    cpfMaskedRegex.lastIndex = 0
+
     // CNPJ masked
     while ((match = cnpjMaskedRegex.exec(text)) !== null) {
       const val = match[0]
@@ -251,12 +269,24 @@ export function parseClientDataFromPdfText(
     while ((match = unmaskedCnpjRegex.exec(text)) !== null) {
       const val = match[1]
       if (val.length === 14 && isValidCNPJ(val)) {
+        if (
+          currentState.empresaCnpj &&
+          val.replace(/\D/g, '') === currentState.empresaCnpj.replace(/\D/g, '')
+        ) {
+          continue
+        }
         return {
           val: formatCpfCnpj(val),
           snippet: extractSnippet(text, match.index, match[0].length),
           confidence: (isClientScope ? 'high' : 'medium') as 'high' | 'medium',
         }
       } else if (val.length === 11 && isValidCPF(val)) {
+        if (
+          currentState.empresaCnpj &&
+          val.replace(/\D/g, '') === currentState.empresaCnpj.replace(/\D/g, '')
+        ) {
+          continue
+        }
         return {
           val: formatCpfCnpj(val),
           snippet: extractSnippet(text, match.index, match[0].length),
@@ -268,6 +298,14 @@ export function parseClientDataFromPdfText(
   }
 
   let foundDoc = clientSectionText ? searchInText(clientSectionText, true) : null
+
+  // If not found in clientSectionText, search lines excluding issuer lines
+  if (!foundDoc) {
+    const nonIssuerLines = lines.filter((l) => !ISSUER_HEADER_REGEX.test(l))
+    foundDoc = searchInText(nonIssuerLines.join('\n'), false)
+  }
+
+  // General fallback on full text if still nothing found
   if (!foundDoc) {
     foundDoc = searchInText(rawText, false)
   }
@@ -395,84 +433,261 @@ export function parseClientDataFromPdfText(
   }
 
   // --- B. Razão Social / Nome do Cliente ---
+  // The user explicitly requires:
+  // "ao importar o arquivo no campo nome empresarial desejo que seja importado o nome do cliente"
+  // The client name (tomador, destinatário, sacado, comprador, cliente) must ALWAYS take
+  // precedence over the emitter / issuer / prestador company name.
+
   let detectedNome = ''
   let nomeSnippet = ''
   let nomeConfidence: 'high' | 'medium' | 'low' = 'low'
 
-  // Look for label patterns like "Razão Social:", "Nome/Razão Social:", "Destinatário:", "Tomador do Serviço:"
-  const nameLabelRegex =
-    /(?:RAZ[ÃA]O SOCIAL|NOME(?:\s*\/\s*RAZ[ÃA]O SOCIAL)?|NOME DO CLIENTE|DESTINAT[ÁA]RIO|TOMADOR(?: DO SERVI[ÇC]O)?|CONSUMIDOR|CLIENTE)[:\s]+([^\n\r]{3,80})/i
-
-  // Inspect client lines for name
-  for (let i = 0; i < linesToSearch.length; i++) {
-    const line = linesToSearch[i]
-    const match = nameLabelRegex.exec(line)
-    if (match && match[1]) {
-      const candidate = match[1].replace(/^(?:[:\-–—]\s*)+/, '').trim()
-      // Filter out invalid names (e.g., just numbers or other label prefixes)
-      if (
-        candidate.length >= 3 &&
-        !/^\d+$/.test(candidate) &&
-        !/^(?:CNPJ|CPF|ENDERE|INSCR)/i.test(candidate)
-      ) {
-        // Strip trailing indicators like "CNPJ: ..." if on the same line
-        const cleaned = candidate.split(/\s+(?:CNPJ|CPF|INSCRI|ENDERE)/i)[0].trim()
-        if (cleaned.length >= 3) {
-          detectedNome = cleaned
-          nomeSnippet = line
-          nomeConfidence = clientSectionText ? 'high' : 'medium'
-          break
-        }
-      }
-    }
-
-    // Secondary pattern: label alone on one line, value on the next line
+  // Helper: check if a candidate string is valid as a business or person name
+  const isExcludedGenericTerm = (str: string): boolean => {
+    const s = str.trim().toLowerCase()
+    if (s.length < 3) return true
+    // Exclude label phrases or system terms
     if (
-      /(?:RAZ[ÃA]O SOCIAL|NOME DO CLIENTE|TOMADOR(?: DO SERVI[ÇC]O)?|DESTINAT[ÁA]RIO)[:]?$/i.test(
-        line,
+      /^(?:danfe|documento|nota fiscal|nfs-?e|nf-?e|chave de acesso|natureza da opera|protocolo|folha|dossie|dossiê|relat[óo]rio|comprovante|recibo|boleto|fatura|duplicata|dados do|identifica|endere[çc]o|munic[íi]pio|cidade|estado|telefone|e-?mail|cnpj|cpf|inscri[çc][ãa]o|descri[çc][ãa]o|valor|imposto|issqn|icms|pis|cofins|irpj|csll|simples nacional|prestador|emitente|cedente|benefici[áa]rio|tomador|destinat[áa]rio|sacado|consumidor|cliente)$/i.test(
+        s,
       )
     ) {
-      if (i + 1 < linesToSearch.length) {
-        const nextLine = linesToSearch[i + 1].trim()
-        if (
-          nextLine.length >= 3 &&
-          !/^(?:CNPJ|CPF|ENDERE|INSCR)/i.test(nextLine) &&
-          !/^\d+$/.test(nextLine)
-        ) {
-          detectedNome = nextLine
-          nomeSnippet = `${line} -> ${nextLine}`
+      return true
+    }
+    // Exclude if it looks like only numbers, punctuation, or dates
+    if (/^[\d\s./\-–—,]+$/.test(s)) return true
+    if (/^\d{2}[/\-.]\d{2}[/\-.]\d{4}$/.test(s)) return true
+    // Exclude known current emitter name
+    if (currentState.empresaNome && s === currentState.empresaNome.trim().toLowerCase()) {
+      return true
+    }
+    return false
+  }
+
+  const cleanNameCandidate = (val: string): string => {
+    let cleaned = val.replace(/^(?:[:\-–—|]\s*)+/, '').trim()
+    // Remove subsequent trailing label blocks like "CNPJ: ...", "Inscrição: ...", "Endereço: ..."
+    cleaned = cleaned
+      .split(/\s+(?:CNPJ|CPF|INSCRI|ENDERE|RUA|AV\.|BAIRRO|CEP|TEL|FONE|E-?MAIL|DATA)/i)[0]
+      .trim()
+    // Strip trailing punctuation
+    cleaned = cleaned.replace(/[;,\-–—]+$/, '').trim()
+    return cleaned
+  }
+
+  // Priority 1: High-specificity Client/Tomador/Destinatário/Sacado labeled patterns
+  // E.g.: "Tomador do Serviço: EMPRESA CLIENTE LTDA", "Destinatário/Remetente: FULANO DE TAL",
+  // "Nome / Razão Social do Tomador: CLIENTE X", "Sacado: NOME CLIENTE", "Cliente: XYZ S/A"
+  const explicitClientNameRegexes = [
+    /(?:TOMADOR(?:\s+DE\s+SERVI[ÇC]OS?)?|DESTINAT[ÁA]RIO(?:\s*\/\s*REMETENTE)?|SACADO|PAGADOR|CONSUMIDOR|CLIENTE|CONTRATANTE)[\s:]+(?:NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|RAZ[ÃA]O\s*SOCIAL)?[:\s\-–—]+([^\n\r]{3,90})/i,
+    /(?:NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|RAZ[ÃA]O\s*SOCIAL)\s+(?:DO\s+)?(?:TOMADOR|DESTINAT[ÁA]RIO|CLIENTE|SACADO|CONSUMIDOR)[:\s\-–—]+([^\n\r]{3,90})/i,
+    /NOME\s+DO\s+CLIENTE[:\s\-–—]+([^\n\r]{3,90})/i,
+    /(?:^|\b)(?:TOMADOR|DESTINAT[ÁA]RIO|SACADO|PAGADOR|CLIENTE)[:\s\-–—]+([^\n\r]{3,90})/i,
+  ]
+
+  // Priority 1 scan in full text
+  for (const regex of explicitClientNameRegexes) {
+    for (const line of lines) {
+      // Don't match lines that are clearly PRESTADOR / EMITENTE headers
+      if (ISSUER_HEADER_REGEX.test(line) && !CLIENT_HEADER_REGEX.test(line)) {
+        continue
+      }
+      const match = regex.exec(line)
+      if (match && match[1]) {
+        const candidate = cleanNameCandidate(match[1])
+        if (!isExcludedGenericTerm(candidate) && candidate.length >= 3) {
+          detectedNome = candidate
+          nomeSnippet = line
           nomeConfidence = 'high'
           break
         }
       }
     }
+    if (detectedNome) break
   }
 
-  // Fallback: If no label match, try to look at lines directly succeeding the client block header
-  if (!detectedNome && clientSectionText) {
-    const sublines = clientSectionText
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-    // The line after the section header is very often the customer name in invoices
-    for (let i = 1; i < Math.min(sublines.length, 5); i++) {
-      const candidate = sublines[i]
-      if (
-        candidate.length >= 4 &&
-        !/^(?:CNPJ|CPF|ENDERE|INSCRI|DATA|FONE|TELEFONE|E-?MAIL|CEP)/i.test(candidate) &&
-        !/^\d+$/.test(candidate) &&
-        /[A-Za-zÀ-ÿ]{3,}/.test(candidate)
-      ) {
-        // Check if looks like a company or personal name (Ltda, S/A, ME, EPP, or 2+ capitalized words)
-        if (
-          /\b(?:LTDA|S\/?A|EIRELI|ME|EPP|SERVI[ÇC]OS|COMERCIO|COM[ÉE]RCIO|INDUSTRIA|IND[ÚU]STRIA)\b/i.test(
-            candidate,
-          ) ||
-          /^[A-ZÀ-Ÿ][a-zà-ÿ]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ]+)+/.test(candidate)
-        ) {
+  // Priority 2: If we identified a clientSectionText, search inside it for "Nome/Razão Social" or multi-line patterns
+  if (!detectedNome && clientSectionLines.length > 0) {
+    const clientBlockNameRegex =
+      /(?:RAZ[ÃA]O\s*SOCIAL|NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|NOME\s+EMPRESARIAL|NOME)[:\s\-–—]+([^\n\r]{3,90})/i
+
+    for (let i = 0; i < clientSectionLines.length; i++) {
+      const line = clientSectionLines[i]
+      // Skip if this line explicitly mentions issuer
+      if (ISSUER_HEADER_REGEX.test(line)) continue
+
+      const match = clientBlockNameRegex.exec(line)
+      if (match && match[1]) {
+        const candidate = cleanNameCandidate(match[1])
+        if (!isExcludedGenericTerm(candidate) && candidate.length >= 3) {
           detectedNome = candidate
-          nomeSnippet = candidate
+          nomeSnippet = line
+          nomeConfidence = 'high'
+          break
+        }
+      }
+
+      // Next-line pattern inside client block:
+      // Line i: "Razão Social:" or "Nome / Razão Social"
+      // Line i+1: "ALPHA COMERCIO E SERVICOS LTDA"
+      if (
+        /(?:RAZ[ÃA]O\s*SOCIAL|NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|NOME\s+EMPRESARIAL)[:]?$/i.test(
+          line,
+        )
+      ) {
+        if (i + 1 < clientSectionLines.length) {
+          const nextLine = clientSectionLines[i + 1].trim()
+          const candidate = cleanNameCandidate(nextLine)
+          if (!isExcludedGenericTerm(candidate) && candidate.length >= 3) {
+            detectedNome = candidate
+            nomeSnippet = `${line} -> ${nextLine}`
+            nomeConfidence = 'high'
+            break
+          }
+        }
+      }
+    }
+
+    // Priority 3: First valid business name or person name line inside client section block
+    // (Common in invoices where customer name immediately follows "TOMADOR DE SERVIÇOS")
+    if (!detectedNome) {
+      for (let i = 0; i < Math.min(clientSectionLines.length, 6); i++) {
+        const candidate = cleanNameCandidate(clientSectionLines[i])
+        if (
+          !isExcludedGenericTerm(candidate) &&
+          candidate.length >= 4 &&
+          /[A-Za-zÀ-ÿ]{3,}/.test(candidate)
+        ) {
+          // Check if looks like a company or personal name (Ltda, S/A, ME, EPP, or 2+ capitalized words)
+          if (
+            /\b(?:LTDA|S\/?A|EIRELI|ME|EPP|SERVI[ÇC]OS|COMERCIO|COM[ÉE]RCIO|INDUSTRIA|IND[ÚU]STRIA)\b/i.test(
+              candidate,
+            ) ||
+            /^[A-ZÀ-Ÿ][a-zà-ÿ]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ]+)+/.test(candidate) ||
+            /^[A-ZÀ-Ÿ0-9\s.&'-]{5,}$/.test(candidate)
+          ) {
+            detectedNome = candidate
+            nomeSnippet = candidate
+            nomeConfidence = 'medium'
+            break
+          }
+        }
+      }
+    }
+  }
+
+  // Priority 4: Look for name associated with the detected client CNPJ/CPF
+  // If we already detected a client CNPJ, search lines around it (within 3 lines above or below)
+  if (!detectedNome && detectedCnpj) {
+    const rawCnpjDigits = detectedCnpj.replace(/\D/g, '')
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      if (line.replace(/\D/g, '').includes(rawCnpjDigits)) {
+        // Inspect line itself for a name preceding or following CNPJ
+        const beforeCnpjMatch = /^(.*?)(?:CNPJ|CPF)/i.exec(line)
+        if (beforeCnpjMatch) {
+          const cand = cleanNameCandidate(beforeCnpjMatch[1])
+          if (!isExcludedGenericTerm(cand) && cand.length >= 4) {
+            detectedNome = cand
+            nomeSnippet = line
+            nomeConfidence = 'high'
+            break
+          }
+        }
+
+        // Check 2 lines above
+        for (let offset = -1; offset >= -2; offset--) {
+          const targetIdx = i + offset
+          if (targetIdx >= 0) {
+            const candLine = lines[targetIdx]
+            // Skip issuer section lines
+            if (ISSUER_HEADER_REGEX.test(candLine)) continue
+            const cand = cleanNameCandidate(candLine)
+            if (!isExcludedGenericTerm(cand) && cand.length >= 4 && /[A-Za-zÀ-ÿ]{3,}/.test(cand)) {
+              detectedNome = cand
+              nomeSnippet = candLine
+              nomeConfidence = 'medium'
+              break
+            }
+          }
+        }
+        if (detectedNome) break
+
+        // Check 1 line below
+        if (i + 1 < lines.length) {
+          const candLine = lines[i + 1]
+          if (!ISSUER_HEADER_REGEX.test(candLine)) {
+            const cand = cleanNameCandidate(candLine)
+            if (!isExcludedGenericTerm(cand) && cand.length >= 4 && /[A-Za-zÀ-ÿ]{3,}/.test(cand)) {
+              detectedNome = cand
+              nomeSnippet = candLine
+              nomeConfidence = 'medium'
+              break
+            }
+          }
+        }
+        if (detectedNome) break
+      }
+    }
+  }
+
+  // Priority 5: Fallback - General "Razão Social" or "Nome" in linesToSearch,
+  // making sure NOT to pick the emitter/prestador name
+  if (!detectedNome) {
+    const fallbackNameRegex =
+      /(?:RAZ[ÃA]O\s*SOCIAL|NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|NOME\s+EMPRESARIAL)[:\s\-–—]+([^\n\r]{3,90})/i
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      // Skip issuer sections
+      if (ISSUER_HEADER_REGEX.test(line)) continue
+
+      const match = fallbackNameRegex.exec(line)
+      if (match && match[1]) {
+        const candidate = cleanNameCandidate(match[1])
+        if (!isExcludedGenericTerm(candidate) && candidate.length >= 3) {
+          detectedNome = candidate
+          nomeSnippet = line
           nomeConfidence = 'medium'
+          break
+        }
+      }
+
+      // Next line fallback
+      if (
+        /(?:RAZ[ÃA]O\s*SOCIAL|NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|NOME\s+EMPRESARIAL)[:]?$/i.test(
+          line,
+        )
+      ) {
+        if (i + 1 < lines.length) {
+          const nextLine = lines[i + 1].trim()
+          const candidate = cleanNameCandidate(nextLine)
+          if (!isExcludedGenericTerm(candidate) && candidate.length >= 3) {
+            detectedNome = candidate
+            nomeSnippet = `${line} -> ${nextLine}`
+            nomeConfidence = 'medium'
+            break
+          }
+        }
+      }
+    }
+  }
+
+  // Priority 6: Fallback for single-entity documents with no section markers
+  // (Preserve current fallback behavior when document has only one identifiable business name)
+  if (!detectedNome && !clientSectionText) {
+    for (const line of lines) {
+      if (ISSUER_HEADER_REGEX.test(line)) continue
+      if (
+        /\b(?:LTDA|S\/?A|EIRELI|ME|EPP)\b/i.test(line) &&
+        !isExcludedGenericTerm(line) &&
+        line.length <= 80
+      ) {
+        const cand = cleanNameCandidate(line)
+        if (!isExcludedGenericTerm(cand) && cand.length >= 4) {
+          detectedNome = cand
+          nomeSnippet = line
+          nomeConfidence = 'low'
           break
         }
       }
@@ -480,23 +695,16 @@ export function parseClientDataFromPdfText(
   }
 
   if (detectedNome) {
-    // If name matches the emitter name, don't confuse it with client
-    if (
-      !currentState.empresaNome ||
-      detectedNome.toLowerCase() !== currentState.empresaNome.toLowerCase()
-    ) {
-      fields.push({
-        key: 'clienteNome',
-        label: 'Nome / Razão Social do Cliente',
-        value: detectedNome,
-        currentValue: currentState.clienteNome || '',
-        snippet: nomeSnippet,
-        confidence: nomeConfidence,
-        isDifferent:
-          detectedNome.trim().toLowerCase() !==
-          (currentState.clienteNome || '').trim().toLowerCase(),
-      })
-    }
+    fields.push({
+      key: 'clienteNome',
+      label: 'Nome / Razão Social',
+      value: detectedNome,
+      currentValue: currentState.clienteNome || '',
+      snippet: nomeSnippet,
+      confidence: nomeConfidence,
+      isDifferent:
+        detectedNome.trim().toLowerCase() !== (currentState.clienteNome || '').trim().toLowerCase(),
+    })
   }
 
   // --- C. Endereço do Cliente ---
