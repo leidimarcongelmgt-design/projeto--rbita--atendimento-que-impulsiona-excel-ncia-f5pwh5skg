@@ -1,6 +1,6 @@
 export interface CalculatorState {
-  // Active tab (apenas Identificação)
-  tab: 'identificacao'
+  // Active tab (Identificação | Empresas)
+  tab: 'identificacao' | 'empresas'
 
   // Identification & Branding (Emissor)
   logoWidth: number

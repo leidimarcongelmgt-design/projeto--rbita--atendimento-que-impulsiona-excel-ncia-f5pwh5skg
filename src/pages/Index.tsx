@@ -3,13 +3,21 @@ import { CalculatorState, DEFAULT_CALCULATOR_STATE } from '@/types/calculator'
 import { parseStateFromUrl, serializeStateToUrl } from '@/lib/calculatorState'
 import { Header } from '@/components/calculator/Header'
 import { IdentificacaoTab } from '@/components/calculator/IdentificacaoTab'
+import { EmpresasTab } from '@/components/calculator/EmpresasTab'
 import { DocumentView } from '@/components/calculator/DocumentView'
+import { EmpresaRow } from '@/types/empresa'
+import { loadEmpresasFromStorage, clearEmpresasStorage } from '@/lib/empresasService'
 import { toast } from 'sonner'
 
 export default function Index() {
   // Initialize state strictly from URL query parameters
   const [state, setState] = useState<CalculatorState>(() => {
     return parseStateFromUrl(window.location.search)
+  })
+
+  // Empresas persistidas em sessionStorage (não poluindo a URL)
+  const [empresas, setEmpresas] = useState<EmpresaRow[]>(() => {
+    return loadEmpresasFromStorage()
   })
 
   const [hasCopied, setHasCopied] = useState(false)
@@ -46,6 +54,8 @@ export default function Index() {
   const handleReset = useCallback(() => {
     const nextState = { ...DEFAULT_CALCULATOR_STATE }
     setState(nextState)
+    setEmpresas([])
+    clearEmpresasStorage()
     setIsDocumentMode(false)
     const newQuery = serializeStateToUrl(nextState)
     window.history.replaceState(null, '', `${window.location.pathname}${newQuery}`)
@@ -95,6 +105,9 @@ export default function Index() {
                 onChange={updateState}
                 onGenerateDocument={() => setIsDocumentMode(true)}
               />
+            )}
+            {state.tab === 'empresas' && (
+              <EmpresasTab empresas={empresas} onEmpresasChange={setEmpresas} />
             )}
           </div>
         )}

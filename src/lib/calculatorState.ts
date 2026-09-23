@@ -21,8 +21,9 @@ export function parseStateFromUrl(search: string): CalculatorState {
     return val !== null ? val : def
   }
 
-  // Apenas 'identificacao' é aceito; qualquer outro (como 'cliente' ou legado) faz fallback seguro para 'identificacao'
-  const tab: CalculatorState['tab'] = 'identificacao'
+  // 'identificacao' ou 'empresas' são aceitos; qualquer outro faz fallback seguro para 'identificacao'
+  const rawTab = params.get('tab')
+  const tab: CalculatorState['tab'] = rawTab === 'empresas' ? 'empresas' : 'identificacao'
 
   return {
     tab,
