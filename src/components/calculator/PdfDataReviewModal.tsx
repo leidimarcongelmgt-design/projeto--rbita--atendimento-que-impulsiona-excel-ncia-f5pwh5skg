@@ -86,8 +86,12 @@ export const PdfDataReviewModal: React.FC<PdfDataReviewModalProps> = ({
     const patch: Partial<CalculatorState> = {}
     fields.forEach((f) => {
       if (selectedKeys[f.key]) {
-        // cast to any to safely assign to Partial<CalculatorState>
-        ;(patch as Record<string, string>)[f.key] = f.value
+        let val = f.value
+        // Garantia de segurança adicional: se for o campo clienteNome, aplicar trim
+        if (f.key === 'clienteNome') {
+          val = val.trim()
+        }
+        ;(patch as Record<string, string>)[f.key] = val
       }
     })
     onApply(patch)

@@ -188,5 +188,99 @@ export function runClientParserSelfCheck(): { passed: boolean; results: string[]
     results.push(`FALHA: Cenário 8 - obteve nome: ${n8}, cnpj: ${c8}`)
   }
 
+  // Teste 9: Nome com rótulo e dois-pontos colados no mesmo valor e pontuações
+  const testInvoice9 = `
+    PRESTADOR DE SERVIÇOS
+    Razão Social: SOFTWARES E SISTEMAS LTDA
+    CNPJ: 10.000.000/0001-00
+
+    TOMADOR DE SERVIÇOS:
+    Nome/Razão Social: : - RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA - :
+    CNPJ: 45.987.654/0001-88
+  `
+  const r9 = parseClientDataFromPdfText(testInvoice9, DEFAULT_CALCULATOR_STATE)
+  const n9 = r9.fields.find((f) => f.key === 'clienteNome')?.value
+  if (n9 === 'RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA') {
+    results.push('OK: Cenário 9 (Nome com rótulo colado e pontuação residual limpos)')
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 9 - obteve nome: ${n9}`)
+  }
+
+  // Teste 10: Nome com CNPJ colado na mesma linha
+  const testInvoice10 = `
+    EMITENTE
+    EMITENTE EXEMPLO LTDA
+    CNPJ: 01.111.111/0001-11
+
+    TOMADOR
+    Razão Social: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA CNPJ: 45.987.654/0001-88
+  `
+  const r10 = parseClientDataFromPdfText(testInvoice10, DEFAULT_CALCULATOR_STATE)
+  const n10 = r10.fields.find((f) => f.key === 'clienteNome')?.value
+  const c10 = r10.fields.find((f) => f.key === 'clienteCnpj')?.value
+  if (n10 === 'RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA' && c10 === '45.987.654/0001-88') {
+    results.push('OK: Cenário 10 (Nome com CNPJ colado na mesma linha isolado perfeitamente)')
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 10 - obteve nome: ${n10}, cnpj: ${c10}`)
+  }
+
+  // Teste 11: Marcador de seção vazado no valor do nome do tomador
+  const testInvoice11 = `
+    PRESTADOR DE SERVIÇOS
+    Razão Social: SERVIÇOS GERAIS LTDA
+    CNPJ: 22.333.444/0001-55
+
+    TOMADOR DE SERVIÇOS: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA
+    CNPJ: 45.987.654/0001-88
+  `
+  const r11 = parseClientDataFromPdfText(testInvoice11, DEFAULT_CALCULATOR_STATE)
+  const n11 = r11.fields.find((f) => f.key === 'clienteNome')?.value
+  if (n11 === 'RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA') {
+    results.push('OK: Cenário 11 (Marcador de seção TOMADOR DE SERVIÇOS vazado removido)')
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 11 - obteve nome: ${n11}`)
+  }
+
+  // Teste 12: Nome com CNPJ não formatado (14 dígitos) colado no fim da linha
+  const testInvoice12 = `
+    DADOS DO EMITENTE
+    EMPRESA BETA LTDA
+    CNPJ: 33.222.111/0001-00
+
+    DESTINATÁRIO / REMETENTE
+    Nome Empresarial: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA 45987654000188
+  `
+  const r12 = parseClientDataFromPdfText(testInvoice12, DEFAULT_CALCULATOR_STATE)
+  const n12 = r12.fields.find((f) => f.key === 'clienteNome')?.value
+  if (n12 === 'RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA') {
+    results.push('OK: Cenário 12 (Nome com dígitos de CNPJ colados no final)')
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 12 - obteve nome: ${n12}`)
+  }
+
+  // Teste 13: Nome quebrado em duas linhas com rótulo "Tomador:" e caracteres residuais
+  const testInvoice13 = `
+    PRESTADOR
+    ALFA CONSULTORIA LTDA
+    CNPJ: 99.888.777/0001-66
+
+    TOMADOR DO SERVIÇO:
+    RESIDENCIAL ESTRELA
+    INCORPORADORA SPE LTDA :
+    CNPJ/CPF: 45.987.654/0001-88
+  `
+  const r13 = parseClientDataFromPdfText(testInvoice13, DEFAULT_CALCULATOR_STATE)
+  const n13 = r13.fields.find((f) => f.key === 'clienteNome')?.value
+  if (n13 === 'RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA') {
+    results.push('OK: Cenário 13 (Quebrado em duas linhas com pontuações no final)')
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 13 - obteve nome: ${n13}`)
+  }
+
   return { passed, results }
 }

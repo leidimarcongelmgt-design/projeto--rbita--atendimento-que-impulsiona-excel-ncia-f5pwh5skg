@@ -339,6 +339,69 @@ export function parseClientDataFromPdfText(
   // Helper functions for candidate evaluation (Name & CNPJ)
   // ---------------------------------------------------------------------------
 
+  /**
+   * Limpeza e sanitização agressiva do nome / razão social do cliente.
+   * Remove rótulos residuais, cabeçalhos de seção, pontuações, CNPJ/CPF colados
+   * e fragmentos indesejados, garantindo que o valor contenha APENAS a razão social pura.
+   */
+  const cleanClientName = (raw: string): string => {
+    if (!raw) return ''
+    let cleaned = raw.replace(/[\r\n\t]+/g, ' ').trim()
+
+    // 1. Remover marcadores e cabeçalhos de seção vazados no início ou meio
+    const sectionHeaders = [
+      /^(?:(?:DADOS\s+DO\s+|IDENTIFICA[ÇC][ÃA]O\s+DO\s+)?TOMADOR(?:\s+DE\s+SERVI[ÇC]OS?)?)\s*[:\-–—|/]*\s*/i,
+      /^(?:(?:DADOS\s+DO\s+|IDENTIFICA[ÇC][ÃA]O\s+DO\s+)?DESTINAT[ÁA]RIO(?:\s*\/\s*REMETENTE)?)\s*[:\-–—|/]*\s*/i,
+      /^(?:(?:DADOS\s+DO\s+)?CLIENTE|SACADO|CONSUMIDOR|PAGADOR|COMPRADOR|LOCAT[ÁA]RIO|CONTRATANTE)\s*[:\-–—|/]*\s*/i,
+    ]
+    for (const sh of sectionHeaders) {
+      cleaned = cleaned.replace(sh, '').trim()
+    }
+
+    // 2. Remover rótulos precedentes no início do valor
+    const leadingLabels = [
+      /^(?:NOME\s*\/\s*RAZ[ÃA]O\s*SOCIAL|RAZ[ÃA]O\s*SOCIAL(?:\s+DO\s+TOMADOR|\s+DO\s+CLIENTE|\s+DO\s+DESTINAT[ÁA]RIO)?|NOME\s+EMPRESARIAL|NOME\s+DO\s+TOMADOR|NOME\s+DO\s+CLIENTE|NOME\s+FANTASIA|NOME|TOMADOR|SACADO|DESTINAT[ÁA]RIO|CLIENTE|PAGADOR|CONSUMIDOR)\s*[:\-–—|/]*\s*/i,
+      /^(?:TOMADOR(?:\s+DE\s+SERVI[ÇC]OS?)?|DESTINAT[ÁA]RIO(?:\s*\/\s*REMETENTE)?|CLIENTE|SACADO)\s*[:\-–—|/]*\s*/i,
+    ]
+    let prev = ''
+    while (prev !== cleaned) {
+      prev = cleaned
+      for (const lbl of leadingLabels) {
+        cleaned = cleaned.replace(lbl, '').trim()
+      }
+      cleaned = cleaned.replace(/^(?:[:\-–—|/.]\s*)+/, '').trim()
+    }
+
+    // 3. Cortar em rótulos conhecidos de outros campos que apareçam a seguir (CNPJ, CPF, IE, Endereço, etc.)
+    cleaned = cleaned
+      .split(
+        /\s+(?:\b(?:CNPJ|CPF|CNPJ\s*\/\s*CPF|INSCRI[ÇC][ÃA]O(?:\s+ESTADUAL|\s+MUNICIPAL)?|\bIE\b|\bIM\b|\bCCM\b|ENDERE[ÇC]O|LOGRADOURO|RUA|AV|AVENIDA|BAIRRO|CEP|MUNIC[ÍI]PIO|CIDADE|UF|ESTADO|TEL|TELEFONE|FONE|E-?MAIL|DATA(?:\s+DE\s+EMISS[ÃA]O)?)\b\s*[:\-–—|/])/i,
+      )[0]
+      .trim()
+
+    // 4. Cortar caso um CNPJ formatado ou CPF formatado apareça colado após um espaço ou traço
+    cleaned = cleaned.split(/\s+(?:[-–—|/]\s*)?\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b/)[0].trim()
+    cleaned = cleaned.split(/\s+(?:[-–—|/]\s*)?\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/)[0].trim()
+
+    // 5. Cortar sequências numéricas longas coladas no final (ex.: CNPJ puro com 14 dígitos ou CPF com 11 dígitos)
+    cleaned = cleaned.replace(/\s+(?:[-–—|/]\s*)?\b\d{11,14}\b.*$/g, '').trim()
+    cleaned = cleaned
+      .replace(/\s+(?:[-–—|/]\s*)?\b\d{2}\s*\d{3}\s*\d{3}\s*\d{4}\s*\d{2}\b.*$/g, '')
+      .trim()
+
+    // 6. Remover pontuações e símbolos residuais nas pontas
+    cleaned = cleaned.replace(/^[;,:.\-–—|/\\_()[\]\s]+/, '').trim()
+    cleaned = cleaned.replace(/[;,:.\-–—|/\\_()[\]\s]+$/, '').trim()
+
+    // 7. Normalizar espaços múltiplos
+    cleaned = cleaned.replace(/\s{2,}/g, ' ').trim()
+
+    // 8. Se após a limpeza ainda sobrarem resquícios de sufixos de rótulo no final (ex: " : " ou "-")
+    cleaned = cleaned.replace(/[:\-–—|/]+$/, '').trim()
+
+    return cleaned
+  }
+
   // Helper: check if a candidate string is valid as a business or person name
   const isExcludedGenericTerm = (str: string): boolean => {
     const s = str.trim().toLowerCase()
@@ -366,17 +429,7 @@ export function parseClientDataFromPdfText(
   }
 
   const cleanNameCandidate = (val: string): string => {
-    let cleaned = val.replace(/^(?:[:\-–—|/]\s*)+/, '').trim()
-    // Remove subsequent trailing label blocks like "CNPJ: ...", "Inscrição: ...", "Endereço: ..."
-    // Note: use word boundary before labels to avoid matching inside names
-    cleaned = cleaned
-      .split(
-        /\s+(?:\bCNPJ\b|\bCPF\b|\bINSCRI[ÇC][ÃA]O\b|\bENDERE[ÇC]O\b|\bRUA\b|\bAV\b|\bAVENIDA\b|\bBAIRRO\b|\bCEP\b|\bTEL\b|\bTELEFONE\b|\bFONE\b|\bE-?MAIL\b|\bDATA\b)/i,
-      )[0]
-      .trim()
-    // Strip trailing punctuation
-    cleaned = cleaned.replace(/[;,\-–—|/]+$/, '').trim()
-    return cleaned
+    return cleanClientName(val)
   }
 
   // Helper to append next line(s) if the company name was wrapped onto subsequent lines in PDF
@@ -419,7 +472,7 @@ export function parseClientDataFromPdfText(
       }
       idx++
     }
-    return result
+    return cleanClientName(result)
   }
 
   // --- B. Razão Social / Nome do Cliente ---
@@ -627,16 +680,20 @@ export function parseClientDataFromPdfText(
   }
 
   if (detectedNome) {
-    fields.push({
-      key: 'clienteNome',
-      label: 'Nome / Razão Social',
-      value: detectedNome,
-      currentValue: currentState.clienteNome || '',
-      snippet: nomeSnippet,
-      confidence: nomeConfidence,
-      isDifferent:
-        detectedNome.trim().toLowerCase() !== (currentState.clienteNome || '').trim().toLowerCase(),
-    })
+    const finalCleanNome = cleanClientName(detectedNome)
+    if (finalCleanNome && !isExcludedGenericTerm(finalCleanNome)) {
+      fields.push({
+        key: 'clienteNome',
+        label: 'Nome / Razão Social',
+        value: finalCleanNome,
+        currentValue: currentState.clienteNome || '',
+        snippet: nomeSnippet,
+        confidence: nomeConfidence,
+        isDifferent:
+          finalCleanNome.trim().toLowerCase() !==
+          (currentState.clienteNome || '').trim().toLowerCase(),
+      })
+    }
   }
 
   // ---------------------------------------------------------------------------
