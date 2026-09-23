@@ -49,8 +49,11 @@ import {
   FORBIDDEN_ISSUER_KEYS,
 } from '@/lib/clientDataParser'
 import { runClientParserSelfCheck } from '@/lib/clientDataParser.test'
+import { runSpreadsheetParserSelfCheck } from '@/lib/spreadsheetParser.test'
 import { PdfDataReviewModal } from './PdfDataReviewModal'
 import { PdfPasswordDialog } from './PdfPasswordDialog'
+import { SpreadsheetReviewModal } from './SpreadsheetReviewModal'
+import { parseSpreadsheetBuffer, SpreadsheetParseResult } from '@/lib/spreadsheetParser'
 import { toast } from 'sonner'
 
 interface ClienteTabProps {
@@ -80,6 +83,13 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
   const cnpjPdfFileRef = useRef<HTMLInputElement>(null)
   const iePdfFileRef = useRef<HTMLInputElement>(null)
   const imPdfFileRef = useRef<HTMLInputElement>(null)
+  const spreadsheetFileRef = useRef<HTMLInputElement>(null)
+
+  // Spreadsheet Data Extraction states
+  const [isReadingSpreadsheet, setIsReadingSpreadsheet] = useState(false)
+  const [spreadsheetReviewModalOpen, setSpreadsheetReviewModalOpen] = useState(false)
+  const [spreadsheetParseResult, setSpreadsheetParseResult] =
+    useState<SpreadsheetParseResult | null>(null)
 
   // PDF Data Extraction states
   const [isExtracting, setIsExtracting] = useState(false)
@@ -221,6 +231,10 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
     if (!check.passed) {
       console.warn('[clientDataParser] Falha na auto-checagem de regressão:', check.results)
     }
+    const checkSpreadsheet = runSpreadsheetParserSelfCheck()
+    if (!checkSpreadsheet.passed) {
+      console.warn('[spreadsheetParser] Falha na auto-checagem:', checkSpreadsheet.results)
+    }
   }, [])
 
   // Trigger re-extraction manually on currently attached PDF
@@ -245,7 +259,7 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
   )
 
   // Apply chosen fields to calculator state and URL
-  // Proteção: NUNCA permitir que campos da aba Identificação (emissor) sejam sobrescritos
+  // Proteção: NUNCA permitir que campos da aba Identificação (emissor) sejam sobrescritos via PDF
   const handleApplyExtractedData = useCallback(
     (patch: Partial<CalculatorState>) => {
       const sanitizedPatch: Partial<CalculatorState> = {}
@@ -259,6 +273,39 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
       const count = Object.keys(sanitizedPatch).length
       toast.success(
         `${count} ${count === 1 ? 'campo do cliente preenchido' : 'campos do cliente preenchidos'} com sucesso!`,
+      )
+    },
+    [onChange],
+  )
+
+  // Leitura e aplicação da planilha XLSX/XLS (traz todos os dados dela: emissor e cliente)
+  const handleSpreadsheetFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsReadingSpreadsheet(true)
+    try {
+      const buffer = await file.arrayBuffer()
+      const result = parseSpreadsheetBuffer(buffer, file.name, state)
+      setSpreadsheetParseResult(result)
+      setSpreadsheetReviewModalOpen(true)
+    } catch (err) {
+      console.error('Erro ao ler planilha:', err)
+      toast.error(
+        'Não foi possível ler os dados da planilha. Verifique se o arquivo está corrompido ou protegido.',
+      )
+    } finally {
+      setIsReadingSpreadsheet(false)
+      e.target.value = ''
+    }
+  }
+
+  const handleApplySpreadsheetData = useCallback(
+    (patch: Partial<CalculatorState>) => {
+      onChange(patch)
+      const count = Object.keys(patch).length
+      toast.success(
+        `${count} ${count === 1 ? 'campo da planilha aplicado' : 'campos da planilha aplicados'} com sucesso ao dossiê!`,
       )
     },
     [onChange],
@@ -369,15 +416,50 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
       {/* SEÇÃO 1: DADOS DO CLIENTE */}
       <Card className="border border-slate-200 card-shadow bg-white">
         <CardHeader className="border-b border-slate-100 pb-4">
-          <div className="flex items-center gap-2">
-            <UserCheck className="w-5 h-5 text-[#1E3A5F]" />
-            <CardTitle className="text-lg font-bold text-slate-900">
-              Identificação do Cliente
-            </CardTitle>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <UserCheck className="w-5 h-5 text-[#1E3A5F]" />
+              <div>
+                <CardTitle className="text-lg font-bold text-slate-900">
+                  Identificação do Cliente
+                </CardTitle>
+                <CardDescription className="text-slate-500 text-xs mt-0.5">
+                  Dados cadastrais e societários do cliente destinatário deste dossiê.
+                </CardDescription>
+              </div>
+            </div>
+
+            {/* Botão Importar Planilha (XLSX) em destaque no topo */}
+            <div className="flex items-center gap-2">
+              <input
+                ref={spreadsheetFileRef}
+                type="file"
+                accept=".xlsx, .xls, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                className="hidden"
+                onChange={handleSpreadsheetFileChange}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isReadingSpreadsheet}
+                onClick={() => spreadsheetFileRef.current?.click()}
+                className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300 text-xs h-8.5 gap-1.5 shadow-2xs font-semibold"
+                title="Importar todos os dados a partir de uma planilha Excel (.xlsx ou .xls)"
+              >
+                {isReadingSpreadsheet ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Lendo Planilha...
+                  </>
+                ) : (
+                  <>
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" /> Importar Planilha
+                    (XLSX)
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
-          <CardDescription className="text-slate-500">
-            Dados cadastrais e societários do cliente destinatário deste dossiê.
-          </CardDescription>
         </CardHeader>
         <CardContent className="pt-6 space-y-6">
           {/* Client Logo Upload + Controls */}
@@ -1344,6 +1426,15 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
         errorMessage={passwordError}
         isSubmitting={isUnlocking}
         onSubmitPassword={handleSubmitPassword}
+      />
+
+      {/* Modal de Revisão de Planilha (XLSX/XLS) */}
+      <SpreadsheetReviewModal
+        open={spreadsheetReviewModalOpen}
+        onOpenChange={setSpreadsheetReviewModalOpen}
+        parseResult={spreadsheetParseResult}
+        onApply={handleApplySpreadsheetData}
+        isLoading={isReadingSpreadsheet}
       />
     </div>
   )
