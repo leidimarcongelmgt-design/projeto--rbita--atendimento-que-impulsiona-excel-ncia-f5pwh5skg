@@ -84,11 +84,108 @@ export function runClientParserSelfCheck(): { passed: boolean; results: string[]
   // Teste 4
   const r4 = parseClientDataFromPdfText(testInvoice4, DEFAULT_CALCULATOR_STATE)
   const n4 = r4.fields.find((f) => f.key === 'clienteNome')?.value
-  if (n4 === 'RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA') {
+  const c4 = r4.fields.find((f) => f.key === 'clienteCnpj')?.value
+  if (n4 === 'RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA' && c4 === '45.987.654/0001-88') {
     results.push('OK: Cenário 4 (TOMADOR: <Nome>)')
   } else {
     passed = false
-    results.push(`FALHA: Cenário 4 - obteve nome: ${n4}`)
+    results.push(`FALHA: Cenário 4 - obteve nome: ${n4}, cnpj: ${c4}`)
+  }
+
+  // Teste 5: Documento com CNPJ do emissor antes do cliente (garantir descarte do emissor e seleção do cliente)
+  const testInvoice5 = `
+    NOTA FISCAL DE SERVIÇOS ELETRÔNICA - NFS-e
+    PRESTADOR DE SERVIÇOS
+    Razão Social: SOFTWARES E SERVICOS DIGITAIS LTDA
+    CNPJ: 02.444.888/0001-55
+    Endereço: AV BRASIL, 1500 - CENTRO
+
+    TOMADOR DE SERVIÇOS
+    Nome/Razão Social: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA
+    CNPJ/CPF: 45.987.654/0001-88
+    Endereço: RUA DAS FLORES, 500
+    Município: SAO PAULO - SP
+  `
+  const r5 = parseClientDataFromPdfText(testInvoice5, DEFAULT_CALCULATOR_STATE)
+  const n5 = r5.fields.find((f) => f.key === 'clienteNome')?.value
+  const c5 = r5.fields.find((f) => f.key === 'clienteCnpj')?.value
+  if (n5 === 'RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA' && c5 === '45.987.654/0001-88') {
+    results.push('OK: Cenário 5 (Emissor antes do cliente - CNPJ do tomador selecionado)')
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 5 - obteve nome: ${n5}, cnpj: ${c5}`)
+  }
+
+  // Teste 6: CNPJ em linha separada do rótulo e do nome do tomador
+  const testInvoice6 = `
+    PRESTADOR DE SERVIÇOS
+    EMPRESA CONSULTORIA FINANCEIRA LTDA
+    CNPJ: 11.222.333/0001-44
+
+    TOMADOR DE SERVIÇOS
+    RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA
+    CNPJ:
+    45.987.654/0001-88
+    RUA DAS FLORES, 500 - SAO PAULO - SP
+  `
+  const r6 = parseClientDataFromPdfText(testInvoice6, DEFAULT_CALCULATOR_STATE)
+  const n6 = r6.fields.find((f) => f.key === 'clienteNome')?.value
+  const c6 = r6.fields.find((f) => f.key === 'clienteCnpj')?.value
+  if (n6 === 'RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA' && c6 === '45.987.654/0001-88') {
+    results.push('OK: Cenário 6 (CNPJ em linha separada do rótulo)')
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 6 - obteve nome: ${n6}, cnpj: ${c6}`)
+  }
+
+  // Teste 7: Documento com múltiplos CNPJs (emissor, intermediário e tomador/cliente)
+  const testInvoice7 = `
+    EMITENTE DA NOTA FISCAL
+    Razão Social: BANCO INTERMEDIADOR E PAGAMENTOS S/A
+    CNPJ: 60.701.190/0001-04
+
+    PRESTADOR DE SERVIÇOS
+    Razão Social: CONSTRUTORA E INCORPORADORA MODELO LTDA
+    CNPJ: 33.444.555/0001-66
+
+    TOMADOR DO SERVIÇO / CLIENTE
+    Razão Social: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA
+    CNPJ/CPF: 45.987.654/0001-88
+    Inscrição Municipal: 12345678
+    Endereço: RUA DAS FLORES, 500 - SAO PAULO - SP
+  `
+  const r7 = parseClientDataFromPdfText(testInvoice7, DEFAULT_CALCULATOR_STATE)
+  const n7 = r7.fields.find((f) => f.key === 'clienteNome')?.value
+  const c7 = r7.fields.find((f) => f.key === 'clienteCnpj')?.value
+  if (n7 === 'RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA' && c7 === '45.987.654/0001-88') {
+    results.push('OK: Cenário 7 (Múltiplos CNPJs - tomador priorizado e isolado)')
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 7 - obteve nome: ${n7}, cnpj: ${c7}`)
+  }
+
+  // Teste 8: Documento sem seção tomador explícita, mas com proximidade ao nome do cliente
+  const testInvoice8 = `
+    FATURA DE COBRANÇA
+    EMPRESA EMISSORA DE ENERGIA S/A
+    CNPJ: 01.234.567/0001-89
+
+    RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA
+    45.987.654/0001-88
+    RUA DAS FLORES, 500
+  `
+  const r8 = parseClientDataFromPdfText(testInvoice8, {
+    ...DEFAULT_CALCULATOR_STATE,
+    empresaCnpj: '01.234.567/0001-89',
+    empresaNome: 'EMPRESA EMISSORA DE ENERGIA S/A',
+  })
+  const n8 = r8.fields.find((f) => f.key === 'clienteNome')?.value
+  const c8 = r8.fields.find((f) => f.key === 'clienteCnpj')?.value
+  if (n8 === 'RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA' && c8 === '45.987.654/0001-88') {
+    results.push('OK: Cenário 8 (Associação por vizinhança de linha ao nome do cliente)')
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 8 - obteve nome: ${n8}, cnpj: ${c8}`)
   }
 
   return { passed, results }

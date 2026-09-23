@@ -226,125 +226,11 @@ export function parseClientDataFromPdfText(
   // Also collect lines that explicitly match client/issuer in line-by-line inspection
   const linesToSearch = clientSectionLines.length > 0 ? clientSectionLines : lines
 
-  // --- A. CNPJ / CPF do Cliente ---
-  // When multiple CNPJs exist (e.g. Issuer + Customer), ensure we pick the client's CNPJ.
-  // We prioritize:
-  // 1. CNPJ/CPF found inside the isolated clientSectionText
-  // 2. CNPJ/CPF explicitly labeled with Tomador/Destinatário/Sacado/Cliente in line
-  // 3. Fallback: all valid CNPJs/CPFs in document, discarding the one belonging to the issuer / empresaCnpj or issuer section
+  // Note: CNPJ/CPF extraction is performed after section and client name detection
+  // to allow neighborhood association with the client name line (e.g. RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA)
   let detectedCnpj = ''
   let cnpjSnippet = ''
   let cnpjConfidence: 'high' | 'medium' | 'low' = 'medium'
-
-  const cnpjMaskedRegex = /\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b/g
-  const cpfMaskedRegex = /\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/g
-
-  // Try to find CNPJ/CPF inside client section first
-  const searchInText = (text: string, isClientScope: boolean) => {
-    let match: RegExpExecArray | null
-    // Reset regex indices
-    cnpjMaskedRegex.lastIndex = 0
-    cpfMaskedRegex.lastIndex = 0
-
-    // CNPJ masked
-    while ((match = cnpjMaskedRegex.exec(text)) !== null) {
-      const val = match[0]
-      if (isValidCNPJ(val)) {
-        // Skip if identical to current empresa CNPJ
-        if (
-          currentState.empresaCnpj &&
-          val.replace(/\D/g, '') === currentState.empresaCnpj.replace(/\D/g, '')
-        ) {
-          continue
-        }
-        return {
-          val: formatCpfCnpj(val),
-          snippet: extractSnippet(text, match.index, val.length),
-          confidence: (isClientScope ? 'high' : 'medium') as 'high' | 'medium',
-        }
-      }
-    }
-    // CPF masked
-    while ((match = cpfMaskedRegex.exec(text)) !== null) {
-      const val = match[0]
-      if (isValidCPF(val)) {
-        if (
-          currentState.empresaCnpj &&
-          val.replace(/\D/g, '') === currentState.empresaCnpj.replace(/\D/g, '')
-        ) {
-          continue
-        }
-        return {
-          val: formatCpfCnpj(val),
-          snippet: extractSnippet(text, match.index, val.length),
-          confidence: (isClientScope ? 'high' : 'medium') as 'high' | 'medium',
-        }
-      }
-    }
-    // Unmasked 14 digits CNPJ near "CNPJ" or "CPF"
-    const unmaskedCnpjRegex = /(?:CNPJ|CPF)[:\s]+(\d{11,14})\b/gi
-    while ((match = unmaskedCnpjRegex.exec(text)) !== null) {
-      const val = match[1]
-      if (val.length === 14 && isValidCNPJ(val)) {
-        if (
-          currentState.empresaCnpj &&
-          val.replace(/\D/g, '') === currentState.empresaCnpj.replace(/\D/g, '')
-        ) {
-          continue
-        }
-        return {
-          val: formatCpfCnpj(val),
-          snippet: extractSnippet(text, match.index, match[0].length),
-          confidence: (isClientScope ? 'high' : 'medium') as 'high' | 'medium',
-        }
-      } else if (val.length === 11 && isValidCPF(val)) {
-        if (
-          currentState.empresaCnpj &&
-          val.replace(/\D/g, '') === currentState.empresaCnpj.replace(/\D/g, '')
-        ) {
-          continue
-        }
-        return {
-          val: formatCpfCnpj(val),
-          snippet: extractSnippet(text, match.index, match[0].length),
-          confidence: (isClientScope ? 'high' : 'medium') as 'high' | 'medium',
-        }
-      }
-    }
-    return null
-  }
-
-  let foundDoc = clientSectionText ? searchInText(clientSectionText, true) : null
-
-  // If not found in clientSectionText, search lines excluding issuer lines
-  if (!foundDoc) {
-    const nonIssuerLines = lines.filter((l) => !ISSUER_HEADER_REGEX.test(l))
-    foundDoc = searchInText(nonIssuerLines.join('\n'), false)
-  }
-
-  // General fallback on full text if still nothing found
-  if (!foundDoc) {
-    foundDoc = searchInText(rawText, false)
-  }
-
-  if (foundDoc) {
-    detectedCnpj = foundDoc.val
-    cnpjSnippet = foundDoc.snippet
-    cnpjConfidence = foundDoc.confidence
-  }
-
-  if (detectedCnpj) {
-    fields.push({
-      key: 'clienteCnpj',
-      label: 'CNPJ / CPF do Cliente',
-      value: detectedCnpj,
-      currentValue: currentState.clienteCnpj || '',
-      snippet: cnpjSnippet,
-      confidence: cnpjConfidence,
-      isDifferent:
-        detectedCnpj.replace(/\D/g, '') !== (currentState.clienteCnpj || '').replace(/\D/g, ''),
-    })
-  }
 
   // --- A.1 Inscrição Estadual (IE) do Cliente ---
   let detectedIE = ''
@@ -449,15 +335,9 @@ export function parseClientDataFromPdfText(
     })
   }
 
-  // --- B. Razão Social / Nome do Cliente ---
-  // The user explicitly requires:
-  // "ao importar o arquivo no campo nome empresarial desejo que seja importado o nome do cliente"
-  // The client name (tomador, destinatário, sacado, comprador, cliente) must ALWAYS take
-  // precedence over the emitter / issuer / prestador company name.
-
-  let detectedNome = ''
-  let nomeSnippet = ''
-  let nomeConfidence: 'high' | 'medium' | 'low' = 'low'
+  // ---------------------------------------------------------------------------
+  // Helper functions for candidate evaluation (Name & CNPJ)
+  // ---------------------------------------------------------------------------
 
   // Helper: check if a candidate string is valid as a business or person name
   const isExcludedGenericTerm = (str: string): boolean => {
@@ -506,7 +386,6 @@ export function parseClientDataFromPdfText(
     startIndex: number,
   ): string => {
     let result = baseCandidate
-    // If the base candidate does not end with LTDA / S/A / EPP / ME / etc, or if next line has typical business continuation
     let idx = startIndex + 1
     while (idx < sourceLines.length && idx <= startIndex + 2) {
       const nextRaw = sourceLines[idx].trim()
@@ -543,6 +422,14 @@ export function parseClientDataFromPdfText(
     return result
   }
 
+  // --- B. Razão Social / Nome do Cliente ---
+  // The client name (tomador, destinatário, sacado, comprador, cliente) must ALWAYS take
+  // precedence over the emitter / issuer / prestador company name.
+  let detectedNome = ''
+  let nomeSnippet = ''
+  let nomeConfidence: 'high' | 'medium' | 'low' = 'low'
+  let detectedNomeLineIndex = -1
+
   // Priority 1: High-specificity Client/Tomador/Destinatário/Sacado labeled patterns
   // E.g.: "Tomador do Serviço: EMPRESA CLIENTE LTDA", "Destinatário/Remetente: FULANO DE TAL",
   // "Nome / Razão Social do Tomador: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA", "Sacado: NOME CLIENTE"
@@ -569,6 +456,7 @@ export function parseClientDataFromPdfText(
           detectedNome = candidate
           nomeSnippet = line
           nomeConfidence = 'high'
+          detectedNomeLineIndex = i
           break
         }
       }
@@ -594,6 +482,8 @@ export function parseClientDataFromPdfText(
           detectedNome = candidate
           nomeSnippet = line
           nomeConfidence = 'high'
+          const fullIdx = lines.indexOf(line)
+          if (fullIdx !== -1) detectedNomeLineIndex = fullIdx
           break
         }
       }
@@ -614,6 +504,8 @@ export function parseClientDataFromPdfText(
             detectedNome = candidate
             nomeSnippet = `${line} -> ${nextLine}`
             nomeConfidence = 'high'
+            const fullIdx = lines.indexOf(nextLine)
+            if (fullIdx !== -1) detectedNomeLineIndex = fullIdx
             break
           }
         }
@@ -645,6 +537,8 @@ export function parseClientDataFromPdfText(
             detectedNome = candidate
             nomeSnippet = candidate
             nomeConfidence = 'high'
+            const fullIdx = lines.indexOf(line)
+            if (fullIdx !== -1) detectedNomeLineIndex = fullIdx
             break
           }
         }
@@ -652,68 +546,7 @@ export function parseClientDataFromPdfText(
     }
   }
 
-  // Priority 4: Look for name associated with the detected client CNPJ/CPF
-  // If we already detected a client CNPJ, search lines around it (within 4 lines above or below)
-  if (!detectedNome && detectedCnpj) {
-    const rawCnpjDigits = detectedCnpj.replace(/\D/g, '')
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i]
-      if (line.replace(/\D/g, '').includes(rawCnpjDigits)) {
-        // Inspect line itself for a name preceding or following CNPJ
-        const beforeCnpjMatch = /^(.*?)(?:CNPJ|CPF)/i.exec(line)
-        if (beforeCnpjMatch) {
-          let cand = cleanNameCandidate(beforeCnpjMatch[1])
-          if (!isExcludedGenericTerm(cand) && cand.length >= 4) {
-            cand = mergeWrappedNameLines(cand, lines, i)
-            detectedNome = cand
-            nomeSnippet = line
-            nomeConfidence = 'high'
-            break
-          }
-        }
-
-        // Check lines above (up to 4 lines)
-        for (let offset = -1; offset >= -4; offset--) {
-          const targetIdx = i + offset
-          if (targetIdx >= 0) {
-            const candLine = lines[targetIdx]
-            // Skip issuer section lines
-            if (ISSUER_HEADER_REGEX.test(candLine) && !CLIENT_HEADER_REGEX.test(candLine)) continue
-            let cand = cleanNameCandidate(candLine)
-            if (!isExcludedGenericTerm(cand) && cand.length >= 4 && /[A-Za-zÀ-ÿ]{3,}/.test(cand)) {
-              cand = mergeWrappedNameLines(cand, lines, targetIdx)
-              detectedNome = cand
-              nomeSnippet = candLine
-              nomeConfidence = 'high'
-              break
-            }
-          }
-        }
-        if (detectedNome) break
-
-        // Check lines below (up to 3 lines)
-        for (let offset = 1; offset <= 3; offset++) {
-          const targetIdx = i + offset
-          if (targetIdx < lines.length) {
-            const candLine = lines[targetIdx]
-            if (ISSUER_HEADER_REGEX.test(candLine) && !CLIENT_HEADER_REGEX.test(candLine)) continue
-            let cand = cleanNameCandidate(candLine)
-            if (!isExcludedGenericTerm(cand) && cand.length >= 4 && /[A-Za-zÀ-ÿ]{3,}/.test(cand)) {
-              cand = mergeWrappedNameLines(cand, lines, targetIdx)
-              detectedNome = cand
-              nomeSnippet = candLine
-              nomeConfidence = 'medium'
-              break
-            }
-          }
-        }
-        if (detectedNome) break
-      }
-    }
-  }
-
-  // Priority 5: Fallback - General "Razão Social" or "Nome" in linesToSearch,
-  // making sure NOT to pick the emitter/prestador name
+  // Priority 4: Look for name in general lines if not yet found
   if (!detectedNome) {
     const fallbackNameRegex =
       /(?:RAZ[ÃA]O\s*SOCIAL|NOME(?:\s*\/\s*RAZ[ÃA]O\s*SOCIAL)?|NOME\s+EMPRESARIAL)[:\s\-–—]+([^\n\r]{3,120})/i
@@ -731,6 +564,7 @@ export function parseClientDataFromPdfText(
           detectedNome = candidate
           nomeSnippet = line
           nomeConfidence = 'medium'
+          detectedNomeLineIndex = i
           break
         }
       }
@@ -749,6 +583,7 @@ export function parseClientDataFromPdfText(
             detectedNome = candidate
             nomeSnippet = `${line} -> ${nextLine}`
             nomeConfidence = 'medium'
+            detectedNomeLineIndex = i + 1
             break
           }
         }
@@ -756,7 +591,7 @@ export function parseClientDataFromPdfText(
     }
   }
 
-  // Priority 6: Specific company entity detection (e.g. SPE LTDA / INCORPORADORA / LTDA / S/A)
+  // Priority 5: Specific company entity detection (e.g. SPE LTDA / INCORPORADORA / LTDA / S/A)
   // when not located by explicit labels, strictly excluding issuer lines and current empresaNome
   if (!detectedNome) {
     for (let i = 0; i < lines.length; i++) {
@@ -773,8 +608,20 @@ export function parseClientDataFromPdfText(
           detectedNome = cand
           nomeSnippet = line
           nomeConfidence = 'low'
+          detectedNomeLineIndex = i
           break
         }
+      }
+    }
+  }
+
+  // If detectedNomeLineIndex was not set but detectedNome was found, locate its first line
+  if (detectedNome && detectedNomeLineIndex === -1) {
+    const firstWord = detectedNome.split(/\s+/)[0]
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes(firstWord)) {
+        detectedNomeLineIndex = i
+        break
       }
     }
   }
@@ -789,6 +636,257 @@ export function parseClientDataFromPdfText(
       confidence: nomeConfidence,
       isDifferent:
         detectedNome.trim().toLowerCase() !== (currentState.clienteNome || '').trim().toLowerCase(),
+    })
+  }
+
+  // ---------------------------------------------------------------------------
+  // A. Extração Especializada de CNPJ / CPF do Cliente (Tomador)
+  // Requisitos:
+  // 1. Garantir que o CNPJ/CPF extraído pertença ao tomador/cliente (ex: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA),
+  //    e nunca ao emissor/prestador.
+  // 2. Descartar CNPJs do emissor (seção prestador/emitente e currentState.empresaCnpj).
+  // 3. Suportar CNPJ em linha separada do nome ou rótulo ("CNPJ:\n45.987.654/0001-88" ou "Nome\nCNPJ: ...").
+  // 4. Associação por vizinhança: dar alta prioridade ao CNPJ dentro da seção do tomador ou
+  //    adjacente às linhas do nome do cliente identificado.
+  // ---------------------------------------------------------------------------
+
+  interface CnpjCandidate {
+    digits: string
+    formatted: string
+    snippet: string
+    lineIndex: number
+    inClientSection: boolean
+    hasClientLabel: boolean
+    isIssuerSection: boolean
+    distanceToName: number // absolute line distance to detected client name
+  }
+
+  const allCnpjCandidates: CnpjCandidate[] = []
+  const knownIssuerDigits = (currentState.empresaCnpj || '').replace(/\D/g, '')
+
+  // Track active section state across document lines
+  let currentSection: 'issuer' | 'client' | 'other' = 'other'
+
+  for (let idx = 0; idx < lines.length; idx++) {
+    const line = lines[idx]
+
+    // Check section header transitions
+    if (ISSUER_HEADER_REGEX.test(line) && !CLIENT_HEADER_REGEX.test(line)) {
+      currentSection = 'issuer'
+    } else if (CLIENT_HEADER_REGEX.test(line)) {
+      currentSection = 'client'
+    } else if (SECTION_BOUNDARY_REGEX.test(line) && currentSection === 'client') {
+      currentSection = 'other'
+    }
+
+    const isInClientSec =
+      currentSection === 'client' || (clientSectionText !== '' && clientSectionLines.includes(line))
+    const isUnderIssuerSec = currentSection === 'issuer'
+
+    const distToName = detectedNomeLineIndex !== -1 ? Math.abs(idx - detectedNomeLineIndex) : 999
+
+    const hasClientLabelInLine =
+      /(?:TOMADOR|DESTINAT[ÁA]RIO|SACADO|CLIENTE|PAGADOR|CONSUMIDOR)/i.test(line)
+
+    // Check line for masked CNPJ
+    const maskedCnpjMatches = line.matchAll(/\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b/g)
+    for (const m of maskedCnpjMatches) {
+      const val = m[0]
+      const digits = val.replace(/\D/g, '')
+      if (isValidCNPJ(digits)) {
+        allCnpjCandidates.push({
+          digits,
+          formatted: formatCpfCnpj(digits),
+          snippet: line,
+          lineIndex: idx,
+          inClientSection: isInClientSec,
+          hasClientLabel: hasClientLabelInLine,
+          isIssuerSection: isUnderIssuerSec,
+          distanceToName: distToName,
+        })
+      }
+    }
+
+    // Check line for masked CPF
+    const maskedCpfMatches = line.matchAll(/\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/g)
+    for (const m of maskedCpfMatches) {
+      const val = m[0]
+      const digits = val.replace(/\D/g, '')
+      if (isValidCPF(digits)) {
+        allCnpjCandidates.push({
+          digits,
+          formatted: formatCpfCnpj(digits),
+          snippet: line,
+          lineIndex: idx,
+          inClientSection: isInClientSec,
+          hasClientLabel: hasClientLabelInLine,
+          isIssuerSection: isUnderIssuerSec,
+          distanceToName: distToName,
+        })
+      }
+    }
+
+    // Check unmasked CNPJ / CPF (e.g. "CNPJ: 45987654000188" or "CNPJ / CPF: 45987654000188")
+    const unmaskedMatches = line.matchAll(/(?:CNPJ|CPF|CNPJ\/CPF)[:\s]+(\d{11,14})\b/gi)
+    for (const m of unmaskedMatches) {
+      const digits = m[1]
+      if (digits.length === 14 && isValidCNPJ(digits)) {
+        allCnpjCandidates.push({
+          digits,
+          formatted: formatCpfCnpj(digits),
+          snippet: line,
+          lineIndex: idx,
+          inClientSection: isInClientSec,
+          hasClientLabel: hasClientLabelInLine,
+          isIssuerSection: isUnderIssuerSec,
+          distanceToName: distToName,
+        })
+      } else if (digits.length === 11 && isValidCPF(digits)) {
+        allCnpjCandidates.push({
+          digits,
+          formatted: formatCpfCnpj(digits),
+          snippet: line,
+          lineIndex: idx,
+          inClientSection: isInClientSec,
+          hasClientLabel: hasClientLabelInLine,
+          isIssuerSection: isUnderIssuerSec,
+          distanceToName: distToName,
+        })
+      }
+    }
+
+    // Check pattern where label is on line idx, and CNPJ/CPF is on next line (idx + 1)
+    // E.g.: "CNPJ:" or "CNPJ / CPF:" or "CPF:" alone
+    if (/(?:^|\s)(?:CNPJ(?:\s*\/\s*CPF)?|CPF)[:]?$/i.test(line) && idx + 1 < lines.length) {
+      const nextLine = lines[idx + 1].trim()
+      const nextMaskedCnpj = /\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b/.exec(nextLine)
+      if (nextMaskedCnpj && isValidCNPJ(nextMaskedCnpj[0])) {
+        const digits = nextMaskedCnpj[0].replace(/\D/g, '')
+        allCnpjCandidates.push({
+          digits,
+          formatted: formatCpfCnpj(digits),
+          snippet: `${line} ${nextLine}`,
+          lineIndex: idx + 1,
+          inClientSection: isInClientSec,
+          hasClientLabel: hasClientLabelInLine,
+          isIssuerSection: isUnderIssuerSec,
+          distanceToName:
+            detectedNomeLineIndex !== -1 ? Math.abs(idx + 1 - detectedNomeLineIndex) : 999,
+        })
+      }
+      const nextMaskedCpf = /\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/.exec(nextLine)
+      if (nextMaskedCpf && isValidCPF(nextMaskedCpf[0])) {
+        const digits = nextMaskedCpf[0].replace(/\D/g, '')
+        allCnpjCandidates.push({
+          digits,
+          formatted: formatCpfCnpj(digits),
+          snippet: `${line} ${nextLine}`,
+          lineIndex: idx + 1,
+          inClientSection: isInClientSec,
+          hasClientLabel: hasClientLabelInLine,
+          isIssuerSection: isUnderIssuerSec,
+          distanceToName:
+            detectedNomeLineIndex !== -1 ? Math.abs(idx + 1 - detectedNomeLineIndex) : 999,
+        })
+      }
+      // Also unmasked digits on next line
+      const nextDigitsMatch = /^(\d{11}|\d{14})\b/.exec(nextLine)
+      if (nextDigitsMatch) {
+        const digits = nextDigitsMatch[1]
+        if (
+          (digits.length === 14 && isValidCNPJ(digits)) ||
+          (digits.length === 11 && isValidCPF(digits))
+        ) {
+          allCnpjCandidates.push({
+            digits,
+            formatted: formatCpfCnpj(digits),
+            snippet: `${line} ${nextLine}`,
+            lineIndex: idx + 1,
+            inClientSection: isInClientSec,
+            hasClientLabel: hasClientLabelInLine,
+            isIssuerSection: isUnderIssuerSec,
+            distanceToName:
+              detectedNomeLineIndex !== -1 ? Math.abs(idx + 1 - detectedNomeLineIndex) : 999,
+          })
+        }
+      }
+    }
+  }
+
+  // Deduplicate candidates by digits while keeping best metadata
+  const candidateMap = new Map<string, CnpjCandidate>()
+  for (const cand of allCnpjCandidates) {
+    const existing = candidateMap.get(cand.digits)
+    if (!existing) {
+      candidateMap.set(cand.digits, cand)
+    } else {
+      // Merge best attributes
+      if (cand.inClientSection) existing.inClientSection = true
+      if (cand.hasClientLabel) existing.hasClientLabel = true
+      if (!cand.isIssuerSection) existing.isIssuerSection = false
+      if (cand.distanceToName < existing.distanceToName) {
+        existing.distanceToName = cand.distanceToName
+        existing.lineIndex = cand.lineIndex
+        existing.snippet = cand.snippet
+      }
+    }
+  }
+
+  // Filter out issuer CNPJ if known from state
+  const validCandidates = Array.from(candidateMap.values()).filter(
+    (c) => !knownIssuerDigits || c.digits !== knownIssuerDigits,
+  )
+
+  if (validCandidates.length > 0) {
+    // Scoring function for choosing the tomador CNPJ:
+    // +1000 for inClientSection
+    // +600 for hasClientLabel
+    // -500 for isIssuerSection
+    // Distance bonus: if distanceToName <= 5 lines, +500 - (distance * 50)
+    const scoreCandidate = (c: CnpjCandidate): number => {
+      let score = 0
+      if (c.inClientSection) score += 1000
+      if (c.hasClientLabel) score += 600
+      if (c.isIssuerSection) score -= 500
+      if (c.distanceToName <= 6) {
+        score += 500 - c.distanceToName * 50
+      } else if (c.distanceToName <= 15) {
+        score += 200 - c.distanceToName * 10
+      }
+      return score
+    }
+
+    validCandidates.sort((a, b) => scoreCandidate(b) - scoreCandidate(a))
+    const bestCand = validCandidates[0]
+    const bestScore = scoreCandidate(bestCand)
+
+    // Only accept if not heavily negative (i.e., not exclusively in issuer section when another might exist)
+    if (validCandidates.length === 1 && bestCand.isIssuerSection && !bestCand.inClientSection) {
+      // If there is only one CNPJ in the document and it was in the issuer section,
+      // check if the document has a distinct client section without CNPJ.
+      // If clientSectionText exists and this CNPJ is NOT in it, it belongs to the issuer.
+      if (!clientSectionText) {
+        detectedCnpj = bestCand.formatted
+        cnpjSnippet = bestCand.snippet
+        cnpjConfidence = 'low'
+      }
+    } else {
+      detectedCnpj = bestCand.formatted
+      cnpjSnippet = bestCand.snippet
+      cnpjConfidence = bestScore >= 500 ? 'high' : bestScore >= 100 ? 'medium' : 'low'
+    }
+  }
+
+  if (detectedCnpj) {
+    fields.push({
+      key: 'clienteCnpj',
+      label: 'CNPJ / CPF do Cliente',
+      value: detectedCnpj,
+      currentValue: currentState.clienteCnpj || '',
+      snippet: cnpjSnippet,
+      confidence: cnpjConfidence,
+      isDifferent:
+        detectedCnpj.replace(/\D/g, '') !== (currentState.clienteCnpj || '').replace(/\D/g, ''),
     })
   }
 
