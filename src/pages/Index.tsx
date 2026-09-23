@@ -4,9 +4,12 @@ import { parseStateFromUrl, serializeStateToUrl } from '@/lib/calculatorState'
 import { Header } from '@/components/calculator/Header'
 import { IdentificacaoTab } from '@/components/calculator/IdentificacaoTab'
 import { EmpresasTab } from '@/components/calculator/EmpresasTab'
+import { DptoPessoalTab } from '@/components/calculator/DptoPessoalTab'
 import { DocumentView } from '@/components/calculator/DocumentView'
 import { EmpresaRow } from '@/types/empresa'
+import { DptoPessoalRow } from '@/types/dptoPessoal'
 import { loadEmpresasFromStorage, clearEmpresasStorage } from '@/lib/empresasService'
+import { loadDptoPessoalFromStorage, clearDptoPessoalStorage } from '@/lib/dptoPessoalService'
 import { toast } from 'sonner'
 
 export default function Index() {
@@ -18,6 +21,11 @@ export default function Index() {
   // Empresas persistidas em sessionStorage (não poluindo a URL)
   const [empresas, setEmpresas] = useState<EmpresaRow[]>(() => {
     return loadEmpresasFromStorage()
+  })
+
+  // Dpto. Pessoal persistido em sessionStorage (não poluindo a URL)
+  const [dptoRows, setDptoRows] = useState<DptoPessoalRow[]>(() => {
+    return loadDptoPessoalFromStorage()
   })
 
   const [hasCopied, setHasCopied] = useState(false)
@@ -55,7 +63,9 @@ export default function Index() {
     const nextState = { ...DEFAULT_CALCULATOR_STATE }
     setState(nextState)
     setEmpresas([])
+    setDptoRows([])
     clearEmpresasStorage()
+    clearDptoPessoalStorage()
     setIsDocumentMode(false)
     const newQuery = serializeStateToUrl(nextState)
     window.history.replaceState(null, '', `${window.location.pathname}${newQuery}`)
@@ -108,6 +118,9 @@ export default function Index() {
             )}
             {state.tab === 'empresas' && (
               <EmpresasTab empresas={empresas} onEmpresasChange={setEmpresas} />
+            )}
+            {state.tab === 'dpto-pessoal' && (
+              <DptoPessoalTab rows={dptoRows} onRowsChange={setDptoRows} empresas={empresas} />
             )}
           </div>
         )}
