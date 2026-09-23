@@ -10,7 +10,12 @@ import {
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
-import { ClientExtractionResult, ExtractedField } from '@/lib/clientDataParser'
+import {
+  ClientExtractionResult,
+  ExtractedField,
+  ALLOWED_CLIENT_EXTRACTION_KEYS,
+  FORBIDDEN_ISSUER_KEYS,
+} from '@/lib/clientDataParser'
 import { CalculatorState } from '@/types/calculator'
 import {
   CheckCircle2,
@@ -58,7 +63,11 @@ export const PdfDataReviewModal: React.FC<PdfDataReviewModalProps> = ({
     }
   }, [extractionResult])
 
-  const fields = extractionResult?.fields || []
+  // Regra fundamental: os dados da aba Identificação (emissor) são FIXOS.
+  // O modal de revisão NUNCA propõe campos da aba Identificação — estritamente campos do cliente.
+  const fields = (extractionResult?.fields || []).filter(
+    (f) => ALLOWED_CLIENT_EXTRACTION_KEYS.has(f.key) && !FORBIDDEN_ISSUER_KEYS.has(f.key),
+  )
   const selectedCount = Object.values(selectedKeys).filter(Boolean).length
 
   const handleSelectAll = () => {
@@ -87,7 +96,11 @@ export const PdfDataReviewModal: React.FC<PdfDataReviewModalProps> = ({
   const handleConfirm = () => {
     const patch: Partial<CalculatorState> = {}
     fields.forEach((f) => {
-      if (selectedKeys[f.key]) {
+      if (
+        selectedKeys[f.key] &&
+        ALLOWED_CLIENT_EXTRACTION_KEYS.has(f.key) &&
+        !FORBIDDEN_ISSUER_KEYS.has(f.key)
+      ) {
         let val = f.value
         // Garantia de segurança adicional: trim em strings cadastrais
         if (
@@ -142,7 +155,7 @@ export const PdfDataReviewModal: React.FC<PdfDataReviewModalProps> = ({
                 Processando e extraindo dados do cliente...
               </p>
               <p className="text-xs text-slate-500 max-w-sm">
-                Lendo o texto do documento e identificando CNPJ, razão social, endereço e emissão.
+                Lendo o texto do documento e identificando CNPJ, razão social e endereço do cliente.
               </p>
             </div>
           )}

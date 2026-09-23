@@ -1,5 +1,51 @@
 import { CalculatorState } from '@/types/calculator'
 
+/**
+ * Chaves da aba Identificação (empresa emissora / cabeçalho / período) que DEVEM
+ * permanecer fixas e NUNCA podem ser alteradas ou propostas por extração de PDF.
+ */
+export const FORBIDDEN_ISSUER_KEYS = new Set<keyof CalculatorState>([
+  'empresaNome',
+  'empresaCnpj',
+  'empresaEndereco',
+  'empresaCidade',
+  'empresaUf',
+  'logoData',
+  'logoWidth',
+  'logoHeight',
+  'logoRatio',
+  'logoControls',
+  'periodoInicio',
+  'periodoFim',
+  'dataEmissao',
+])
+
+/**
+ * Chaves exclusivas permitidas para preenchimento por extração de PDF (apenas dados do cliente).
+ */
+export const ALLOWED_CLIENT_EXTRACTION_KEYS = new Set<keyof CalculatorState>([
+  'clienteNome',
+  'clienteCnpj',
+  'clienteIE',
+  'clienteIM',
+  'clienteRamo',
+  'clienteEndereco',
+  'clienteCidade',
+  'clienteUf',
+  'contFinNome',
+  'contFinTelefone',
+  'contFinEmail',
+  'contEstoqueNome',
+  'contEstoqueTelefone',
+  'contEstoqueEmail',
+  'contRhNome',
+  'contRhTelefone',
+  'contRhEmail',
+  'contLegalNome',
+  'contLegalTelefone',
+  'contLegalEmail',
+])
+
 export interface ExtractedField {
   key: keyof CalculatorState
   label: string
@@ -1918,38 +1964,16 @@ export function parseClientDataFromPdfText(
     })
   }
 
-  // --- E. Data de Emissão (Bônus contextual do documento) ---
-  let detectedEmissao = ''
-  let emissaoSnippet = ''
-
-  const emissaoRegex =
-    /(?:DATA(?: DE)? EMISS[ÃA]O|EMISS[ÃA]O|DATA DA EMISS[ÃA]O|EMITIDO EM)[:\s]+(\d{2})[/\-.](\d{2})[/\-.](\d{4})\b/i
-  for (const line of lines) {
-    const match = emissaoRegex.exec(line)
-    if (match) {
-      const [, day, month, year] = match
-      // Format as YYYY-MM-DD for HTML input[type=date]
-      detectedEmissao = `${year}-${month}-${day}`
-      emissaoSnippet = line
-      break
-    }
-  }
-
-  if (detectedEmissao) {
-    fields.push({
-      key: 'dataEmissao',
-      label: 'Data de Emissão do Documento',
-      value: detectedEmissao,
-      currentValue: currentState.dataEmissao || '',
-      snippet: emissaoSnippet,
-      confidence: 'medium',
-      isDifferent: detectedEmissao !== (currentState.dataEmissao || ''),
-    })
-  }
+  // Regra fundamental: a aba Identificação (emissor / período / dataEmissao) é FIXA.
+  // Nenhum campo da aba Identificação pode ser extraído ou proposto a partir de PDFs.
+  // Filtro estrito: apenas chaves permitidas do cliente são mantidas no resultado.
+  const clientOnlyFields = fields.filter(
+    (f) => ALLOWED_CLIENT_EXTRACTION_KEYS.has(f.key) && !FORBIDDEN_ISSUER_KEYS.has(f.key),
+  )
 
   // Se for Cartão CNPJ (docType === 'cnpj'), incluir CNPJ, Nome Empresarial, Ramo de Atividade, Endereço, Cidade e UF
   const finalFields = isCnpjCardMode
-    ? fields.filter(
+    ? clientOnlyFields.filter(
         (f) =>
           f.key === 'clienteCnpj' ||
           f.key === 'clienteNome' ||
@@ -1958,7 +1982,7 @@ export function parseClientDataFromPdfText(
           f.key === 'clienteCidade' ||
           f.key === 'clienteUf',
       )
-    : fields
+    : clientOnlyFields
 
   return {
     fields: finalFields,

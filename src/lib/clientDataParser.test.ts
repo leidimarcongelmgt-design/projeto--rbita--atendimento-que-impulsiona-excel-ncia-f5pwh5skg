@@ -1,4 +1,8 @@
-import { parseClientDataFromPdfText } from './clientDataParser'
+import {
+  parseClientDataFromPdfText,
+  FORBIDDEN_ISSUER_KEYS,
+  ALLOWED_CLIENT_EXTRACTION_KEYS,
+} from './clientDataParser'
 import { DEFAULT_CALCULATOR_STATE } from '@/types/calculator'
 
 // Casos de teste e validação de regressão para extração de dados de clientes em PDFs fiscais
@@ -849,6 +853,99 @@ export function runClientParserSelfCheck(): { passed: boolean; results: string[]
   } else {
     passed = false
     results.push(`FALHA: Cenário 32 - campos: ${r32.fields.map((f) => f.key).join(', ')}`)
+  }
+
+  // Teste 33 (Regressão Regra Identificação Fixa):
+  // Documento que contém dados do emissor e data de emissão NUNCA propõe campos da aba Identificação.
+  // Campos do emissor (empresaNome, empresaCnpj, empresaEndereco, empresaCidade, empresaUf, logo, periodo, dataEmissao)
+  // devem ser estritamente bloqueados.
+  const testIssuerIsolationDoc = `
+    EMITENTE / PRESTADOR DE SERVIÇOS:
+    RAZÃO SOCIAL: CONTABILIDADE CENTRAL SUL LTDA
+    CNPJ: 11.222.333/0001-44
+    ENDEREÇO: AVENIDA BRASIL, 1500 - CENTRO
+    MUNICÍPIO: CURITIBA - PR
+    DATA DE EMISSÃO: 25/12/2024
+    PERÍODO DE APURAÇÃO: 01/11/2024 A 30/11/2024
+
+    TOMADOR DE SERVIÇOS:
+    RAZÃO SOCIAL: DELTA LOGÍSTICA E TRANSPORTE LTDA
+    CNPJ: 99.888.777/0001-66
+    INSCRIÇÃO ESTADUAL: 987.654.321.000
+    INSCRIÇÃO MUNICIPAL: 55443322
+    ENDEREÇO: RUA DAS CARRETAS, 400 - DISTRITO INDUSTRIAL
+    MUNICÍPIO: LONDRINA
+    UF: PR
+  `
+  const r33 = parseClientDataFromPdfText(testIssuerIsolationDoc, {
+    ...DEFAULT_CALCULATOR_STATE,
+    empresaNome: 'MINHA EMPRESA FIXA LTDA',
+    empresaCnpj: '00.111.222/0001-33',
+    empresaEndereco: 'RUA ORIGINAL, 10',
+    empresaCidade: 'SAO PAULO',
+    empresaUf: 'SP',
+    dataEmissao: '2024-01-01',
+    periodoInicio: '2024-01-01',
+    periodoFim: '2024-01-31',
+  })
+
+  const issuerFieldFound = r33.fields.find(
+    (f) => FORBIDDEN_ISSUER_KEYS.has(f.key) || !ALLOWED_CLIENT_EXTRACTION_KEYS.has(f.key),
+  )
+  const clientCnpj33 = r33.fields.find((f) => f.key === 'clienteCnpj')?.value
+  const clientNome33 = r33.fields.find((f) => f.key === 'clienteNome')?.value
+
+  if (
+    !issuerFieldFound &&
+    clientCnpj33 === '99.888.777/0001-66' &&
+    clientNome33 === 'DELTA LOGÍSTICA E TRANSPORTE LTDA'
+  ) {
+    results.push(
+      'OK: Cenário 33 (Aba Identificação Fixa - dados do emissor/data de emissão NUNCA são propostos ou alterados)',
+    )
+  } else {
+    passed = false
+    results.push(
+      `FALHA: Cenário 33 - issuerFieldFound: ${issuerFieldFound?.key}, cnpj: ${clientCnpj33}, nome: ${clientNome33}`,
+    )
+  }
+
+  // Teste 34 (Regressão Cartão CNPJ com DATA DE EMISSÃO / EXPEDIÇÃO):
+  // Cartão CNPJ com campo "DATA DE EMISSÃO: 10/05/2023" ou "EMITIDO EM" não pode propor "dataEmissao"
+  const testCnpjCardWithIssueDate = `
+    REPÚBLICA FEDERATIVA DO BRASIL
+    CADASTRO NACIONAL DA PESSOA JURÍDICA
+    NÚMERO DE INSCRIÇÃO: 12.345.678/0001-90
+    NOME EMPRESARIAL: ACME CONSULTORIA EMPRESARIAL LTDA
+    CÓDIGO E DESCRIÇÃO DA ATIVIDADE ECONÔMICA PRINCIPAL: 70.20-4-00 - Atividades de consultoria em gestão empresarial
+    LOGRADOURO: RUA DOS PINHEIROS, 100
+    BAIRRO: PINHEIROS
+    MUNICÍPIO: SAO PAULO
+    UF: SP
+    DATA DE EMISSÃO DO DOCUMENTO: 15/08/2023
+    EMITIDO NO DIA: 15/08/2023 ÀS 10:00
+  `
+  const r34 = parseClientDataFromPdfText(
+    testCnpjCardWithIssueDate,
+    DEFAULT_CALCULATOR_STATE,
+    true,
+    1,
+    undefined,
+    false,
+    'cnpj',
+  )
+  const hasEmissao34 = r34.fields.some((f) => f.key === 'dataEmissao')
+  const hasAnyIssuerField34 = r34.fields.some((f) => FORBIDDEN_ISSUER_KEYS.has(f.key))
+
+  if (!hasEmissao34 && !hasAnyIssuerField34 && r34.fields.length >= 4) {
+    results.push(
+      'OK: Cenário 34 (Cartão CNPJ com data de emissão não propõe campo dataEmissao da aba Identificação)',
+    )
+  } else {
+    passed = false
+    results.push(
+      `FALHA: Cenário 34 - hasEmissao: ${hasEmissao34}, hasAnyIssuer: ${hasAnyIssuerField34}`,
+    )
   }
 
   return { passed, results }

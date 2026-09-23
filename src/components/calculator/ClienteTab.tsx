@@ -44,6 +44,8 @@ import {
   parseClientDataFromPdfText,
   ClientExtractionResult,
   DocumentExtractionType,
+  ALLOWED_CLIENT_EXTRACTION_KEYS,
+  FORBIDDEN_ISSUER_KEYS,
 } from '@/lib/clientDataParser'
 import { runClientParserSelfCheck } from '@/lib/clientDataParser.test'
 import { PdfDataReviewModal } from './PdfDataReviewModal'
@@ -242,10 +244,18 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
   )
 
   // Apply chosen fields to calculator state and URL
+  // Proteção: NUNCA permitir que campos da aba Identificação (emissor) sejam sobrescritos
   const handleApplyExtractedData = useCallback(
     (patch: Partial<CalculatorState>) => {
-      onChange(patch)
-      const count = Object.keys(patch).length
+      const sanitizedPatch: Partial<CalculatorState> = {}
+      for (const [key, val] of Object.entries(patch)) {
+        const stateKey = key as keyof CalculatorState
+        if (ALLOWED_CLIENT_EXTRACTION_KEYS.has(stateKey) && !FORBIDDEN_ISSUER_KEYS.has(stateKey)) {
+          ;(sanitizedPatch as Record<string, unknown>)[stateKey] = val
+        }
+      }
+      onChange(sanitizedPatch)
+      const count = Object.keys(sanitizedPatch).length
       toast.success(
         `${count} ${count === 1 ? 'campo do cliente preenchido' : 'campos do cliente preenchidos'} com sucesso!`,
       )
