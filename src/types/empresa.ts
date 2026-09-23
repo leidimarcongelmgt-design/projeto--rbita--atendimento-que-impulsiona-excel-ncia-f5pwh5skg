@@ -6,10 +6,10 @@ export interface EmpresaRow {
   ramoAtividade: string
   zona: string
   filial: string
-  contabil: string
   entrada: string
   grupo: string
   // Campos opcionais legados caso existam em sessionStorage ou planilhas antigas
+  contabil?: string
   numFunc?: number | string
   peso1?: number | string
   peso2?: number | string
@@ -22,7 +22,6 @@ export type EmpresaColumnKey =
   | 'ramoAtividade'
   | 'zona'
   | 'filial'
-  | 'contabil'
   | 'entrada'
   | 'grupo'
 
@@ -38,7 +37,6 @@ export const EMPRESA_COLUMNS: {
   { key: 'ramoAtividade', label: 'RAMO DE ATIVIDADE 2' },
   { key: 'zona', label: 'ZONA' },
   { key: 'filial', label: 'FILIAL' },
-  { key: 'contabil', label: 'CONTÁBIL' },
   { key: 'entrada', label: 'ENTRADA' },
   { key: 'grupo', label: 'GRUPO' },
 ]

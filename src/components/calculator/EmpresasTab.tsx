@@ -61,7 +61,6 @@ const DEFAULT_EMPRESAS_COL_WIDTHS: { [key: string]: number } = {
   ramoAtividade: 200,
   zona: 110,
   filial: 90,
-  contabil: 110,
   entrada: 100,
   grupo: 120,
   acoes: 64,
@@ -75,7 +74,6 @@ const MIN_EMPRESAS_COL_WIDTHS: { [key: string]: number } = {
   ramoAtividade: 110,
   zona: 70,
   filial: 60,
-  contabil: 80,
   entrada: 80,
   grupo: 80,
   acoes: 50,
@@ -299,8 +297,8 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                   </CardTitle>
                 </div>
                 <CardDescription className="text-slate-500 mt-1">
-                  Importe planilhas Excel (.xlsx ou .xls) com as 9 colunas padrão (EMPRESAS, CNPJ,
-                  REGIME TRIB., RAMO DE ATIVIDADE 2, ZONA, FILIAL, CONTÁBIL, ENTRADA, GRUPO).
+                  Importe planilhas Excel (.xlsx ou .xls) com as 8 colunas padrão (EMPRESAS, CNPJ,
+                  REGIME TRIB., RAMO DE ATIVIDADE 2, ZONA, FILIAL, ENTRADA, GRUPO).
                 </CardDescription>
               </div>
 
@@ -345,11 +343,12 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                 <div className="flex items-center gap-2">
                   <Info className="w-4 h-4 text-purple-900" />
                   <span className="text-xs font-semibold text-slate-800 uppercase tracking-wide">
-                    Estrutura esperada do cabeçalho da planilha (9 colunas)
+                    Estrutura esperada do cabeçalho da planilha (8 colunas)
                   </span>
                 </div>
                 <span className="text-[11px] text-slate-500">
-                  Nº FUNC. e Pesos gerenciados nas abas dedicadas de Dpto. Pessoal e Dpto. Fiscal
+                  CONTÁBIL, Nº FUNC. e Pesos gerenciados nas abas dedicadas de Dpto. Contábil, Dpto.
+                  Pessoal e Dpto. Fiscal
                 </span>
               </div>
 
@@ -458,9 +457,9 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                 </div>
                 <h3 className="text-sm font-semibold text-slate-800">Nenhuma empresa importada</h3>
                 <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 mb-5">
-                  Clique no botão abaixo para carregar uma planilha Excel com as 9 colunas padrão
-                  (EMPRESAS, CNPJ, REGIME TRIB., RAMO DE ATIVIDADE 2, ZONA, FILIAL, CONTÁBIL,
-                  ENTRADA e GRUPO).
+                  Clique no botão abaixo para carregar uma planilha Excel com as 8 colunas padrão
+                  (EMPRESAS, CNPJ, REGIME TRIB., RAMO DE ATIVIDADE 2, ZONA, FILIAL, ENTRADA e
+                  GRUPO).
                 </p>
                 <Button
                   type="button"
@@ -535,7 +534,7 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                     <tbody className="divide-y divide-slate-200 bg-white">
                       {filteredAndSortedEmpresas.length === 0 ? (
                         <tr>
-                          <td colSpan={11} className="py-8 text-center text-slate-500">
+                          <td colSpan={10} className="py-8 text-center text-slate-500">
                             Nenhum registro encontrado para o filtro "{searchQuery}".
                           </td>
                         </tr>
@@ -583,12 +582,6 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                               title={empresa.filial}
                             >
                               {empresa.filial || '—'}
-                            </td>
-                            <td
-                              className="py-2.5 px-3 text-slate-700 border-r border-slate-100 truncate"
-                              title={empresa.contabil}
-                            >
-                              {empresa.contabil || '—'}
                             </td>
                             <td
                               className="py-2.5 px-3 text-slate-700 border-r border-slate-100 truncate"

@@ -43,8 +43,9 @@ export function clearDptoContabilStorage(): void {
 
 /**
  * Constrói lista a partir das Empresas existentes da aba Empresas.
- * Copia nome + CNPJ das empresas e o valor atual da coluna CONTÁBIL.
  * Preserva edições que o usuário já possa ter feito localmente na aba Contábil.
+ * Como a coluna CONTÁBIL foi removida da aba Empresas, novas linhas entram com valor em branco
+ * (ou com valor legado se existir em sessões antigas).
  */
 export function syncContabilFromEmpresas(
   empresas: EmpresaRow[],
