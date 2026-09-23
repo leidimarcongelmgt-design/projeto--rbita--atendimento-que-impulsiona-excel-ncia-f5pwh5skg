@@ -27,11 +27,24 @@ import {
   Phone,
   Mail,
   User,
+  Building,
+  Building2,
+  Landmark,
+  FileSpreadsheet,
 } from 'lucide-react'
 import { formatPhoneBR } from '@/lib/calculatorState'
-import { AttachedPdf, formatFileSize, getAttachedPdfArrayBuffer } from '@/lib/pdfStorage'
+import {
+  AttachedPdf,
+  formatFileSize,
+  getAttachedPdfArrayBuffer,
+  PdfDocumentCategory,
+} from '@/lib/pdfStorage'
 import { extractTextFromPdf } from '@/lib/pdfTextExtractor'
-import { parseClientDataFromPdfText, ClientExtractionResult } from '@/lib/clientDataParser'
+import {
+  parseClientDataFromPdfText,
+  ClientExtractionResult,
+  DocumentExtractionType,
+} from '@/lib/clientDataParser'
 import { runClientParserSelfCheck } from '@/lib/clientDataParser.test'
 import { PdfDataReviewModal } from './PdfDataReviewModal'
 import { PdfPasswordDialog } from './PdfPasswordDialog'
@@ -43,8 +56,11 @@ interface ClienteTabProps {
   onNavigateTab: (tab: CalculatorState['tab']) => void
   onGenerateDocument: () => void
   attachedPdf: AttachedPdf | null
-  onUploadPdf: (file: File) => Promise<ArrayBuffer | null> | void
-  onRemovePdf: () => void
+  onUploadPdf: (file: File, category?: PdfDocumentCategory) => Promise<ArrayBuffer | null> | void
+  onRemovePdf: (category?: PdfDocumentCategory) => void
+  attachedCnpjPdf?: AttachedPdf | null
+  attachedIePdf?: AttachedPdf | null
+  attachedImPdf?: AttachedPdf | null
 }
 
 export const ClienteTab: React.FC<ClienteTabProps> = ({
@@ -55,15 +71,23 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
   attachedPdf,
   onUploadPdf,
   onRemovePdf,
+  attachedCnpjPdf,
+  attachedIePdf,
+  attachedImPdf,
 }) => {
   const clientFileRef = useRef<HTMLInputElement>(null)
   const pdfFileRef = useRef<HTMLInputElement>(null)
+  const cnpjPdfFileRef = useRef<HTMLInputElement>(null)
+  const iePdfFileRef = useRef<HTMLInputElement>(null)
+  const imPdfFileRef = useRef<HTMLInputElement>(null)
 
   // PDF Data Extraction states
   const [isExtracting, setIsExtracting] = useState(false)
   const [reviewModalOpen, setReviewModalOpen] = useState(false)
   const [extractionResult, setExtractionResult] = useState<ClientExtractionResult | null>(null)
   const [activePdfName, setActivePdfName] = useState<string>('')
+  const [activeDocumentLabel, setActiveDocumentLabel] = useState<string>('')
+  const [activeDocType, setActiveDocType] = useState<DocumentExtractionType>('all')
 
   // Password Dialog states for protected PDFs
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false)
@@ -71,14 +95,26 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
   const [isUnlocking, setIsUnlocking] = useState(false)
   const pendingBufferRef = useRef<ArrayBuffer | null>(null)
   const pendingPdfNameRef = useRef<string>('')
+  const pendingDocTypeRef = useRef<DocumentExtractionType>('all')
+  const pendingDocLabelRef = useRef<string>('')
 
   // Process text and open review modal
   const runExtractionOnBuffer = useCallback(
-    async (buffer: ArrayBuffer, pdfName: string, password?: string) => {
+    async (
+      buffer: ArrayBuffer,
+      pdfName: string,
+      docType: DocumentExtractionType = 'all',
+      docLabel = 'Documento PDF',
+      password?: string,
+    ) => {
       setIsExtracting(true)
       setActivePdfName(pdfName)
+      setActiveDocumentLabel(docLabel)
+      setActiveDocType(docType)
       pendingBufferRef.current = buffer
       pendingPdfNameRef.current = pdfName
+      pendingDocTypeRef.current = docType
+      pendingDocLabelRef.current = docLabel
 
       try {
         const textResult = await extractTextFromPdf(buffer, { password })
@@ -91,7 +127,6 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
           } else {
             setPasswordError('')
           }
-          // Do not open review modal yet if user hasn't provided valid password
           setReviewModalOpen(false)
           return
         }
@@ -108,6 +143,7 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
           textResult.totalPages,
           textResult.error,
           textResult.isPasswordProtected,
+          docType,
         )
         setExtractionResult(parsed)
       } catch (err: unknown) {
@@ -120,6 +156,7 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
           totalPages: 0,
           errorMessage: 'Erro inesperado ao processar o conteúdo do PDF.',
           isPasswordProtected: false,
+          docType,
         })
       } finally {
         setIsExtracting(false)
@@ -162,6 +199,7 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
           textResult.totalPages,
           textResult.error,
           false,
+          pendingDocTypeRef.current,
         )
         setExtractionResult(parsed)
       } catch (err: unknown) {
@@ -188,18 +226,25 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
   }, [])
 
   // Trigger re-extraction manually on currently attached PDF
-  const handleManualExtraction = useCallback(async () => {
-    if (!attachedPdf) {
-      toast.error('Nenhum PDF anexado para extração.')
-      return
-    }
-    const buffer = await getAttachedPdfArrayBuffer(attachedPdf)
-    if (!buffer) {
-      toast.error('Não foi possível obter o conteúdo do PDF anexado para reprocessamento.')
-      return
-    }
-    await runExtractionOnBuffer(buffer, attachedPdf.name)
-  }, [attachedPdf, runExtractionOnBuffer])
+  const handleManualExtraction = useCallback(
+    async (
+      pdf: AttachedPdf | null | undefined,
+      docType: DocumentExtractionType,
+      docLabel: string,
+    ) => {
+      if (!pdf) {
+        toast.error('Nenhum PDF anexado para extração.')
+        return
+      }
+      const buffer = await getAttachedPdfArrayBuffer(pdf, pdf.category)
+      if (!buffer) {
+        toast.error('Não foi possível obter o conteúdo do PDF anexado para reprocessamento.')
+        return
+      }
+      await runExtractionOnBuffer(buffer, pdf.name, docType, docLabel)
+    },
+    [runExtractionOnBuffer],
+  )
 
   // Apply chosen fields to calculator state and URL
   const handleApplyExtractedData = useCallback(
@@ -295,9 +340,36 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
     await onUploadPdf(file)
 
     // Trigger automatic extraction right upon import
-    runExtractionOnBuffer(buffer, file.name)
+    runExtractionOnBuffer(buffer, file.name, 'all', 'Documento Principal')
 
     // reset input so user can pick same file again if desired
+    e.target.value = ''
+  }
+
+  const handleCnpjPdfChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const buffer = await file.arrayBuffer()
+    await onUploadPdf(file, 'cnpj')
+    runExtractionOnBuffer(buffer, file.name, 'cnpj', 'Cartão CNPJ')
+    e.target.value = ''
+  }
+
+  const handleIePdfChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const buffer = await file.arrayBuffer()
+    await onUploadPdf(file, 'ie')
+    runExtractionOnBuffer(buffer, file.name, 'ie', 'Inscrição Estadual')
+    e.target.value = ''
+  }
+
+  const handleImPdfChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const buffer = await file.arrayBuffer()
+    await onUploadPdf(file, 'im')
+    runExtractionOnBuffer(buffer, file.name, 'im', 'Inscrição Municipal')
     e.target.value = ''
   }
 
@@ -938,7 +1010,7 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={onRemovePdf}
+                      onClick={() => onRemovePdf('principal')}
                       className="text-xs h-8 text-red-600 hover:text-red-700 hover:bg-red-50 gap-1"
                       title="Remover documento PDF"
                     >
@@ -1002,7 +1074,9 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={handleManualExtraction}
+                        onClick={() =>
+                          handleManualExtraction(attachedPdf, 'all', 'Documento Principal')
+                        }
                         disabled={isExtracting}
                         className="text-xs h-9 px-4 border-blue-300 text-blue-700 hover:bg-blue-50 gap-2 font-medium bg-white"
                         title="Extrair automaticamente dados do cliente a partir do texto deste PDF"
@@ -1084,6 +1158,375 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
         </CardContent>
       </Card>
 
+      {/* SEÇÃO 4: DOCUMENTOS FISCAIS COMPLEMENTARES (CNPJ, INSCRIÇÃO ESTADUAL E INSCRIÇÃO MUNICIPAL) */}
+      <Card className="border border-slate-200 card-shadow bg-white">
+        <CardHeader className="border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-2">
+            <FileSpreadsheet className="w-5 h-5 text-[#1E3A5F]" />
+            <CardTitle className="text-lg font-bold text-slate-900">
+              Documentos Fiscais do Cliente
+            </CardTitle>
+          </div>
+          <CardDescription className="text-slate-500">
+            Importe os PDFs oficiais dos registros fiscais do cliente (Cartão CNPJ, Inscrição
+            Estadual e Inscrição Municipal) como anexos separados com extração automática dos
+            números cadastrais.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* 1. PDF do CNPJ (Cartão CNPJ) */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-5 flex flex-col justify-between hover:border-slate-300 transition-all">
+              <div>
+                <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-200">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-blue-100 text-[#1E3A5F] flex items-center justify-center font-bold">
+                      <Building className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900">PDF do CNPJ</h4>
+                      <p className="text-[11px] text-slate-500">Cartão CNPJ (Receita Federal)</p>
+                    </div>
+                  </div>
+                  {attachedCnpjPdf && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onRemovePdf('cnpj')}
+                      className="text-xs h-7 text-red-600 hover:text-red-700 hover:bg-red-50 px-2"
+                      title="Remover Cartão CNPJ"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                </div>
+
+                <div className="mt-4">
+                  {attachedCnpjPdf ? (
+                    <div className="space-y-3 bg-white p-3.5 rounded-lg border border-slate-200 text-center">
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                        <CheckCircle2 className="w-3 h-3" /> PDF Conectado com Sucesso
+                      </div>
+                      <p className="text-xs font-bold text-slate-800 break-all line-clamp-2">
+                        {attachedCnpjPdf.name}
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        {formatFileSize(attachedCnpjPdf.size)}
+                      </p>
+
+                      <div className="pt-1 flex flex-wrap items-center justify-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(attachedCnpjPdf.blobUrl, '_blank')}
+                          className="text-[11px] h-7 px-2 text-slate-700"
+                        >
+                          <ExternalLink className="w-3 h-3 mr-1" /> Abrir
+                        </Button>
+                        <a
+                          href={attachedCnpjPdf.blobUrl}
+                          download={attachedCnpjPdf.name}
+                          className="inline-flex"
+                        >
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="text-[11px] h-7 px-2 text-slate-700"
+                          >
+                            <Download className="w-3 h-3 mr-1" /> Baixar
+                          </Button>
+                        </a>
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={isExtracting}
+                        onClick={() =>
+                          handleManualExtraction(attachedCnpjPdf, 'cnpj', 'Cartão CNPJ')
+                        }
+                        className="w-full text-xs h-7.5 bg-blue-50 text-[#1E3A5F] hover:bg-blue-100 font-medium gap-1"
+                      >
+                        <Sparkles className="w-3 h-3 text-blue-600" /> Reextrair CNPJ / Razão
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 px-2 bg-white rounded-lg border border-dashed border-slate-300">
+                      <Building className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                      <p className="text-xs font-semibold text-slate-700">
+                        Nenhum Cartão CNPJ anexado
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Importe para ler CNPJ e Razão Social
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-200">
+                <input
+                  ref={cnpjPdfFileRef}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className="hidden"
+                  onChange={handleCnpjPdfChange}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => cnpjPdfFileRef.current?.click()}
+                  className="w-full bg-[#1E3A5F] hover:bg-[#16304F] text-white text-xs h-8 gap-1.5"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  {attachedCnpjPdf ? 'Trocar Cartão CNPJ' : 'Importar Cartão CNPJ'}
+                </Button>
+              </div>
+            </div>
+
+            {/* 2. PDF da Inscrição Estadual */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-5 flex flex-col justify-between hover:border-slate-300 transition-all">
+              <div>
+                <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-200">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-900 flex items-center justify-center font-bold">
+                      <Landmark className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900">
+                        PDF da Inscrição Estadual
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        Comprovante Estadual (CADESP/SEFAZ)
+                      </p>
+                    </div>
+                  </div>
+                  {attachedIePdf && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onRemovePdf('ie')}
+                      className="text-xs h-7 text-red-600 hover:text-red-700 hover:bg-red-50 px-2"
+                      title="Remover PDF da Inscrição Estadual"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                </div>
+
+                <div className="mt-4">
+                  {attachedIePdf ? (
+                    <div className="space-y-3 bg-white p-3.5 rounded-lg border border-slate-200 text-center">
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                        <CheckCircle2 className="w-3 h-3" /> PDF Conectado com Sucesso
+                      </div>
+                      <p className="text-xs font-bold text-slate-800 break-all line-clamp-2">
+                        {attachedIePdf.name}
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        {formatFileSize(attachedIePdf.size)}
+                      </p>
+
+                      <div className="pt-1 flex flex-wrap items-center justify-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(attachedIePdf.blobUrl, '_blank')}
+                          className="text-[11px] h-7 px-2 text-slate-700"
+                        >
+                          <ExternalLink className="w-3 h-3 mr-1" /> Abrir
+                        </Button>
+                        <a
+                          href={attachedIePdf.blobUrl}
+                          download={attachedIePdf.name}
+                          className="inline-flex"
+                        >
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="text-[11px] h-7 px-2 text-slate-700"
+                          >
+                            <Download className="w-3 h-3 mr-1" /> Baixar
+                          </Button>
+                        </a>
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={isExtracting}
+                        onClick={() =>
+                          handleManualExtraction(attachedIePdf, 'ie', 'Inscrição Estadual')
+                        }
+                        className="w-full text-xs h-7.5 bg-purple-50 text-purple-900 hover:bg-purple-100 font-medium gap-1"
+                      >
+                        <Sparkles className="w-3 h-3 text-purple-700" /> Reextrair Inscrição
+                        Estadual
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 px-2 bg-white rounded-lg border border-dashed border-slate-300">
+                      <Landmark className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                      <p className="text-xs font-semibold text-slate-700">
+                        Nenhum PDF de IE anexado
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Importe para ler a Inscrição Estadual
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-200">
+                <input
+                  ref={iePdfFileRef}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className="hidden"
+                  onChange={handleIePdfChange}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => iePdfFileRef.current?.click()}
+                  className="w-full bg-[#1E3A5F] hover:bg-[#16304F] text-white text-xs h-8 gap-1.5"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  {attachedIePdf ? 'Trocar PDF da IE' : 'Importar Inscrição Estadual'}
+                </Button>
+              </div>
+            </div>
+
+            {/* 3. PDF da Inscrição Municipal */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-5 flex flex-col justify-between hover:border-slate-300 transition-all">
+              <div>
+                <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-200">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-900 flex items-center justify-center font-bold">
+                      <Building2 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900">
+                        PDF da Inscrição Municipal
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        Cadastro Mobiliário (Prefeitura/CCM)
+                      </p>
+                    </div>
+                  </div>
+                  {attachedImPdf && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onRemovePdf('im')}
+                      className="text-xs h-7 text-red-600 hover:text-red-700 hover:bg-red-50 px-2"
+                      title="Remover PDF da Inscrição Municipal"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                </div>
+
+                <div className="mt-4">
+                  {attachedImPdf ? (
+                    <div className="space-y-3 bg-white p-3.5 rounded-lg border border-slate-200 text-center">
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                        <CheckCircle2 className="w-3 h-3" /> PDF Conectado com Sucesso
+                      </div>
+                      <p className="text-xs font-bold text-slate-800 break-all line-clamp-2">
+                        {attachedImPdf.name}
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        {formatFileSize(attachedImPdf.size)}
+                      </p>
+
+                      <div className="pt-1 flex flex-wrap items-center justify-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(attachedImPdf.blobUrl, '_blank')}
+                          className="text-[11px] h-7 px-2 text-slate-700"
+                        >
+                          <ExternalLink className="w-3 h-3 mr-1" /> Abrir
+                        </Button>
+                        <a
+                          href={attachedImPdf.blobUrl}
+                          download={attachedImPdf.name}
+                          className="inline-flex"
+                        >
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="text-[11px] h-7 px-2 text-slate-700"
+                          >
+                            <Download className="w-3 h-3 mr-1" /> Baixar
+                          </Button>
+                        </a>
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={isExtracting}
+                        onClick={() =>
+                          handleManualExtraction(attachedImPdf, 'im', 'Inscrição Municipal')
+                        }
+                        className="w-full text-xs h-7.5 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 font-medium gap-1"
+                      >
+                        <Sparkles className="w-3 h-3 text-emerald-700" /> Reextrair Inscrição
+                        Municipal
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 px-2 bg-white rounded-lg border border-dashed border-slate-300">
+                      <Building2 className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                      <p className="text-xs font-semibold text-slate-700">
+                        Nenhum PDF de IM anexado
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Importe para ler a Inscrição Municipal (CCM)
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-200">
+                <input
+                  ref={imPdfFileRef}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className="hidden"
+                  onChange={handleImPdfChange}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => imPdfFileRef.current?.click()}
+                  className="w-full bg-[#1E3A5F] hover:bg-[#16304F] text-white text-xs h-8 gap-1.5"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  {attachedImPdf ? 'Trocar PDF da IM' : 'Importar Inscrição Municipal'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Modal de Revisão e Confirmação de Dados Extraídos do PDF */}
       <PdfDataReviewModal
         open={reviewModalOpen}
@@ -1093,6 +1536,7 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
         isExtracting={isExtracting}
         pdfName={activePdfName}
         onRequestPassword={handleOpenPasswordPrompt}
+        documentLabel={activeDocumentLabel}
       />
 
       {/* Diálogo de Senha para Desproteger PDF */}

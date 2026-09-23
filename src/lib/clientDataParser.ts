@@ -10,6 +10,8 @@ export interface ExtractedField {
   isDifferent: boolean
 }
 
+export type DocumentExtractionType = 'all' | 'cnpj' | 'ie' | 'im'
+
 export interface ClientExtractionResult {
   fields: ExtractedField[]
   rawText: string
@@ -17,6 +19,7 @@ export interface ClientExtractionResult {
   totalPages: number
   errorMessage?: string
   isPasswordProtected?: boolean
+  docType?: DocumentExtractionType
 }
 // Brazilian states UF list
 const BRAZILIAN_UFS = new Set([
@@ -147,6 +150,7 @@ export function parseClientDataFromPdfText(
   totalPages = 1,
   errorMessage?: string,
   isPasswordProtected = false,
+  docType: DocumentExtractionType = 'all',
 ): ClientExtractionResult {
   if (!rawText || !hasTextLayer || errorMessage) {
     return {
@@ -156,8 +160,171 @@ export function parseClientDataFromPdfText(
       totalPages,
       errorMessage,
       isPasswordProtected,
+      docType,
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Extração Direcionada para Inscrição Estadual (docType === 'ie')
+  // Comprovante de Inscrição e Situação Cadastral (Sintegra, Cadesp, Siare, etc.)
+  // ---------------------------------------------------------------------------
+  if (docType === 'ie') {
+    const fields: ExtractedField[] = []
+    const lines = rawText
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean)
+
+    let detectedIE = ''
+    let ieSnippet = ''
+    let ieConfidence: 'high' | 'medium' | 'low' = 'low'
+
+    // Patterns específicos de Comprovante de Inscrição Estadual
+    const specificIeRegexes = [
+      /(?:N[ÚU]MERO\s+DA\s+)?INSCRI[ÇC][ÃA]O\s+ESTADUAL[:\s\-–—]+([0-9.\-–/]{5,25}|ISENTO\b)/i,
+      /(?:INSC\.?\s*ESTADUAL|INSC\.?\s*EST\.?|\bIE\b)[:\s\-–—]+([0-9.\-–/]{5,25}|ISENTO\b)/i,
+      /(?:INSCRI[ÇC][ÃA]O\s+NO\s+CADASTRO\s+DE\s+CONTRIBUINTES|CADASTRO\s+ESTADUAL)[:\s\-–—]+([0-9.\-–/]{5,25})/i,
+    ]
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      for (const regex of specificIeRegexes) {
+        const match = regex.exec(line)
+        if (match && match[1]) {
+          const candidate = match[1].replace(/^(?:[:\-–—]\s*)+/, '').trim()
+          if (candidate && !/^(?:CNPJ|CPF|ENDERE|MUNIC|DATA)/i.test(candidate)) {
+            detectedIE = candidate
+            ieSnippet = line
+            ieConfidence = 'high'
+            break
+          }
+        }
+      }
+      if (detectedIE) break
+
+      // Linha com rótulo "INSCRIÇÃO ESTADUAL" e valor na linha seguinte
+      if (
+        /^(?:N[ÚU]MERO\s+DA\s+)?INSCRI[ÇC][ÃA]O\s+ESTADUAL[:\-–—]?$/i.test(line) ||
+        /^INSC\.?\s*ESTADUAL[:\-–—]?$/i.test(line)
+      ) {
+        if (i + 1 < lines.length) {
+          const nextLine = lines[i + 1].trim()
+          const candidateMatch = /^([0-9.\-–/]{5,25}|ISENTO\b)/i.exec(nextLine)
+          if (candidateMatch) {
+            detectedIE = candidateMatch[1].trim()
+            ieSnippet = `${line} -> ${nextLine}`
+            ieConfidence = 'high'
+            break
+          }
+        }
+      }
+    }
+
+    if (detectedIE) {
+      fields.push({
+        key: 'clienteIE',
+        label: 'Inscrição Estadual do Cliente',
+        value: detectedIE,
+        currentValue: currentState.clienteIE || '',
+        snippet: ieSnippet,
+        confidence: ieConfidence,
+        isDifferent:
+          detectedIE.trim().toLowerCase() !== (currentState.clienteIE || '').trim().toLowerCase(),
+      })
+    }
+
+    return {
+      fields,
+      rawText,
+      hasTextLayer,
+      totalPages,
+      docType,
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Extração Direcionada para Inscrição Municipal (docType === 'im')
+  // Comprovante do Cadastro de Contribuintes Mobiliários (CCM / FIC / DUC / IM)
+  // ---------------------------------------------------------------------------
+  if (docType === 'im') {
+    const fields: ExtractedField[] = []
+    const lines = rawText
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean)
+
+    let detectedIM = ''
+    let imSnippet = ''
+    let imConfidence: 'high' | 'medium' | 'low' = 'low'
+
+    const specificImRegexes = [
+      /(?:N[ÚU]MERO\s+DA\s+)?INSCRI[ÇC][ÃA]O\s+MUNICIPAL[:\s\-–—]+([0-9.\-–/]{4,25}|ISENTO\b)/i,
+      /(?:INSC\.?\s*MUNICIPAL|INSC\.?\s*MUN\.?|\bIM\b)[:\s\-–—]+([0-9.\-–/]{4,25}|ISENTO\b)/i,
+      /(?:CADASTRO\s+DE\s+CONTRIBUINTES\s+MOBILI[ÁA]RIOS|\bCCM\b)[:\s\-–—]+([0-9.\-–/]{4,25})/i,
+      /(?:CADASTRO\s+MOBILI[ÁA]RIO|INSCRI[ÇC][ÃA]O\s+MOBILI[ÁA]RIA)[:\s\-–—]+([0-9.\-–/]{4,25})/i,
+    ]
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      for (const regex of specificImRegexes) {
+        const match = regex.exec(line)
+        if (match && match[1]) {
+          const candidate = match[1].replace(/^(?:[:\-–—]\s*)+/, '').trim()
+          if (candidate && !/^(?:CNPJ|CPF|ENDERE|ESTADUAL|DATA)/i.test(candidate)) {
+            detectedIM = candidate
+            imSnippet = line
+            imConfidence = 'high'
+            break
+          }
+        }
+      }
+      if (detectedIM) break
+
+      // Linha com rótulo "INSCRIÇÃO MUNICIPAL" ou "CCM" e valor na linha seguinte
+      if (
+        /^(?:N[ÚU]MERO\s+DA\s+)?INSCRI[ÇC][ÃA]O\s+MUNICIPAL[:\-–—]?$/i.test(line) ||
+        /^INSC\.?\s*MUNICIPAL[:\-–—]?$/i.test(line) ||
+        /^(?:CADASTRO\s+DE\s+CONTRIBUINTES\s+MOBILI[ÁA]RIOS|\bCCM\b)[:\-–—]?$/i.test(line)
+      ) {
+        if (i + 1 < lines.length) {
+          const nextLine = lines[i + 1].trim()
+          const candidateMatch = /^([0-9.\-–/]{4,25}|ISENTO\b)/i.exec(nextLine)
+          if (candidateMatch) {
+            detectedIM = candidateMatch[1].trim()
+            imSnippet = `${line} -> ${nextLine}`
+            imConfidence = 'high'
+            break
+          }
+        }
+      }
+    }
+
+    if (detectedIM) {
+      fields.push({
+        key: 'clienteIM',
+        label: 'Inscrição Municipal do Cliente',
+        value: detectedIM,
+        currentValue: currentState.clienteIM || '',
+        snippet: imSnippet,
+        confidence: imConfidence,
+        isDifferent:
+          detectedIM.trim().toLowerCase() !== (currentState.clienteIM || '').trim().toLowerCase(),
+      })
+    }
+
+    return {
+      fields,
+      rawText,
+      hasTextLayer,
+      totalPages,
+      docType,
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Extração para Cartão CNPJ (docType === 'cnpj') ou Documento Geral ('all')
+  // ---------------------------------------------------------------------------
+  const isCnpjCardMode = docType === 'cnpj'
 
   const fields: ExtractedField[] = []
   const lines = rawText
@@ -1434,10 +1601,16 @@ export function parseClientDataFromPdfText(
     })
   }
 
+  // Se for Cartão CNPJ (docType === 'cnpj'), restringir os campos apenas ao CNPJ e Nome Empresarial/Razão Social
+  const finalFields = isCnpjCardMode
+    ? fields.filter((f) => f.key === 'clienteCnpj' || f.key === 'clienteNome')
+    : fields
+
   return {
-    fields,
+    fields: finalFields,
     rawText,
     hasTextLayer,
     totalPages,
+    docType,
   }
 }

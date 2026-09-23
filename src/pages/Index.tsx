@@ -10,7 +10,14 @@ import { TributosTab } from '@/components/calculator/TributosTab'
 import { FolhaTab } from '@/components/calculator/FolhaTab'
 import { DocumentView } from '@/components/calculator/DocumentView'
 import { toast } from 'sonner'
-import { AttachedPdf, loadPersistedPdf, savePdfFile, clearAttachedPdf } from '@/lib/pdfStorage'
+import {
+  AttachedPdf,
+  loadPersistedPdf,
+  savePdfFile,
+  clearAttachedPdf,
+  clearAllAttachedPdfs,
+  PdfDocumentCategory,
+} from '@/lib/pdfStorage'
 
 export default function Index() {
   const _location = useLocation()
@@ -20,9 +27,18 @@ export default function Index() {
     return parseStateFromUrl(window.location.search)
   })
 
-  // Attached PDF stored in session/memory
+  // Attached PDFs stored in session/memory
   const [attachedPdf, setAttachedPdf] = useState<AttachedPdf | null>(() => {
-    return loadPersistedPdf()
+    return loadPersistedPdf('principal')
+  })
+  const [attachedCnpjPdf, setAttachedCnpjPdf] = useState<AttachedPdf | null>(() => {
+    return loadPersistedPdf('cnpj')
+  })
+  const [attachedIePdf, setAttachedIePdf] = useState<AttachedPdf | null>(() => {
+    return loadPersistedPdf('ie')
+  })
+  const [attachedImPdf, setAttachedImPdf] = useState<AttachedPdf | null>(() => {
+    return loadPersistedPdf('im')
   })
 
   const [hasCopied, setHasCopied] = useState(false)
@@ -61,39 +77,69 @@ export default function Index() {
   }, [state])
 
   // PDF handlers
-  const handleUploadPdf = useCallback(async (file: File): Promise<ArrayBuffer | null> => {
-    if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
-      toast.error('Por favor, selecione um arquivo no formato PDF (.pdf).')
-      return null
-    }
-    try {
-      const buffer = await file.arrayBuffer()
-      const saved = await savePdfFile(file)
-      setAttachedPdf(saved)
-      toast.success(`PDF "${file.name}" importado com sucesso!`)
-      return buffer
-    } catch {
-      toast.error('Erro ao ler o arquivo PDF.')
-      return null
+  const handleUploadPdf = useCallback(
+    async (
+      file: File,
+      category: PdfDocumentCategory = 'principal',
+    ): Promise<ArrayBuffer | null> => {
+      if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+        toast.error('Por favor, selecione um arquivo no formato PDF (.pdf).')
+        return null
+      }
+      try {
+        const buffer = await file.arrayBuffer()
+        const saved = await savePdfFile(file, category)
+        if (category === 'principal') setAttachedPdf(saved)
+        else if (category === 'cnpj') setAttachedCnpjPdf(saved)
+        else if (category === 'ie') setAttachedIePdf(saved)
+        else if (category === 'im') setAttachedImPdf(saved)
+
+        const categoryLabels: Record<PdfDocumentCategory, string> = {
+          principal: 'PDF Principal',
+          cnpj: 'PDF do Cartão CNPJ',
+          ie: 'PDF da Inscrição Estadual',
+          im: 'PDF da Inscrição Municipal',
+        }
+        toast.success(`${categoryLabels[category]} "${file.name}" importado com sucesso!`)
+        return buffer
+      } catch {
+        toast.error('Erro ao ler o arquivo PDF.')
+        return null
+      }
+    },
+    [],
+  )
+
+  const handleRemovePdf = useCallback((category: PdfDocumentCategory = 'principal') => {
+    clearAttachedPdf(category)
+    if (category === 'principal') {
+      setAttachedPdf(null)
+      toast.info('Documento PDF principal removido.')
+    } else if (category === 'cnpj') {
+      setAttachedCnpjPdf(null)
+      toast.info('PDF do CNPJ removido.')
+    } else if (category === 'ie') {
+      setAttachedIePdf(null)
+      toast.info('PDF da Inscrição Estadual removido.')
+    } else if (category === 'im') {
+      setAttachedImPdf(null)
+      toast.info('PDF da Inscrição Municipal removido.')
     }
   }, [])
 
-  const handleRemovePdf = useCallback(() => {
-    clearAttachedPdf()
-    setAttachedPdf(null)
-    toast.info('Documento PDF removido.')
-  }, [])
-
-  // Reset all parameters to reference defaults
+  // Reset all parameters to reference defaults ("Nova Consulta")
   const handleReset = useCallback(() => {
     const nextState = { ...DEFAULT_CALCULATOR_STATE }
     setState(nextState)
     setIsDocumentMode(false)
-    clearAttachedPdf()
+    clearAllAttachedPdfs()
     setAttachedPdf(null)
+    setAttachedCnpjPdf(null)
+    setAttachedIePdf(null)
+    setAttachedImPdf(null)
     const newQuery = serializeStateToUrl(nextState)
     window.history.replaceState(null, '', `${window.location.pathname}${newQuery}`)
-    toast.info('Valores redefinidos para os padrões da referência.')
+    toast.info('Valores e documentos anexos redefinidos para os padrões da referência.')
   }, [])
 
   // Copy current URL to clipboard with confirmation toast
@@ -135,6 +181,9 @@ export default function Index() {
             computed={computed}
             onBack={() => setIsDocumentMode(false)}
             attachedPdf={attachedPdf}
+            attachedCnpjPdf={attachedCnpjPdf}
+            attachedIePdf={attachedIePdf}
+            attachedImPdf={attachedImPdf}
           />
         ) : (
           <div>
@@ -156,9 +205,11 @@ export default function Index() {
                 attachedPdf={attachedPdf}
                 onUploadPdf={handleUploadPdf}
                 onRemovePdf={handleRemovePdf}
+                attachedCnpjPdf={attachedCnpjPdf}
+                attachedIePdf={attachedIePdf}
+                attachedImPdf={attachedImPdf}
               />
             )}
-
             {state.tab === 'calculo' && (
               <CalculoTab
                 state={state}

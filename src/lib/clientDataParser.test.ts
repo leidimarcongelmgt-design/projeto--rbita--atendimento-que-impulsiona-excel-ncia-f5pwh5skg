@@ -447,5 +447,97 @@ export function runClientParserSelfCheck(): { passed: boolean; results: string[]
     results.push(`FALHA: Cenário 21 - obteve ramo: "${ramo21}"`)
   }
 
+  // Teste 22: Extração direcionada de Cartão CNPJ (somente CNPJ e Nome Empresarial)
+  const testCnpjCard = `
+    REPÚBLICA FEDERATIVA DO BRASIL
+    CADASTRO NACIONAL DA PESSOA JURÍDICA
+    NÚMERO DE INSCRIÇÃO
+    45.987.654/0001-88
+    MATRIZ
+    NOME EMPRESARIAL
+    RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA
+    TÍTULO DO ESTABELECIMENTO (NOME FANTASIA)
+    ESTRELA RESIDENCIAL
+    CÓDIGO E DESCRIÇÃO DA ATIVIDADE ECONÔMICA PRINCIPAL
+    41.10-7-00 - Incorporação de empreendimentos imobiliários
+    ENDEREÇO
+    RUA DAS FLORES, 500
+  `
+  const r22 = parseClientDataFromPdfText(
+    testCnpjCard,
+    DEFAULT_CALCULATOR_STATE,
+    true,
+    1,
+    undefined,
+    false,
+    'cnpj',
+  )
+  const n22 = r22.fields.find((f) => f.key === 'clienteNome')?.value
+  const c22 = r22.fields.find((f) => f.key === 'clienteCnpj')?.value
+  const other22 = r22.fields.find((f) => f.key !== 'clienteNome' && f.key !== 'clienteCnpj')
+  if (
+    n22 === 'RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA' &&
+    c22 === '45.987.654/0001-88' &&
+    !other22
+  ) {
+    results.push('OK: Cenário 22 (Cartão CNPJ - extração estrita de CNPJ e Nome Empresarial)')
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 22 - n: ${n22}, c: ${c22}, outro: ${other22?.key}`)
+  }
+
+  // Teste 23: Extração direcionada de Inscrição Estadual (docType === 'ie')
+  const testIeCard = `
+    GOVERNO DO ESTADO DE SÃO PAULO
+    SECRETARIA DA FAZENDA - CADESP
+    COMPROVANTE DE INSCRIÇÃO E SITUAÇÃO CADASTRAL
+    INSCRIÇÃO ESTADUAL: 123.456.789.110
+    CNPJ: 45.987.654/0001-88
+    RAZÃO SOCIAL: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA
+    SITUAÇÃO CADASTRAL: ATIVA
+  `
+  const r23 = parseClientDataFromPdfText(
+    testIeCard,
+    DEFAULT_CALCULATOR_STATE,
+    true,
+    1,
+    undefined,
+    false,
+    'ie',
+  )
+  const ie23 = r23.fields.find((f) => f.key === 'clienteIE')?.value
+  if (ie23 === '123.456.789.110' && r23.fields.length === 1) {
+    results.push('OK: Cenário 23 (Inscrição Estadual - extração estrita de IE)')
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 23 - ie: ${ie23}, count: ${r23.fields.length}`)
+  }
+
+  // Teste 24: Extração direcionada de Inscrição Municipal (docType === 'im')
+  const testImCard = `
+    PREFEITURA DO MUNICÍPIO DE SÃO PAULO
+    SECRETARIA MUNICIPAL DA FAZENDA
+    FIC - FICHA DE DADOS CADASTRAIS
+    NÚMERO DA INSCRIÇÃO MUNICIPAL (CCM): 9.876.543-2
+    RAZÃO SOCIAL: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA
+    CNPJ: 45.987.654/0001-88
+  `
+  const r24 = parseClientDataFromPdfText(
+    testImCard,
+    DEFAULT_CALCULATOR_STATE,
+    true,
+    1,
+    undefined,
+    false,
+    'im',
+  )
+  const im24 = r24.fields.find((f) => f.key === 'clienteIM')?.value
+  if (im24 === '9.876.543-2' && r24.fields.length === 1) {
+    results.push('OK: Cenário 24 (Inscrição Municipal - extração estrita de IM/CCM)')
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 24 - im: ${im24}, count: ${r24.fields.length}`)
+  }
+
   return { passed, results }
 }

@@ -1,21 +1,40 @@
+export type PdfDocumentCategory = 'principal' | 'cnpj' | 'ie' | 'im'
+
 export interface AttachedPdf {
   name: string
   size: number
   blobUrl: string
   uploadedAt: string
+  category?: PdfDocumentCategory
 }
 
-export function getMemoryPdf(): AttachedPdf | null {
-  return memoryPdf
+// In-memory references for the current runtime
+const memoryPdfs: Record<PdfDocumentCategory, AttachedPdf | null> = {
+  principal: null,
+  cnpj: null,
+  ie: null,
+  im: null,
 }
 
-const STORAGE_KEY = 'dossie_attached_pdf_meta'
-const STORAGE_DATA_KEY = 'dossie_attached_pdf_base64'
+export function getMemoryPdf(category: PdfDocumentCategory = 'principal'): AttachedPdf | null {
+  return memoryPdfs[category]
+}
+
+const getStorageKeys = (category: PdfDocumentCategory = 'principal') => {
+  if (category === 'principal') {
+    return {
+      meta: 'dossie_attached_pdf_meta',
+      data: 'dossie_attached_pdf_base64',
+    }
+  }
+  return {
+    meta: `dossie_attached_pdf_${category}_meta`,
+    data: `dossie_attached_pdf_${category}_base64`,
+  }
+}
+
 // 3MB limit for sessionStorage
 const MAX_SESSION_STORAGE_BYTES = 3 * 1024 * 1024
-
-// In-memory reference for the current runtime
-let memoryPdf: AttachedPdf | null = null
 
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return '0 B'
@@ -28,22 +47,24 @@ export function formatFileSize(bytes: number): string {
 /**
  * Load PDF from memory or restore from sessionStorage if available
  */
-export function loadPersistedPdf(): AttachedPdf | null {
-  if (memoryPdf) {
-    return memoryPdf
+export function loadPersistedPdf(category: PdfDocumentCategory = 'principal'): AttachedPdf | null {
+  if (memoryPdfs[category]) {
+    return memoryPdfs[category]
   }
 
   if (typeof window === 'undefined' || typeof sessionStorage === 'undefined') {
     return null
   }
 
+  const { meta: metaKey, data: dataKey } = getStorageKeys(category)
+
   try {
-    const metaStr = sessionStorage.getItem(STORAGE_KEY)
-    const base64 = sessionStorage.getItem(STORAGE_DATA_KEY)
+    const metaStr = sessionStorage.getItem(metaKey)
+    const base64 = sessionStorage.getItem(dataKey)
     if (metaStr && base64) {
       const meta = JSON.parse(metaStr) as { name?: string; size?: number; uploadedAt?: string }
       if (!meta || !meta.name) {
-        clearAttachedPdf()
+        clearAttachedPdf(category)
         return null
       }
 
@@ -58,20 +79,21 @@ export function loadPersistedPdf(): AttachedPdf | null {
       const blob = new Blob([byteNumbers], { type: 'application/pdf' })
       const blobUrl = URL.createObjectURL(blob)
 
-      memoryPdf = {
+      const restored: AttachedPdf = {
         name: meta.name,
         size: typeof meta.size === 'number' ? meta.size : byteNumbers.length,
         blobUrl,
         uploadedAt: meta.uploadedAt || new Date().toISOString(),
+        category,
       }
-      return memoryPdf
+      memoryPdfs[category] = restored
+      return restored
     }
   } catch (err) {
-    // sessionStorage failed, corrupted data, or quota issue - clean up smoothly
-    console.warn('Falha ao restaurar PDF anexado da sessão:', err)
+    console.warn(`Falha ao restaurar PDF (${category}) da sessão:`, err)
     try {
-      sessionStorage.removeItem(STORAGE_KEY)
-      sessionStorage.removeItem(STORAGE_DATA_KEY)
+      sessionStorage.removeItem(metaKey)
+      sessionStorage.removeItem(dataKey)
     } catch {
       // ignore
     }
@@ -81,12 +103,15 @@ export function loadPersistedPdf(): AttachedPdf | null {
 }
 
 /**
- * Store a newly imported PDF file
+ * Store a newly imported PDF file under specified category
  */
-export async function savePdfFile(file: File): Promise<AttachedPdf> {
-  // If there was an old blobUrl, revoke it
-  if (memoryPdf?.blobUrl) {
-    URL.revokeObjectURL(memoryPdf.blobUrl)
+export async function savePdfFile(
+  file: File,
+  category: PdfDocumentCategory = 'principal',
+): Promise<AttachedPdf> {
+  const current = memoryPdfs[category]
+  if (current?.blobUrl) {
+    URL.revokeObjectURL(current.blobUrl)
   }
 
   const blobUrl = URL.createObjectURL(file)
@@ -95,8 +120,11 @@ export async function savePdfFile(file: File): Promise<AttachedPdf> {
     size: file.size,
     blobUrl,
     uploadedAt: new Date().toISOString(),
+    category,
   }
-  memoryPdf = attached
+  memoryPdfs[category] = attached
+
+  const { meta: metaKey, data: dataKey } = getStorageKeys(category)
 
   // Attempt sessionStorage if under size threshold
   if (file.size <= MAX_SESSION_STORAGE_BYTES) {
@@ -105,17 +133,18 @@ export async function savePdfFile(file: File): Promise<AttachedPdf> {
       reader.onload = () => {
         try {
           const base64 = reader.result as string
-          sessionStorage.setItem(STORAGE_DATA_KEY, base64)
+          sessionStorage.setItem(dataKey, base64)
           sessionStorage.setItem(
-            STORAGE_KEY,
+            metaKey,
             JSON.stringify({
               name: attached.name,
               size: attached.size,
               uploadedAt: attached.uploadedAt,
+              category,
             }),
           )
         } catch {
-          // Exceeded storage quota, just retain in memory
+          // Exceeded storage quota, retain in memory
         }
       }
       reader.readAsDataURL(file)
@@ -125,8 +154,8 @@ export async function savePdfFile(file: File): Promise<AttachedPdf> {
   } else {
     // Clean old sessionStorage entry if file is larger
     try {
-      sessionStorage.removeItem(STORAGE_KEY)
-      sessionStorage.removeItem(STORAGE_DATA_KEY)
+      sessionStorage.removeItem(metaKey)
+      sessionStorage.removeItem(dataKey)
     } catch {
       // Ignore
     }
@@ -136,18 +165,31 @@ export async function savePdfFile(file: File): Promise<AttachedPdf> {
 }
 
 /**
- * Remove attached PDF and cleanup resources
+ * Remove attached PDF of specific category and cleanup resources
  */
-export function clearAttachedPdf(): void {
-  if (memoryPdf?.blobUrl) {
-    URL.revokeObjectURL(memoryPdf.blobUrl)
+export function clearAttachedPdf(category: PdfDocumentCategory = 'principal'): void {
+  const current = memoryPdfs[category]
+  if (current?.blobUrl) {
+    URL.revokeObjectURL(current.blobUrl)
   }
-  memoryPdf = null
+  memoryPdfs[category] = null
+
+  const { meta: metaKey, data: dataKey } = getStorageKeys(category)
   try {
-    sessionStorage.removeItem(STORAGE_KEY)
-    sessionStorage.removeItem(STORAGE_DATA_KEY)
+    sessionStorage.removeItem(metaKey)
+    sessionStorage.removeItem(dataKey)
   } catch {
     // Ignore
+  }
+}
+
+/**
+ * Clear all attached PDFs (for reset / nova consulta)
+ */
+export function clearAllAttachedPdfs(): void {
+  const categories: PdfDocumentCategory[] = ['principal', 'cnpj', 'ie', 'im']
+  for (const cat of categories) {
+    clearAttachedPdf(cat)
   }
 }
 
@@ -156,6 +198,7 @@ export function clearAttachedPdf(): void {
  */
 export async function getAttachedPdfArrayBuffer(
   attached: AttachedPdf,
+  category: PdfDocumentCategory = attached.category || 'principal',
 ): Promise<ArrayBuffer | null> {
   // Try fetching from blobUrl first
   if (attached.blobUrl) {
@@ -171,8 +214,9 @@ export async function getAttachedPdfArrayBuffer(
 
   // Fallback to sessionStorage base64 if available
   if (typeof sessionStorage !== 'undefined') {
+    const { data: dataKey } = getStorageKeys(category)
     try {
-      const base64 = sessionStorage.getItem(STORAGE_DATA_KEY)
+      const base64 = sessionStorage.getItem(dataKey)
       if (base64) {
         const parts = base64.split(',')
         const base64Content = parts[1] || parts[0] || ''

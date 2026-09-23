@@ -30,6 +30,7 @@ interface PdfDataReviewModalProps {
   isExtracting?: boolean
   pdfName?: string
   onRequestPassword?: () => void
+  documentLabel?: string
 }
 
 export const PdfDataReviewModal: React.FC<PdfDataReviewModalProps> = ({
@@ -40,6 +41,7 @@ export const PdfDataReviewModal: React.FC<PdfDataReviewModalProps> = ({
   isExtracting = false,
   pdfName,
   onRequestPassword,
+  documentLabel,
 }) => {
   const [selectedKeys, setSelectedKeys] = useState<Record<string, boolean>>({})
 
@@ -114,11 +116,12 @@ export const PdfDataReviewModal: React.FC<PdfDataReviewModalProps> = ({
           <DialogDescription className="text-xs text-slate-600">
             {pdfName ? (
               <span>
-                Documento: <strong>{pdfName}</strong> • Verifique as informações encontradas antes
-                de aplicar ao dossiê.
+                {documentLabel ? <strong>{documentLabel}</strong> : 'Documento'}:{' '}
+                <strong>{pdfName}</strong> • Verifique as informações encontradas antes de aplicar
+                ao dossiê.
               </span>
             ) : (
-              'Verifique as informações encontradas antes de aplicar ao dossiê.'
+              documentLabel || 'Verifique as informações encontradas antes de aplicar ao dossiê.'
             )}
           </DialogDescription>
         </DialogHeader>
@@ -202,13 +205,22 @@ export const PdfDataReviewModal: React.FC<PdfDataReviewModalProps> = ({
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-6 text-center space-y-2">
                 <Info className="w-8 h-8 text-slate-400 mx-auto" />
                 <h4 className="text-sm font-semibold text-slate-800">
-                  Nenhum dado cadastral identificado
+                  Dado não encontrado no documento
                 </h4>
                 <p className="text-xs text-slate-600 max-w-md mx-auto">
-                  O texto do documento foi lido ({extractionResult.totalPages}{' '}
-                  {extractionResult.totalPages === 1 ? 'página' : 'páginas'}), porém nenhum padrão
-                  claro de cliente brasileiro (CNPJ/CPF, razão social ou endereço de destinatário)
-                  foi encontrado com segurança.
+                  {extractionResult.docType === 'cnpj'
+                    ? 'O texto do documento foi lido, mas não foi possível identificar o número do CNPJ ou Razão Social deste cliente.'
+                    : extractionResult.docType === 'ie'
+                      ? 'O texto do documento foi lido, mas não foi possível identificar o número da Inscrição Estadual (IE) deste cliente.'
+                      : extractionResult.docType === 'im'
+                        ? 'O texto do documento foi lido, mas não foi possível identificar o número da Inscrição Municipal (IM/CCM) deste cliente.'
+                        : `O texto do documento foi lido (${extractionResult.totalPages} ${
+                            extractionResult.totalPages === 1 ? 'página' : 'páginas'
+                          }), porém nenhum padrão claro de cliente brasileiro foi encontrado com segurança.`}
+                </p>
+                <p className="text-[11px] text-slate-500 pt-1">
+                  Nenhum campo será alterado no seu dossiê. Você pode preencher manualmente na aba
+                  Cliente ou enviar outro documento.
                 </p>
               </div>
             )}
