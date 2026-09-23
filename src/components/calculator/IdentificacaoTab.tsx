@@ -5,21 +5,40 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Upload, Trash2, Eye, EyeOff, Building2, UserCheck, Calendar } from 'lucide-react'
+import {
+  Upload,
+  Trash2,
+  Eye,
+  EyeOff,
+  Building2,
+  UserCheck,
+  Calendar,
+  FileText,
+  ExternalLink,
+  Download,
+} from 'lucide-react'
+import { AttachedPdf, formatFileSize } from '@/lib/pdfStorage'
 
 interface IdentificacaoTabProps {
   state: CalculatorState
   onChange: (patch: Partial<CalculatorState>) => void
   onGenerateDocument: () => void
+  attachedPdf: AttachedPdf | null
+  onUploadPdf: (file: File) => void
+  onRemovePdf: () => void
 }
 
 export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
   state,
   onChange,
   onGenerateDocument,
+  attachedPdf,
+  onUploadPdf,
+  onRemovePdf,
 }) => {
   const companyFileRef = useRef<HTMLInputElement>(null)
   const clientFileRef = useRef<HTMLInputElement>(null)
+  const pdfFileRef = useRef<HTMLInputElement>(null)
 
   // Compress & resize image to data URL to preserve URL length
   const handleImageUpload = (
@@ -129,6 +148,14 @@ export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
     } else {
       onChange({ clientLogoHeight: newHeight })
     }
+  }
+
+  const handlePdfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    onUploadPdf(file)
+    // reset input so user can pick same file again if desired
+    e.target.value = ''
   }
 
   return (
@@ -599,7 +626,144 @@ export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
         </CardContent>
       </Card>
 
-      {/* SEÇÃO 3: PERÍODO E EMISSÃO */}
+      {/* SEÇÃO 3: IMPORTAÇÃO DE ARQUIVO PDF */}
+      <Card className="border border-slate-200 card-shadow bg-white">
+        <CardHeader className="border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-2">
+            <FileText className="w-5 h-5 text-[#1E3A5F]" />
+            <CardTitle className="text-lg font-bold text-slate-900">
+              Documento Anexo (Arquivo PDF)
+            </CardTitle>
+          </div>
+          <CardDescription className="text-slate-500">
+            Importe um documento PDF de apoio para consulta e conferência direta nesta aba.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-6 space-y-4">
+          <div className="rounded-lg border border-dashed border-slate-300 p-5 bg-slate-50/50">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+              <div>
+                <Label className="text-sm font-semibold text-slate-800">
+                  {attachedPdf ? attachedPdf.name : 'Arquivo PDF'}
+                </Label>
+                <p className="text-xs text-slate-500">
+                  {attachedPdf ? (
+                    <>Tamanho: {formatFileSize(attachedPdf.size)} • Leitura local e segura</>
+                  ) : (
+                    'Aceita arquivos .pdf (processamento 100% no seu navegador)'
+                  )}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {attachedPdf && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(attachedPdf.blobUrl, '_blank')}
+                      className="text-xs h-8 text-slate-600 gap-1.5"
+                      title="Abrir PDF em nova aba"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Abrir em nova aba</span>
+                    </Button>
+                    <a
+                      href={attachedPdf.blobUrl}
+                      download={attachedPdf.name}
+                      className="inline-flex"
+                    >
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-8 text-slate-600 gap-1.5"
+                        title="Baixar arquivo PDF"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Baixar</span>
+                      </Button>
+                    </a>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={onRemovePdf}
+                      className="text-xs h-8 text-red-600 hover:text-red-700 hover:bg-red-50 gap-1"
+                      title="Remover documento PDF"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Remover
+                    </Button>
+                  </>
+                )}
+
+                <input
+                  ref={pdfFileRef}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className="hidden"
+                  onChange={handlePdfChange}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => pdfFileRef.current?.click()}
+                  className="bg-[#1E3A5F] hover:bg-[#16304F] text-white text-xs h-8 gap-1.5"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  {attachedPdf ? 'Trocar PDF' : 'Importar PDF'}
+                </Button>
+              </div>
+            </div>
+
+            {/* Visualização Generosa do PDF */}
+            <div className="mt-4 flex flex-col items-center justify-center bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
+              {attachedPdf ? (
+                <div className="w-full flex flex-col">
+                  <div className="w-full h-[520px] sm:h-[620px] bg-slate-100 flex flex-col">
+                    <iframe
+                      src={attachedPdf.blobUrl}
+                      title={`Visualização de ${attachedPdf.name}`}
+                      className="w-full h-full border-0"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between w-full py-2.5 px-4 bg-slate-50 border-t border-slate-200 text-xs text-slate-500">
+                    <div className="flex items-center gap-2 truncate max-w-[80%]">
+                      <FileText className="w-4 h-4 text-[#1E3A5F] flex-shrink-0" />
+                      <span className="font-medium text-slate-700 truncate">
+                        {attachedPdf.name}
+                      </span>
+                      <span className="text-slate-400 font-mono text-[11px]">
+                        ({formatFileSize(attachedPdf.size)})
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-400">Disponível nesta sessão</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12 px-4 text-slate-400">
+                  <FileText className="w-12 h-12 mx-auto mb-2 opacity-30 text-[#1E3A5F]" />
+                  <p className="text-sm font-medium text-slate-600 mb-1">
+                    Nenhum arquivo PDF importado
+                  </p>
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                    Clique em "Importar PDF" acima para selecionar um documento de conferência
+                    (balancete, extrato, contrato ou notas fiscais).
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <p className="text-[11px] text-slate-400 mt-3">
+              Nota: O arquivo PDF fica disponível nesta sessão do navegador e não altera o link
+              compartilhado.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* SEÇÃO 4: PERÍODO E EMISSÃO */}
       <Card className="border border-slate-200 card-shadow bg-white">
         <CardHeader className="border-b border-slate-100 pb-4">
           <div className="flex items-center gap-2">

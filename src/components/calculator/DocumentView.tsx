@@ -2,16 +2,23 @@ import React from 'react'
 import { CalculatorState, ComputedFinancials } from '@/types/calculator'
 import { formatBRL, formatDateBR, formatPercent } from '@/lib/calculatorState'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Printer, Building2, UserCheck, Calendar } from 'lucide-react'
+import { ArrowLeft, Printer, Building2, UserCheck, Calendar, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { AttachedPdf, formatFileSize } from '@/lib/pdfStorage'
 
 interface DocumentViewProps {
   state: CalculatorState
   computed: ComputedFinancials
   onBack: () => void
+  attachedPdf?: AttachedPdf | null
 }
 
-export const DocumentView: React.FC<DocumentViewProps> = ({ state, computed, onBack }) => {
+export const DocumentView: React.FC<DocumentViewProps> = ({
+  state,
+  computed,
+  onBack,
+  attachedPdf,
+}) => {
   const isLucro = computed.resultadoExercicio >= 0
 
   const handlePrint = () => {
@@ -394,6 +401,20 @@ export const DocumentView: React.FC<DocumentViewProps> = ({ state, computed, onB
             </div>
           </div>
         </div>
+
+        {/* Anexo PDF Referenciado */}
+        {attachedPdf && (
+          <div className="mt-8 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 bg-slate-50/70 p-3 rounded">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-[#1E3A5F]" />
+              <span>
+                <strong>Documento Anexo:</strong> {attachedPdf.name} (
+                {formatFileSize(attachedPdf.size)})
+              </span>
+            </div>
+            <span className="text-[11px] text-slate-400">Anexo arquivado digitalmente</span>
+          </div>
+        )}
 
         {/* Rodapé legal no documento impresso */}
         <div className="mt-12 text-center text-[10px] text-slate-400">

@@ -9,13 +9,19 @@ import { TributosTab } from '@/components/calculator/TributosTab'
 import { FolhaTab } from '@/components/calculator/FolhaTab'
 import { DocumentView } from '@/components/calculator/DocumentView'
 import { toast } from 'sonner'
+import { AttachedPdf, loadPersistedPdf, savePdfFile, clearAttachedPdf } from '@/lib/pdfStorage'
 
 export default function Index() {
-  const location = useLocation()
+  const _location = useLocation()
 
   // Initialize state strictly from URL query parameters
   const [state, setState] = useState<CalculatorState>(() => {
     return parseStateFromUrl(window.location.search)
+  })
+
+  // Attached PDF stored in session/memory
+  const [attachedPdf, setAttachedPdf] = useState<AttachedPdf | null>(() => {
+    return loadPersistedPdf()
   })
 
   const [hasCopied, setHasCopied] = useState(false)
@@ -52,6 +58,27 @@ export default function Index() {
   const computed = useMemo(() => {
     return computeFinancials(state)
   }, [state])
+
+  // PDF handlers
+  const handleUploadPdf = useCallback(async (file: File) => {
+    if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+      toast.error('Por favor, selecione um arquivo no formato PDF (.pdf).')
+      return
+    }
+    try {
+      const saved = await savePdfFile(file)
+      setAttachedPdf(saved)
+      toast.success(`PDF "${file.name}" importado com sucesso!`)
+    } catch {
+      toast.error('Erro ao ler o arquivo PDF.')
+    }
+  }, [])
+
+  const handleRemovePdf = useCallback(() => {
+    clearAttachedPdf()
+    setAttachedPdf(null)
+    toast.info('Documento PDF removido.')
+  }, [])
 
   // Reset all parameters to reference defaults
   const handleReset = useCallback(() => {
@@ -97,7 +124,12 @@ export default function Index() {
 
       <div className="max-w-[1100px] w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1">
         {isDocumentMode ? (
-          <DocumentView state={state} computed={computed} onBack={() => setIsDocumentMode(false)} />
+          <DocumentView
+            state={state}
+            computed={computed}
+            onBack={() => setIsDocumentMode(false)}
+            attachedPdf={attachedPdf}
+          />
         ) : (
           <div>
             {state.tab === 'identificacao' && (
@@ -105,6 +137,9 @@ export default function Index() {
                 state={state}
                 onChange={updateState}
                 onGenerateDocument={() => setIsDocumentMode(true)}
+                attachedPdf={attachedPdf}
+                onUploadPdf={handleUploadPdf}
+                onRemovePdf={handleRemovePdf}
               />
             )}
 
