@@ -5,16 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import {
-  Upload,
-  Trash2,
-  Eye,
-  EyeOff,
-  Building2,
-  Calendar,
-  ArrowRight,
-  UserCheck,
-} from 'lucide-react'
+import { Upload, Trash2, Eye, EyeOff, Building2, ArrowRight, UserCheck } from 'lucide-react'
 
 interface IdentificacaoTabProps {
   state: CalculatorState
@@ -333,34 +324,8 @@ export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
               />
             </div>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* SEÇÃO 2: DATA DE EMISSÃO */}
-      <Card className="border border-slate-200 card-shadow bg-white">
-        <CardHeader className="border-b border-slate-100 pb-4">
-          <div className="flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-[#1E3A5F]" />
-            <CardTitle className="text-lg font-bold text-slate-900">Data de Emissão</CardTitle>
-          </div>
-          <CardDescription className="text-slate-500">
-            Defina a data de formalização e emissão do relatório.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-6">
-          <div className="max-w-xs">
-            <Label htmlFor="dataEmissao" className="text-xs font-medium text-slate-700">
-              Data de Emissão
-            </Label>
-            <Input
-              id="dataEmissao"
-              type="date"
-              value={state.dataEmissao}
-              onChange={(e) => onChange({ dataEmissao: e.target.value })}
-              className="mt-1 h-9 bg-[#F9FAFB]"
-            />
-          </div>
-
+          {/* Navegação e Ações */}
           <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
             <Button
               type="button"

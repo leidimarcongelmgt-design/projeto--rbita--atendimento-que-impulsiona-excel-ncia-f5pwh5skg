@@ -1,13 +1,12 @@
 import React from 'react'
 import { CalculatorState, ComputedFinancials } from '@/types/calculator'
-import { formatBRL, formatDateBR, formatPercent } from '@/lib/calculatorState'
+import { formatBRL, formatPercent } from '@/lib/calculatorState'
 import { Button } from '@/components/ui/button'
 import {
   ArrowLeft,
   Printer,
   Building2,
   UserCheck,
-  Calendar,
   FileText,
   Phone,
   Mail,
@@ -170,8 +169,8 @@ export const DocumentView: React.FC<DocumentViewProps> = ({
             </div>
           </div>
 
-          {/* Título do Relatório e Metadados */}
-          <div className="mt-6 pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+          {/* Título do Relatório */}
+          <div className="mt-6 pt-4 border-t border-slate-100">
             <div>
               <h1 className="text-xl font-bold uppercase tracking-wide text-[#1E3A5F]">
                 Demonstrativo de Resultado e Folha de Pagamento
@@ -179,15 +178,6 @@ export const DocumentView: React.FC<DocumentViewProps> = ({
               <p className="text-xs text-slate-500">
                 Relatório analítico gerencial e apuração fiscal consolidada
               </p>
-            </div>
-
-            <div className="text-xs text-slate-600 flex items-center gap-3">
-              {state.dataEmissao && (
-                <span className="flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                  <strong>Emissão:</strong> {formatDateBR(state.dataEmissao)}
-                </span>
-              )}
             </div>
           </div>
         </div>

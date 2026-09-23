@@ -180,8 +180,6 @@ export function serializeStateToUrl(state: CalculatorState): string {
   if (state.contLegalTelefone) params.set('contLegalTelefone', state.contLegalTelefone)
   if (state.contLegalEmail) params.set('contLegalEmail', state.contLegalEmail)
 
-  if (state.dataEmissao) params.set('dataEmissao', state.dataEmissao)
-
   return `?${params.toString()}`
 }
 
