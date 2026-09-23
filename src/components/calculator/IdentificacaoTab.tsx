@@ -25,6 +25,7 @@ import { AttachedPdf, formatFileSize, getAttachedPdfArrayBuffer } from '@/lib/pd
 import { extractTextFromPdf } from '@/lib/pdfTextExtractor'
 import { parseClientDataFromPdfText, ClientExtractionResult } from '@/lib/clientDataParser'
 import { PdfDataReviewModal } from './PdfDataReviewModal'
+import { PdfPasswordDialog } from './PdfPasswordDialog'
 import { toast } from 'sonner'
 
 interface IdentificacaoTabProps {
@@ -54,31 +55,61 @@ export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
   const [extractionResult, setExtractionResult] = useState<ClientExtractionResult | null>(null)
   const [activePdfName, setActivePdfName] = useState<string>('')
 
+  // Password Dialog states for protected PDFs
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false)
+  const [passwordError, setPasswordError] = useState<string>('')
+  const [isUnlocking, setIsUnlocking] = useState(false)
+  const pendingBufferRef = useRef<ArrayBuffer | null>(null)
+  const pendingPdfNameRef = useRef<string>('')
+
   // Process text and open review modal
   const runExtractionOnBuffer = useCallback(
-    async (buffer: ArrayBuffer, pdfName: string) => {
+    async (buffer: ArrayBuffer, pdfName: string, password?: string) => {
       setIsExtracting(true)
       setActivePdfName(pdfName)
-      setReviewModalOpen(true)
+      pendingBufferRef.current = buffer
+      pendingPdfNameRef.current = pdfName
 
       try {
-        const textResult = await extractTextFromPdf(buffer)
+        const textResult = await extractTextFromPdf(buffer, { password })
+
+        if (textResult.isPasswordProtected) {
+          // Open password dialog directly
+          setPasswordDialogOpen(true)
+          if (password) {
+            setPasswordError('Senha incorreta, tente novamente.')
+          } else {
+            setPasswordError('')
+          }
+          // Do not open review modal yet if user hasn't provided valid password
+          setReviewModalOpen(false)
+          return
+        }
+
+        // Successfully extracted (or unencrypted)
+        setPasswordDialogOpen(false)
+        setPasswordError('')
+        setReviewModalOpen(true)
+
         const parsed = parseClientDataFromPdfText(
           textResult.fullText,
           state,
           textResult.hasTextLayer,
           textResult.totalPages,
           textResult.error,
+          textResult.isPasswordProtected,
         )
         setExtractionResult(parsed)
       } catch (err: unknown) {
         console.error('Erro na extração de texto do PDF:', err)
+        setReviewModalOpen(true)
         setExtractionResult({
           fields: [],
           rawText: '',
           hasTextLayer: false,
           totalPages: 0,
           errorMessage: 'Erro inesperado ao processar o conteúdo do PDF.',
+          isPasswordProtected: false,
         })
       } finally {
         setIsExtracting(false)
@@ -86,6 +117,58 @@ export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
     },
     [state],
   )
+
+  // Handle password submission from dialog
+  const handleSubmitPassword = useCallback(
+    async (password: string) => {
+      const buffer = pendingBufferRef.current
+      const name = pendingPdfNameRef.current || 'Documento PDF'
+      if (!buffer) {
+        toast.error('Arquivo PDF não disponível para desbloqueio.')
+        setPasswordDialogOpen(false)
+        return
+      }
+
+      setIsUnlocking(true)
+      setPasswordError('')
+
+      try {
+        const textResult = await extractTextFromPdf(buffer, { password })
+        if (textResult.isPasswordProtected) {
+          setPasswordError('Senha incorreta, tente novamente.')
+          return
+        }
+
+        // Password valid!
+        setPasswordDialogOpen(false)
+        setPasswordError('')
+        toast.success('PDF desprotegido com sucesso!')
+
+        // Show review modal with extracted fields
+        setReviewModalOpen(true)
+        const parsed = parseClientDataFromPdfText(
+          textResult.fullText,
+          state,
+          textResult.hasTextLayer,
+          textResult.totalPages,
+          textResult.error,
+          false,
+        )
+        setExtractionResult(parsed)
+      } catch (err: unknown) {
+        console.error('Erro ao desbloquear PDF:', err)
+        setPasswordError('Não foi possível desbloquear o PDF com a senha informada.')
+      } finally {
+        setIsUnlocking(false)
+      }
+    },
+    [state],
+  )
+
+  const handleOpenPasswordPrompt = useCallback(() => {
+    setPasswordDialogOpen(true)
+    setPasswordError('')
+  }, [])
 
   // Trigger re-extraction manually on currently attached PDF
   const handleManualExtraction = useCallback(async () => {
@@ -971,6 +1054,17 @@ export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
         onApply={handleApplyExtractedData}
         isExtracting={isExtracting}
         pdfName={activePdfName}
+        onRequestPassword={handleOpenPasswordPrompt}
+      />
+
+      {/* Diálogo de Senha para Desproteger PDF */}
+      <PdfPasswordDialog
+        open={passwordDialogOpen}
+        onOpenChange={setPasswordDialogOpen}
+        pdfName={activePdfName || attachedPdf?.name}
+        errorMessage={passwordError}
+        isSubmitting={isUnlocking}
+        onSubmitPassword={handleSubmitPassword}
       />
     </div>
   )

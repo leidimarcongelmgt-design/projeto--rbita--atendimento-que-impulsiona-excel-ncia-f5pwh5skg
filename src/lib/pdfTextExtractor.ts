@@ -1,4 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist'
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
 // Worker resolution configuration
 // In Vite/browser environments, setting GlobalWorkerOptions.workerSrc with an explicit URL
@@ -8,14 +9,17 @@ const PDFJS_VERSION = pdfjsLib.version || '4.10.38'
 function setupPdfWorker() {
   if (typeof window === 'undefined' || !pdfjsLib.GlobalWorkerOptions) return
 
-  // 1. Try local bundled worker via new URL
   try {
-    const workerUrl = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
-    pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
+    if (pdfWorkerUrl) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
+      return
+    }
   } catch {
-    // 2. Fallback to reliable CDN matching the exact version
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.mjs`
+    // ignore
   }
+
+  // Fallback to reliable CDN matching the exact version
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.mjs`
 }
 
 setupPdfWorker()
@@ -139,7 +143,7 @@ export async function extractTextFromPdf(
             hasTextLayer: false,
             isPasswordProtected: true,
             error: password
-              ? 'Senha incorreta. Por favor, verifique a senha e tente novamente.'
+              ? 'Senha incorreta, tente novamente.'
               : 'Este arquivo PDF é protegido por senha.',
           }
         }
@@ -150,17 +154,19 @@ export async function extractTextFromPdf(
     const isPassword =
       errorObj?.name === 'PasswordException' ||
       errMessage.includes('password') ||
-      errorObj?.code === 1 // PDFJS PasswordResponses.NEED_PASSWORD
+      errorObj?.code === 1 || // PDFJS PasswordResponses.NEED_PASSWORD
+      errorObj?.code === 2 // PDFJS PasswordResponses.INCORRECT_PASSWORD
 
     if (isPassword) {
       friendlyError = password
-        ? 'Senha incorreta. Por favor, verifique a senha e tente novamente.'
+        ? 'Senha incorreta, tente novamente.'
         : 'Este arquivo PDF é protegido por senha.'
     } else if (errorObj?.name === 'InvalidPDFException') {
       friendlyError = 'O arquivo fornecido não é um PDF válido ou está corrompido.'
     } else if (
       errMessage.includes('fake worker') ||
-      errMessage.includes('dynamically imported module')
+      errMessage.includes('dynamically imported module') ||
+      errMessage.includes('setting up fake worker')
     ) {
       friendlyError =
         'Não foi possível inicializar o leitor de PDF no navegador. Verifique sua conexão com a internet ou tente novamente.'

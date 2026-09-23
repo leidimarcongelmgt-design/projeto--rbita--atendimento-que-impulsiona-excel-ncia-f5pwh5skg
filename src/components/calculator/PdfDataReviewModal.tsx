@@ -29,6 +29,7 @@ interface PdfDataReviewModalProps {
   onApply: (selectedData: Partial<CalculatorState>) => void
   isExtracting?: boolean
   pdfName?: string
+  onRequestPassword?: () => void
 }
 
 export const PdfDataReviewModal: React.FC<PdfDataReviewModalProps> = ({
@@ -38,6 +39,7 @@ export const PdfDataReviewModal: React.FC<PdfDataReviewModalProps> = ({
   onApply,
   isExtracting = false,
   pdfName,
+  onRequestPassword,
 }) => {
   const [selectedKeys, setSelectedKeys] = useState<Record<string, boolean>>({})
 
@@ -136,13 +138,33 @@ export const PdfDataReviewModal: React.FC<PdfDataReviewModalProps> = ({
           {!isExtracting && extractionResult?.errorMessage && (
             <div className="rounded-lg border border-red-200 bg-red-50/60 p-4 flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-              <div>
-                <h4 className="text-sm font-semibold text-red-900">Atenção ao abrir o PDF</h4>
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-red-900">
+                  {extractionResult.isPasswordProtected
+                    ? 'Arquivo PDF protegido por senha'
+                    : 'Atenção ao abrir o PDF'}
+                </h4>
                 <p className="text-xs text-red-700 mt-1">{extractionResult.errorMessage}</p>
-                <p className="text-xs text-slate-500 mt-2">
-                  Dica: Se o arquivo estiver protegido, salve uma cópia desprotegida ou preencha os
-                  campos manualmente.
-                </p>
+
+                {extractionResult.isPasswordProtected && onRequestPassword && (
+                  <div className="mt-3 pt-2 border-t border-red-200/60">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={onRequestPassword}
+                      className="bg-[#1E3A5F] hover:bg-[#16304F] text-white text-xs h-8 gap-1.5 shadow-2xs"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" /> Digitar Senha e Desbloquear
+                    </Button>
+                  </div>
+                )}
+
+                {!extractionResult.isPasswordProtected && (
+                  <p className="text-xs text-slate-500 mt-2">
+                    Dica: Verifique o arquivo enviado ou preencha os campos cadastrais do cliente
+                    manualmente.
+                  </p>
+                )}
               </div>
             </div>
           )}

@@ -16,8 +16,8 @@ export interface ClientExtractionResult {
   hasTextLayer: boolean
   totalPages: number
   errorMessage?: string
+  isPasswordProtected?: boolean
 }
-
 // Brazilian states UF list
 const BRAZILIAN_UFS = new Set([
   'AC',
@@ -146,6 +146,7 @@ export function parseClientDataFromPdfText(
   hasTextLayer = true,
   totalPages = 1,
   errorMessage?: string,
+  isPasswordProtected = false,
 ): ClientExtractionResult {
   if (!rawText || !hasTextLayer || errorMessage) {
     return {
@@ -154,6 +155,7 @@ export function parseClientDataFromPdfText(
       hasTextLayer,
       totalPages,
       errorMessage,
+      isPasswordProtected,
     }
   }
 
