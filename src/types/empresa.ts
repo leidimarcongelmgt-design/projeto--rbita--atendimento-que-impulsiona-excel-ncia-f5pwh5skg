@@ -37,7 +37,7 @@ export const EMPRESA_COLUMNS: {
   { key: 'ramoAtividade', label: 'RAMO DE ATIVIDADE 2' },
   { key: 'zona', label: 'ZONA' },
   { key: 'filial', label: 'FILIAL' },
-  { key: 'entrada', label: 'ENTRADA' },
+  { key: 'entrada', label: 'CLIENTE DESDE' },
   { key: 'grupo', label: 'GRUPO' },
 ]
 

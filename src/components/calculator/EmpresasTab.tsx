@@ -298,7 +298,7 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                 </div>
                 <CardDescription className="text-slate-500 mt-1">
                   Importe planilhas Excel (.xlsx ou .xls) com as 8 colunas padrão (EMPRESAS, CNPJ,
-                  REGIME TRIB., RAMO DE ATIVIDADE 2, ZONA, FILIAL, ENTRADA, GRUPO).
+                  REGIME TRIB., RAMO DE ATIVIDADE 2, ZONA, FILIAL, CLIENTE DESDE, GRUPO).
                 </CardDescription>
               </div>
 
@@ -458,7 +458,7 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                 <h3 className="text-sm font-semibold text-slate-800">Nenhuma empresa importada</h3>
                 <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 mb-5">
                   Clique no botão abaixo para carregar uma planilha Excel com as 8 colunas padrão
-                  (EMPRESAS, CNPJ, REGIME TRIB., RAMO DE ATIVIDADE 2, ZONA, FILIAL, ENTRADA e
+                  (EMPRESAS, CNPJ, REGIME TRIB., RAMO DE ATIVIDADE 2, ZONA, FILIAL, CLIENTE DESDE e
                   GRUPO).
                 </p>
                 <Button

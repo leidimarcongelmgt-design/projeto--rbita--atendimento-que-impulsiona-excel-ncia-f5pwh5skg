@@ -167,7 +167,13 @@ export function mapHeadersToFields(headers: string[]): {
       return
     } else if (normalized === 'filial' || normalized.includes('filial')) {
       mapping.set(colIdx, 'filial')
-    } else if (normalized === 'entrada' || normalized.includes('entrada')) {
+    } else if (
+      normalized === 'entrada' ||
+      normalized.includes('entrada') ||
+      normalized === 'cliente desde' ||
+      normalized.includes('cliente desde') ||
+      normalized === 'desde'
+    ) {
       mapping.set(colIdx, 'entrada')
     } else if (normalized === 'grupo' || normalized.includes('grupo')) {
       mapping.set(colIdx, 'grupo')
