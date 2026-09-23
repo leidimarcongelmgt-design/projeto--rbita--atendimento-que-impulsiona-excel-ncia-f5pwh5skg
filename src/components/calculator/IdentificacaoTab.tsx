@@ -158,25 +158,6 @@ export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
               </div>
 
               <div className="flex items-center gap-2">
-                {state.logoData && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      // Preencher 100% da área do container
-                      onChange({
-                        logoWidth: 800,
-                        logoHeight: 250,
-                      })
-                    }}
-                    className="text-xs h-8 text-blue-700 border-blue-200 bg-blue-50/50 hover:bg-blue-100/70 gap-1.5"
-                    title="Expandir a logo para preencher todo o espaço disponível"
-                  >
-                    Preencher Todo o Espaço
-                  </Button>
-                )}
-
                 <Button
                   type="button"
                   variant="outline"
@@ -253,11 +234,7 @@ export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
                       className="transition-all duration-200 w-full drop-shadow-xs"
                     />
                   </div>
-                  <div className="flex flex-wrap items-center justify-between w-full mt-2.5 pt-2 border-t border-slate-100 text-[11px] text-slate-500 px-1 gap-2">
-                    <span className="text-emerald-700 font-medium flex items-center gap-1.5 bg-emerald-50 px-2 py-0.5 rounded">
-                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                      Logo preenchendo o espaço reservado
-                    </span>
+                  <div className="flex flex-wrap items-center justify-end w-full mt-2.5 pt-2 border-t border-slate-100 text-[11px] text-slate-500 px-1 gap-2">
                     <span className="tabular-nums font-mono text-slate-400">
                       {state.logoWidth}px × {state.logoHeight}px
                     </span>
@@ -411,25 +388,6 @@ export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
               </div>
 
               <div className="flex items-center gap-2">
-                {state.clientLogoData && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      // Preencher 100% da área do container
-                      onChange({
-                        clientLogoWidth: 600,
-                        clientLogoHeight: 220,
-                      })
-                    }}
-                    className="text-xs h-8 text-blue-700 border-blue-200 bg-blue-50/50 hover:bg-blue-100/70 gap-1.5"
-                    title="Expandir o logotipo para preencher todo o espaço disponível"
-                  >
-                    Preencher Todo o Espaço
-                  </Button>
-                )}
-
                 <Button
                   type="button"
                   variant="outline"
@@ -512,11 +470,7 @@ export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
                       className="transition-all duration-200 w-full drop-shadow-xs"
                     />
                   </div>
-                  <div className="flex flex-wrap items-center justify-between w-full mt-2.5 pt-2 border-t border-slate-100 text-[11px] text-slate-500 px-1 gap-2">
-                    <span className="text-emerald-700 font-medium flex items-center gap-1.5 bg-emerald-50 px-2 py-0.5 rounded">
-                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                      Logo preenchendo o espaço reservado
-                    </span>
+                  <div className="flex flex-wrap items-center justify-end w-full mt-2.5 pt-2 border-t border-slate-100 text-[11px] text-slate-500 px-1 gap-2">
                     <span className="tabular-nums font-mono text-slate-400">
                       {state.clientLogoWidth}px × {state.clientLogoHeight}px
                     </span>
