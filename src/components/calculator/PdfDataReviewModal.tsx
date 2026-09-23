@@ -89,8 +89,14 @@ export const PdfDataReviewModal: React.FC<PdfDataReviewModalProps> = ({
     fields.forEach((f) => {
       if (selectedKeys[f.key]) {
         let val = f.value
-        // Garantia de segurança adicional: se for o campo clienteNome ou clienteRamo, aplicar trim
-        if (f.key === 'clienteNome' || f.key === 'clienteRamo') {
+        // Garantia de segurança adicional: trim em strings cadastrais
+        if (
+          f.key === 'clienteNome' ||
+          f.key === 'clienteRamo' ||
+          f.key === 'clienteEndereco' ||
+          f.key === 'clienteCidade' ||
+          f.key === 'clienteUf'
+        ) {
           val = val.trim()
         }
         ;(patch as Record<string, string>)[f.key] = val

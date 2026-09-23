@@ -52,6 +52,47 @@ const BRAZILIAN_UFS = new Set([
   'TO',
 ])
 
+const BRAZILIAN_STATE_NAMES_TO_UF: Record<string, string> = {
+  acre: 'AC',
+  alagoas: 'AL',
+  amapa: 'AP',
+  amapá: 'AP',
+  amazonas: 'AM',
+  bahia: 'BA',
+  ceara: 'CE',
+  ceará: 'CE',
+  'distrito federal': 'DF',
+  'espirito santo': 'ES',
+  'espírito santo': 'ES',
+  goias: 'GO',
+  goiás: 'GO',
+  maranhao: 'MA',
+  maranhão: 'MA',
+  'mato grosso': 'MT',
+  'mato grosso do sul': 'MS',
+  'minas gerais': 'MG',
+  para: 'PA',
+  pará: 'PA',
+  paraiba: 'PB',
+  paraíba: 'PB',
+  parana: 'PR',
+  paraná: 'PR',
+  pernambuco: 'PE',
+  piaui: 'PI',
+  piauí: 'PI',
+  'rio de janeiro': 'RJ',
+  'rio grande do norte': 'RN',
+  'rio grande do sul': 'RS',
+  rondonia: 'RO',
+  rondônia: 'RO',
+  roraima: 'RR',
+  'santa catarina': 'SC',
+  'sao paulo': 'SP',
+  'são paulo': 'SP',
+  sergipe: 'SE',
+  tocantins: 'TO',
+}
+
 /**
  * Validates a Brazilian CNPJ number (14 digits)
  */
@@ -1460,47 +1501,386 @@ export function parseClientDataFromPdfText(
     })
   }
 
-  // --- C. Endereço do Cliente ---
+  // --- C. Endereço, Cidade e UF do Cliente ---
+  // No Cartão CNPJ e documentos fiscais brasileiros, o endereço pode vir:
+  // 1) Bloco estruturado da Receita Federal (LOGRADOURO, NÚMERO, COMPLEMENTO, CEP, BAIRRO/DISTRITO, MUNICÍPIO, UF).
+  // 2) Campo único "Endereço: Logradouro, 123 - Sala 1 - Bairro - CEP 12345-678".
+  // 3) Linhas chave/valor em linhas separadas.
+  // Regra fundamental: Município e UF não devem ser incluídos dentro de `clienteEndereco`.
   let detectedEndereco = ''
   let enderecoSnippet = ''
   let enderecoConfidence: 'high' | 'medium' | 'low' = 'low'
 
-  const enderecoLabelRegex =
-    /(?:ENDERE[ÇC]O|LOGRADOURO|RUA|AVENIDA|AV\.|RODOVIA|ROD\.)[:\s]+([^\n\r]{6,120})/i
+  let detectedCidade = ''
+  let detectedUf = ''
+  let cidadeUfSnippet = ''
+  let cidadeConfidence: 'high' | 'medium' | 'low' = 'low'
+
+  // Helpers de normalização e limpeza
+  const normalizeUfCandidate = (rawUf: string): string => {
+    if (!rawUf) return ''
+    const clean = rawUf
+      .trim()
+      .replace(/^[;,:.\-–—|/\\_()[\]\s]+/, '')
+      .replace(/[;,:.\-–—|/\\_()[\]\s]+$/, '')
+    const upper = clean.toUpperCase()
+    if (BRAZILIAN_UFS.has(upper)) {
+      return upper
+    }
+    const lower = clean.toLowerCase()
+    if (BRAZILIAN_STATE_NAMES_TO_UF[lower]) {
+      return BRAZILIAN_STATE_NAMES_TO_UF[lower]
+    }
+    return ''
+  }
+
+  const cleanAddressComponent = (val: string): string => {
+    if (!val) return ''
+    let cleaned = val.replace(/[\r\n\t]+/g, ' ').trim()
+    cleaned = cleaned.replace(/^[;,:.\-–—|/\\_()[\]\s]+/, '').trim()
+    cleaned = cleaned.replace(/[;,:.\-–—|/\\_()[\]\s]+$/, '').trim()
+    // Descartar placeholders da Receita Federal tipo "********", "SEM COMPLEMENTO", "SN", "S/N"
+    if (/^\*+$/.test(cleaned) || /^[-–—.]+$/.test(cleaned)) {
+      return ''
+    }
+    return cleaned
+  }
+
+  const isAddressHeaderLabel = (line: string): boolean => {
+    return /^(?:LOGRADOURO|N[ÚU]MERO|Nº|COMPLEMENTO|BAIRRO|BAIRRO\/DISTRITO|DISTRITO|CEP|MUNIC[ÍI]PIO|MUNIC[ÍI]PIO\s+DA\s+SEDE|CIDADE|UF|UF\s+DA\s+SEDE|ESTADO|ENDERE[ÇC]O|ENDERE[ÇC]O\s+ELETR[ÔO]NICO|TELEFONE|FONE|SITUA[ÇC][ÃA]O\s+CADASTRAL|DATA\s+DA\s+SITUA[ÇC][ÃA]O\s+CADASTRAL|MOTIVO\s+DE\s+SITUA[ÇC][ÃA]O\s+CADASTRAL|ENTE\s+FEDERATIVO\s+RESPONS[ÁA]VEL|C[ÓO]DIGO\s+E\s+DESCRI[ÇC][ÃA]O)[:\-–—]?$/i.test(
+      line.trim(),
+    )
+  }
+
+  // --- Estratégia 1: Bloco estruturado do Cartão CNPJ (Receita Federal) ---
+  // Subcampos: logradouro, número, complemento, cep, bairro, município, uf
+  let cnpjLogradouro = ''
+  let cnpjNumero = ''
+  let cnpjComplemento = ''
+  let cnpjCep = ''
+  let cnpjBairro = ''
+  let cnpjMunicipio = ''
+  let cnpjUf = ''
+  const cnpjAddressSnippets: string[] = []
+
+  // Expressões regulares com rótulo e valor inline
+  const inlineLogradouroRegex =
+    /^(?:LOGRADOURO|ENDERE[ÇC]O\s+DO\s+ESTABELECIMENTO|RUA|AVENIDA|AV\.|RODOVIA)[:\s\-–—]+([^\n\r]{3,120})/i
+  const inlineNumeroRegex = /^(?:N[ÚU]MERO|Nº)[:\s\-–—]+([^\n\r]{1,30})/i
+  const inlineComplementoRegex = /^COMPLEMENTO[:\s\-–—]+([^\n\r]{1,60})/i
+  const inlineCepRegex = /(?:^|\s)CEP[:\s\-–—]+(\d{2}\.?\d{3}[-\s]?\d{3}|\d{8})(?:\b|$)/i
+  const inlineBairroRegex = /^(?:BAIRRO\s*\/\s*DISTRITO|BAIRRO|DISTRITO)[:\s\-–—]+([^\n\r]{2,60})/i
+  const inlineMunicipioRegex =
+    /^(?:MUNIC[ÍI]PIO\s+DA\s+SEDE|MUNIC[ÍI]PIO|CIDADE)[:\s\-–—]+([A-Za-zÀ-ÿ\s'-]{2,50})/i
+  const inlineUfRegex = /^(?:UF\s+DA\s+SEDE|UF|ESTADO)[:\s\-–—]+([A-Za-zÀ-ÿ]{2,30})/i
 
   for (let i = 0; i < linesToSearch.length; i++) {
-    const line = linesToSearch[i]
-    const match = enderecoLabelRegex.exec(line)
-    if (match && match[1]) {
-      let candidate = match[1].replace(/^(?:[:\-–—]\s*)+/, '').trim()
-      // Cut off if phone/email/CNPJ is stuck on the end
-      candidate = candidate.split(/\s+(?:CNPJ|CPF|INSCRI|FONE|TEL|E-?MAIL|CEP)/i)[0].trim()
-      if (candidate.length >= 5) {
-        detectedEndereco = candidate
-        enderecoSnippet = line
-        enderecoConfidence = clientSectionText ? 'high' : 'medium'
-        break
+    const line = linesToSearch[i].trim()
+    if (!line) continue
+
+    // 1. Logradouro
+    if (!cnpjLogradouro) {
+      if (/^LOGRADOURO[:\-–—]?$/i.test(line) && i + 1 < linesToSearch.length) {
+        const next = linesToSearch[i + 1].trim()
+        if (!isAddressHeaderLabel(next)) {
+          cnpjLogradouro = cleanAddressComponent(next)
+          cnpjAddressSnippets.push(`${line} -> ${next}`)
+        }
+      } else {
+        const m = inlineLogradouroRegex.exec(line)
+        if (m && m[1]) {
+          const cand = cleanAddressComponent(m[1])
+          if (cand && !isAddressHeaderLabel(cand)) {
+            cnpjLogradouro = cand
+            cnpjAddressSnippets.push(line)
+          }
+        }
       }
     }
 
-    // Pattern: "Endereço:" alone, value on next line
-    if (/^(?:ENDERE[ÇC]O|LOGRADOURO)[:]?$/i.test(line)) {
-      if (i + 1 < linesToSearch.length) {
-        const nextLine = linesToSearch[i + 1].trim()
-        if (nextLine.length >= 6 && !/^(?:CNPJ|CPF|DATA|TELEFONE)/i.test(nextLine)) {
-          detectedEndereco = nextLine
-          enderecoSnippet = `${line} -> ${nextLine}`
-          enderecoConfidence = 'high'
+    // 2. Número
+    if (!cnpjNumero) {
+      if (/^(?:N[ÚU]MERO|Nº)[:\-–—]?$/i.test(line) && i + 1 < linesToSearch.length) {
+        const next = linesToSearch[i + 1].trim()
+        if (!isAddressHeaderLabel(next)) {
+          cnpjNumero = cleanAddressComponent(next)
+          cnpjAddressSnippets.push(`${line} -> ${next}`)
+        }
+      } else {
+        const m = inlineNumeroRegex.exec(line)
+        if (m && m[1]) {
+          const cand = cleanAddressComponent(m[1])
+          if (cand && !isAddressHeaderLabel(cand)) {
+            cnpjNumero = cand
+            cnpjAddressSnippets.push(line)
+          }
+        }
+      }
+    }
+
+    // 3. Complemento
+    if (!cnpjComplemento) {
+      if (/^COMPLEMENTO[:\-–—]?$/i.test(line) && i + 1 < linesToSearch.length) {
+        const next = linesToSearch[i + 1].trim()
+        if (!isAddressHeaderLabel(next)) {
+          const cand = cleanAddressComponent(next)
+          if (cand && !/^(?:sem\s+complemento|não\s+possui|nao\s+possui|nenhum)$/i.test(cand)) {
+            cnpjComplemento = cand
+            cnpjAddressSnippets.push(`${line} -> ${next}`)
+          }
+        }
+      } else {
+        const m = inlineComplementoRegex.exec(line)
+        if (m && m[1]) {
+          const cand = cleanAddressComponent(m[1])
+          if (
+            cand &&
+            !isAddressHeaderLabel(cand) &&
+            !/^(?:sem\s+complemento|não\s+possui|nao\s+possui|nenhum)$/i.test(cand)
+          ) {
+            cnpjComplemento = cand
+            cnpjAddressSnippets.push(line)
+          }
+        }
+      }
+    }
+
+    // 4. CEP
+    if (!cnpjCep) {
+      if (/^CEP[:\-–—]?$/i.test(line) && i + 1 < linesToSearch.length) {
+        const next = linesToSearch[i + 1].trim()
+        const cepM = /^(\d{2}\.?\d{3}[-\s]?\d{3}|\d{8})$/.exec(next)
+        if (cepM) {
+          const digits = cepM[1].replace(/\D/g, '')
+          cnpjCep = digits.length === 8 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : cepM[1]
+          cnpjAddressSnippets.push(`${line} -> ${next}`)
+        }
+      } else {
+        const m = inlineCepRegex.exec(line)
+        if (m && m[1]) {
+          const digits = m[1].replace(/\D/g, '')
+          cnpjCep = digits.length === 8 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : m[1]
+          cnpjAddressSnippets.push(line)
+        }
+      }
+    }
+
+    // 5. Bairro / Distrito
+    if (!cnpjBairro) {
+      if (
+        /^(?:BAIRRO\s*\/\s*DISTRITO|BAIRRO|DISTRITO)[:\-–—]?$/i.test(line) &&
+        i + 1 < linesToSearch.length
+      ) {
+        const next = linesToSearch[i + 1].trim()
+        if (!isAddressHeaderLabel(next)) {
+          cnpjBairro = cleanAddressComponent(next)
+          cnpjAddressSnippets.push(`${line} -> ${next}`)
+        }
+      } else {
+        const m = inlineBairroRegex.exec(line)
+        if (m && m[1]) {
+          const cand = cleanAddressComponent(m[1])
+          if (cand && !isAddressHeaderLabel(cand)) {
+            cnpjBairro = cand
+            cnpjAddressSnippets.push(line)
+          }
+        }
+      }
+    }
+
+    // 6. Município / Cidade
+    if (!cnpjMunicipio) {
+      if (
+        /^(?:MUNIC[ÍI]PIO\s+DA\s+SEDE|MUNIC[ÍI]PIO|CIDADE)[:\-–—]?$/i.test(line) &&
+        i + 1 < linesToSearch.length
+      ) {
+        const next = linesToSearch[i + 1].trim()
+        if (!isAddressHeaderLabel(next)) {
+          cnpjMunicipio = cleanAddressComponent(next)
+          cnpjAddressSnippets.push(`${line} -> ${next}`)
+        }
+      } else {
+        const m = inlineMunicipioRegex.exec(line)
+        if (m && m[1]) {
+          const cand = cleanAddressComponent(m[1])
+          if (cand && !isAddressHeaderLabel(cand)) {
+            cnpjMunicipio = cand
+            cnpjAddressSnippets.push(line)
+          }
+        }
+      }
+    }
+
+    // 7. UF
+    if (!cnpjUf) {
+      if (/^(?:UF\s+DA\s+SEDE|UF|ESTADO)[:\-–—]?$/i.test(line) && i + 1 < linesToSearch.length) {
+        const next = linesToSearch[i + 1].trim()
+        const norm = normalizeUfCandidate(next)
+        if (norm) {
+          cnpjUf = norm
+          cnpjAddressSnippets.push(`${line} -> ${next}`)
+        }
+      } else {
+        const m = inlineUfRegex.exec(line)
+        if (m && m[1]) {
+          const norm = normalizeUfCandidate(m[1])
+          if (norm) {
+            cnpjUf = norm
+            cnpjAddressSnippets.push(line)
+          }
+        }
+      }
+    }
+  }
+
+  // Se encontrou dados estruturados do Cartão CNPJ (pelo menos logradouro ou município)
+  if (cnpjLogradouro || cnpjMunicipio || cnpjUf) {
+    if (cnpjLogradouro) {
+      // Compor endereço no formato: "Logradouro, Número - Complemento - Bairro - CEP"
+      let addressParts: string[] = []
+      if (cnpjNumero) {
+        addressParts.push(`${cnpjLogradouro}, ${cnpjNumero}`)
+      } else {
+        addressParts.push(cnpjLogradouro)
+      }
+
+      if (cnpjComplemento) {
+        addressParts.push(cnpjComplemento)
+      }
+      if (cnpjBairro) {
+        addressParts.push(cnpjBairro)
+      }
+      if (cnpjCep) {
+        addressParts.push(cnpjCep)
+      }
+
+      detectedEndereco = addressParts.join(' - ')
+      enderecoSnippet = cnpjAddressSnippets.slice(0, 3).join(' | ')
+      enderecoConfidence = 'high'
+    }
+
+    if (cnpjMunicipio) {
+      detectedCidade = cnpjMunicipio
+      cidadeConfidence = 'high'
+      cidadeUfSnippet = cnpjAddressSnippets.find((s) => /MUNIC|CIDADE/i.test(s)) || enderecoSnippet
+    }
+
+    if (cnpjUf) {
+      detectedUf = cnpjUf
+      cidadeConfidence = 'high'
+      if (!cidadeUfSnippet) {
+        cidadeUfSnippet =
+          cnpjAddressSnippets.find((s) => /\bUF\b|ESTADO/i.test(s)) || enderecoSnippet
+      }
+    }
+  }
+
+  // --- Estratégia 2: Campo único "Endereço:" ou variações tradicionais ---
+  if (!detectedEndereco) {
+    const enderecoLabelRegex = /(?:ENDERE[ÇC]O|LOGRADOURO)[:\s]+([^\n\r]{6,160})/i
+
+    for (let i = 0; i < linesToSearch.length; i++) {
+      const line = linesToSearch[i]
+      const match = enderecoLabelRegex.exec(line)
+      if (match && match[1]) {
+        let candidate = match[1].replace(/^(?:[:\-–—]\s*)+/, '').trim()
+        // Cut off if phone/email/CNPJ is stuck on the end
+        candidate = candidate.split(/\s+(?:CNPJ|CPF|INSCRI|FONE|TEL|E-?MAIL|DATA)/i)[0].trim()
+        candidate = cleanAddressComponent(candidate)
+        if (candidate.length >= 5) {
+          detectedEndereco = candidate
+          enderecoSnippet = line
+          enderecoConfidence = clientSectionText ? 'high' : 'medium'
+          break
+        }
+      }
+
+      // Pattern: "Endereço:" alone, value on next line
+      if (/^(?:ENDERE[ÇC]O|LOGRADOURO)[:]?$/i.test(line)) {
+        if (i + 1 < linesToSearch.length) {
+          const nextLine = linesToSearch[i + 1].trim()
+          if (nextLine.length >= 5 && !/^(?:CNPJ|CPF|DATA|TELEFONE|INSCRI)/i.test(nextLine)) {
+            detectedEndereco = cleanAddressComponent(nextLine)
+            enderecoSnippet = `${line} -> ${nextLine}`
+            enderecoConfidence = 'high'
+            break
+          }
+        }
+      }
+    }
+  }
+
+  // --- Estratégia 2 para Cidade e UF caso não localizadas no bloco estruturado ---
+  if (!detectedCidade || !detectedUf) {
+    // Look for "Cidade / UF" or "Município:" or "São Paulo - SP" or "Campinas/SP"
+    const cidadeUfRegex =
+      /(?:CIDADE|MUNIC[ÍI]PIO|MUNIC[ÍI]PIO\s+DA\s+SEDE)[:\s]+([A-Za-zÀ-ÿ\s'-]{3,35})(?:[\s/-]+(?:UF[:\s]*)?([A-Za-z]{2}))?\b/i
+
+    for (const line of linesToSearch) {
+      const match = cidadeUfRegex.exec(line)
+      if (match) {
+        const cityCandidate = match[1].trim()
+        const ufCandidate = (match[2] || '').trim().toUpperCase()
+
+        if (cityCandidate && !/^(?:CNPJ|CPF|ENDERE|BAIRRO|LOGRADOURO)/i.test(cityCandidate)) {
+          if (!detectedCidade) {
+            detectedCidade = cityCandidate
+            cidadeUfSnippet = line
+            cidadeConfidence = 'medium'
+          }
+          if (!detectedUf && ufCandidate && BRAZILIAN_UFS.has(ufCandidate)) {
+            detectedUf = ufCandidate
+            cidadeConfidence = 'high'
+          }
+          if (detectedCidade && detectedUf) break
+        }
+      }
+
+      // Alternative: line like "Belo Horizonte - MG" or "Curitiba / PR"
+      const simpleCityUfMatch =
+        /\b([A-ZÀ-Ÿ][a-zà-ÿ]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ]+)?)\s*[/-]\s*([A-Z]{2})\b/.exec(line)
+      if (simpleCityUfMatch) {
+        const candidateUf = simpleCityUfMatch[2].toUpperCase()
+        if (BRAZILIAN_UFS.has(candidateUf)) {
+          if (!detectedCidade) detectedCidade = simpleCityUfMatch[1].trim()
+          if (!detectedUf) detectedUf = candidateUf
+          cidadeUfSnippet = line
+          cidadeConfidence = 'medium'
           break
         }
       }
     }
   }
 
+  // Standalone UF search if still missing
+  if (!detectedUf) {
+    const ufAloneRegex = /(?:UF|ESTADO|UF\s+DA\s+SEDE)[:\s]+([A-Za-zÀ-ÿ]{2,30})\b/i
+    for (const line of linesToSearch) {
+      const ufMatch = ufAloneRegex.exec(line)
+      if (ufMatch) {
+        const uf = normalizeUfCandidate(ufMatch[1])
+        if (uf) {
+          detectedUf = uf
+          if (!cidadeUfSnippet) cidadeUfSnippet = line
+          break
+        }
+      }
+    }
+  }
+
+  // Limpeza de segurança final no Endereço: remover prefixos "Endereço:" residuais se restarem
+  if (detectedEndereco) {
+    detectedEndereco = detectedEndereco
+      .replace(/^(?:ENDERE[ÇC]O|LOGRADOURO)[\s:]*/i, '')
+      .replace(/^[;,:.\-–—|/\\_()[\]\s]+/, '')
+      .replace(/[;,:.\-–—|/\\_()[\]\s]+$/, '')
+      .trim()
+  }
+
   if (detectedEndereco) {
     fields.push({
       key: 'clienteEndereco',
-      label: 'Endereço do Cliente',
+      label: 'Endereço',
       value: detectedEndereco,
       currentValue: currentState.clienteEndereco || '',
       snippet: enderecoSnippet,
@@ -1511,69 +1891,10 @@ export function parseClientDataFromPdfText(
     })
   }
 
-  // --- D. Cidade e UF do Cliente ---
-  let detectedCidade = ''
-  let detectedUf = ''
-  let cidadeUfSnippet = ''
-  let cidadeConfidence: 'high' | 'medium' | 'low' = 'low'
-
-  // Look for "Cidade / UF" or "Município:" or "São Paulo - SP" or "Campinas/SP"
-  const cidadeUfRegex =
-    /(?:CIDADE|MUNIC[ÍI]PIO)[:\s]+([A-Za-zÀ-ÿ\s'-]{3,35})(?:[\s/-]+(?:UF[:\s]*)?([A-Za-z]{2}))?\b/i
-
-  for (const line of linesToSearch) {
-    const match = cidadeUfRegex.exec(line)
-    if (match) {
-      const cityCandidate = match[1].trim()
-      const ufCandidate = (match[2] || '').trim().toUpperCase()
-
-      if (cityCandidate && !/^(?:CNPJ|CPF|ENDERE)/i.test(cityCandidate)) {
-        detectedCidade = cityCandidate
-        cidadeUfSnippet = line
-        cidadeConfidence = 'medium'
-        if (ufCandidate && BRAZILIAN_UFS.has(ufCandidate)) {
-          detectedUf = ufCandidate
-          cidadeConfidence = 'high'
-        }
-        break
-      }
-    }
-
-    // Alternative: line like "Belo Horizonte - MG" or "Curitiba / PR"
-    const simpleCityUfMatch =
-      /\b([A-ZÀ-Ÿ][a-zà-ÿ]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ]+)?)\s*[/-]\s*([A-Z]{2})\b/.exec(line)
-    if (simpleCityUfMatch) {
-      const candidateUf = simpleCityUfMatch[2].toUpperCase()
-      if (BRAZILIAN_UFS.has(candidateUf)) {
-        detectedCidade = simpleCityUfMatch[1].trim()
-        detectedUf = candidateUf
-        cidadeUfSnippet = line
-        cidadeConfidence = 'medium'
-        break
-      }
-    }
-  }
-
-  // Look for standalone UF if city had no UF
-  if (!detectedUf) {
-    const ufAloneRegex = /(?:UF|ESTADO)[:\s]+([A-Za-z]{2})\b/i
-    for (const line of linesToSearch) {
-      const ufMatch = ufAloneRegex.exec(line)
-      if (ufMatch) {
-        const uf = ufMatch[1].toUpperCase()
-        if (BRAZILIAN_UFS.has(uf)) {
-          detectedUf = uf
-          if (!cidadeUfSnippet) cidadeUfSnippet = line
-          break
-        }
-      }
-    }
-  }
-
   if (detectedCidade) {
     fields.push({
       key: 'clienteCidade',
-      label: 'Cidade do Cliente',
+      label: 'Município/Cidade',
       value: detectedCidade,
       currentValue: currentState.clienteCidade || '',
       snippet: cidadeUfSnippet,
@@ -1587,7 +1908,7 @@ export function parseClientDataFromPdfText(
   if (detectedUf) {
     fields.push({
       key: 'clienteUf',
-      label: 'UF do Cliente',
+      label: 'UF/Estado',
       value: detectedUf,
       currentValue: currentState.clienteUf || '',
       snippet: cidadeUfSnippet,
@@ -1626,10 +1947,16 @@ export function parseClientDataFromPdfText(
     })
   }
 
-  // Se for Cartão CNPJ (docType === 'cnpj'), restringir os campos ao CNPJ, Nome Empresarial e Ramo de Atividade (Atividade Principal)
+  // Se for Cartão CNPJ (docType === 'cnpj'), incluir CNPJ, Nome Empresarial, Ramo de Atividade, Endereço, Cidade e UF
   const finalFields = isCnpjCardMode
     ? fields.filter(
-        (f) => f.key === 'clienteCnpj' || f.key === 'clienteNome' || f.key === 'clienteRamo',
+        (f) =>
+          f.key === 'clienteCnpj' ||
+          f.key === 'clienteNome' ||
+          f.key === 'clienteRamo' ||
+          f.key === 'clienteEndereco' ||
+          f.key === 'clienteCidade' ||
+          f.key === 'clienteUf',
       )
     : fields
 

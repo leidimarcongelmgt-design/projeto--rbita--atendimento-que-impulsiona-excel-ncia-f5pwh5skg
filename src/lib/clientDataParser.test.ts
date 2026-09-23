@@ -447,7 +447,7 @@ export function runClientParserSelfCheck(): { passed: boolean; results: string[]
     results.push(`FALHA: Cenário 21 - obteve ramo: "${ramo21}"`)
   }
 
-  // Teste 22: Extração direcionada de Cartão CNPJ com Atividade Econômica Principal em linha separada
+  // Teste 22: Extração direcionada de Cartão CNPJ com Atividade Econômica Principal e Endereço simples
   const testCnpjCard = `
     REPÚBLICA FEDERATIVA DO BRASIL
     CADASTRO NACIONAL DA PESSOA JURÍDICA
@@ -477,23 +477,19 @@ export function runClientParserSelfCheck(): { passed: boolean; results: string[]
   const n22 = r22.fields.find((f) => f.key === 'clienteNome')?.value
   const c22 = r22.fields.find((f) => f.key === 'clienteCnpj')?.value
   const ramo22 = r22.fields.find((f) => f.key === 'clienteRamo')?.value
-  const other22 = r22.fields.find(
-    (f) => f.key !== 'clienteNome' && f.key !== 'clienteCnpj' && f.key !== 'clienteRamo',
-  )
+  const end22 = r22.fields.find((f) => f.key === 'clienteEndereco')?.value
   if (
     n22 === 'RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA' &&
     c22 === '45.987.654/0001-88' &&
     ramo22 === '41.10-7-00 - Incorporação de empreendimentos imobiliários' &&
-    !other22
+    end22 === 'RUA DAS FLORES, 500'
   ) {
     results.push(
-      'OK: Cenário 22 (Cartão CNPJ - extração de CNPJ, Nome Empresarial e Atividade Econômica Principal em linhas separadas)',
+      'OK: Cenário 22 (Cartão CNPJ - extração de CNPJ, Nome Empresarial, Atividade Econômica Principal e Endereço)',
     )
   } else {
     passed = false
-    results.push(
-      `FALHA: Cenário 22 - n: ${n22}, c: ${c22}, ramo: ${ramo22}, outro: ${other22?.key}`,
-    )
+    results.push(`FALHA: Cenário 22 - n: ${n22}, c: ${c22}, ramo: ${ramo22}, end: ${end22}`)
   }
 
   // Teste 23: Extração direcionada de Inscrição Estadual (docType === 'ie')
@@ -639,6 +635,220 @@ export function runClientParserSelfCheck(): { passed: boolean; results: string[]
   } else {
     passed = false
     results.push(`FALHA: Cenário 27 - ramo: "${ramo27}"`)
+  }
+
+  // Teste 28: Cartão CNPJ com bloco oficial estruturado da Receita Federal
+  // Subcampos: LOGRADOURO, NÚMERO, COMPLEMENTO, CEP, BAIRRO/DISTRITO, MUNICÍPIO, UF
+  const testCnpjCardOfficialRFB = `
+    REPÚBLICA FEDERATIVA DO BRASIL
+    CADASTRO NACIONAL DA PESSOA JURÍDICA
+    NÚMERO DE INSCRIÇÃO
+    45.987.654/0001-88
+    MATRIZ
+    NOME EMPRESARIAL
+    RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA
+    TÍTULO DO ESTABELECIMENTO (NOME FANTASIA)
+    ESTRELA RESIDENCIAL
+    CÓDIGO E DESCRIÇÃO DA ATIVIDADE ECONÔMICA PRINCIPAL
+    41.10-7-00 - Incorporação de empreendimentos imobiliários
+    LOGRADOURO
+    RUA DAS FLORES
+    NÚMERO
+    123
+    COMPLEMENTO
+    SALA 2
+    CEP
+    29.000-000
+    BAIRRO/DISTRITO
+    CENTRO
+    MUNICÍPIO
+    VITORIA
+    UF
+    ES
+    SITUAÇÃO CADASTRAL
+    ATIVA
+  `
+  const r28 = parseClientDataFromPdfText(
+    testCnpjCardOfficialRFB,
+    DEFAULT_CALCULATOR_STATE,
+    true,
+    1,
+    undefined,
+    false,
+    'cnpj',
+  )
+  const n28 = r28.fields.find((f) => f.key === 'clienteNome')?.value
+  const c28 = r28.fields.find((f) => f.key === 'clienteCnpj')?.value
+  const ramo28 = r28.fields.find((f) => f.key === 'clienteRamo')?.value
+  const end28 = r28.fields.find((f) => f.key === 'clienteEndereco')?.value
+  const cid28 = r28.fields.find((f) => f.key === 'clienteCidade')?.value
+  const uf28 = r28.fields.find((f) => f.key === 'clienteUf')?.value
+
+  if (
+    n28 === 'RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA' &&
+    c28 === '45.987.654/0001-88' &&
+    ramo28 === '41.10-7-00 - Incorporação de empreendimentos imobiliários' &&
+    end28 === 'RUA DAS FLORES, 123 - SALA 2 - CENTRO - 29.000-000' &&
+    cid28 === 'VITORIA' &&
+    uf28 === 'ES'
+  ) {
+    results.push(
+      'OK: Cenário 28 (Cartão CNPJ oficial RFB - bloco composto de endereço, cidade e UF com complemento)',
+    )
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 28 - end: "${end28}", cid: "${cid28}", uf: "${uf28}"`)
+  }
+
+  // Teste 29: Cartão CNPJ oficial RFB sem complemento (placeholder "********" da RFB ignorado)
+  const testCnpjCardRFBNoComplement = `
+    REPÚBLICA FEDERATIVA DO BRASIL
+    CADASTRO NACIONAL DA PESSOA JURÍDICA
+    NÚMERO DE INSCRIÇÃO
+    45.987.654/0001-88
+    MATRIZ
+    NOME EMPRESARIAL
+    RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA
+    CÓDIGO E DESCRIÇÃO DA ATIVIDADE ECONÔMICA PRINCIPAL
+    41.10-7-00 - Incorporação de empreendimentos imobiliários
+    LOGRADOURO
+    AV PAULISTA
+    NÚMERO
+    1000
+    COMPLEMENTO
+    ********
+    CEP
+    01310-100
+    BAIRRO/DISTRITO
+    BELA VISTA
+    MUNICÍPIO
+    SAO PAULO
+    UF
+    SP
+  `
+  const r29 = parseClientDataFromPdfText(
+    testCnpjCardRFBNoComplement,
+    DEFAULT_CALCULATOR_STATE,
+    true,
+    1,
+    undefined,
+    false,
+    'cnpj',
+  )
+  const end29 = r29.fields.find((f) => f.key === 'clienteEndereco')?.value
+  const cid29 = r29.fields.find((f) => f.key === 'clienteCidade')?.value
+  const uf29 = r29.fields.find((f) => f.key === 'clienteUf')?.value
+
+  if (
+    end29 === 'AV PAULISTA, 1000 - BELA VISTA - 01310-100' &&
+    cid29 === 'SAO PAULO' &&
+    uf29 === 'SP'
+  ) {
+    results.push(
+      'OK: Cenário 29 (Cartão CNPJ oficial RFB - sem complemento com asteriscos ignorados)',
+    )
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 29 - end: "${end29}", cid: "${cid29}", uf: "${uf29}"`)
+  }
+
+  // Teste 30: Cartão CNPJ com linha única de endereço, município e UF
+  const testCnpjCardSingleLine = `
+    COMPROVANTE DE INSCRIÇÃO E DE SITUAÇÃO CADASTRAL
+    CNPJ: 45.987.654/0001-88
+    NOME EMPRESARIAL: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA
+    ATIVIDADE ECONÔMICA PRINCIPAL: 41.10-7-00 - Incorporação de empreendimentos imobiliários
+    ENDEREÇO: RUA DAS PALMEIRAS, 450 - BAIRRO INDUSTRIAL - CEP: 29010-000
+    MUNICÍPIO: VILA VELHA
+    ESTADO: ESPIRITO SANTO
+  `
+  const r30 = parseClientDataFromPdfText(
+    testCnpjCardSingleLine,
+    DEFAULT_CALCULATOR_STATE,
+    true,
+    1,
+    undefined,
+    false,
+    'cnpj',
+  )
+  const end30 = r30.fields.find((f) => f.key === 'clienteEndereco')?.value
+  const cid30 = r30.fields.find((f) => f.key === 'clienteCidade')?.value
+  const uf30 = r30.fields.find((f) => f.key === 'clienteUf')?.value
+
+  if (
+    end30 === 'RUA DAS PALMEIRAS, 450 - BAIRRO INDUSTRIAL' &&
+    cid30 === 'VILA VELHA' &&
+    uf30 === 'ES'
+  ) {
+    results.push(
+      'OK: Cenário 30 (Cartão CNPJ - linha única de endereço e estado por extenso convertido para sigla)',
+    )
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 30 - end: "${end30}", cid: "${cid30}", uf: "${uf30}"`)
+  }
+
+  // Teste 31: Cartão CNPJ com Município da Sede e UF da Sede
+  const testCnpjCardSedeLabels = `
+    NÚMERO DE INSCRIÇÃO: 45.987.654/0001-88
+    NOME EMPRESARIAL: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA
+    CÓDIGO E DESCRIÇÃO DA ATIVIDADE ECONÔMICA PRINCIPAL: 41.10-7-00 - Incorporação de empreendimentos imobiliários
+    LOGRADOURO: RUA RIO BRANCO, 80
+    BAIRRO: PRAIA DO CANTO
+    CEP: 29055-000
+    MUNICÍPIO DA SEDE: VITORIA
+    UF DA SEDE: ES
+  `
+  const r31 = parseClientDataFromPdfText(
+    testCnpjCardSedeLabels,
+    DEFAULT_CALCULATOR_STATE,
+    true,
+    1,
+    undefined,
+    false,
+    'cnpj',
+  )
+  const end31 = r31.fields.find((f) => f.key === 'clienteEndereco')?.value
+  const cid31 = r31.fields.find((f) => f.key === 'clienteCidade')?.value
+  const uf31 = r31.fields.find((f) => f.key === 'clienteUf')?.value
+
+  if (
+    end31 === 'RUA RIO BRANCO, 80 - PRAIA DO CANTO - 29055-000' &&
+    cid31 === 'VITORIA' &&
+    uf31 === 'ES'
+  ) {
+    results.push('OK: Cenário 31 (Cartão CNPJ - rótulos MUNICÍPIO DA SEDE e UF DA SEDE)')
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 31 - end: "${end31}", cid: "${cid31}", uf: "${uf31}"`)
+  }
+
+  // Teste 32: Não duplicação e exclusão de campos não encontrados (ausência de endereço)
+  const testCnpjCardWithoutAddress = `
+    REPÚBLICA FEDERATIVA DO BRASIL
+    NÚMERO DE INSCRIÇÃO: 45.987.654/0001-88
+    NOME EMPRESARIAL: RESIDENCIAL ESTRELA INCORPORADORA SPE LTDA
+    CÓDIGO E DESCRIÇÃO DA ATIVIDADE ECONÔMICA PRINCIPAL: 41.10-7-00 - Incorporação de empreendimentos imobiliários
+  `
+  const r32 = parseClientDataFromPdfText(
+    testCnpjCardWithoutAddress,
+    DEFAULT_CALCULATOR_STATE,
+    true,
+    1,
+    undefined,
+    false,
+    'cnpj',
+  )
+  const end32 = r32.fields.find((f) => f.key === 'clienteEndereco')
+  const cid32 = r32.fields.find((f) => f.key === 'clienteCidade')
+  const uf32 = r32.fields.find((f) => f.key === 'clienteUf')
+  if (!end32 && !cid32 && !uf32 && r32.fields.length === 3) {
+    results.push(
+      'OK: Cenário 32 (Cartão CNPJ sem endereço - campos de endereço não são incluídos indevidamente)',
+    )
+  } else {
+    passed = false
+    results.push(`FALHA: Cenário 32 - campos: ${r32.fields.map((f) => f.key).join(', ')}`)
   }
 
   return { passed, results }
