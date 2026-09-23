@@ -19,7 +19,16 @@ import {
   Sparkles,
   Loader2,
   ArrowRight,
+  Users,
+  DollarSign,
+  Boxes,
+  Briefcase,
+  Scale,
+  Phone,
+  Mail,
+  User,
 } from 'lucide-react'
+import { formatPhoneBR } from '@/lib/calculatorState'
 import { AttachedPdf, formatFileSize, getAttachedPdfArrayBuffer } from '@/lib/pdfStorage'
 import { extractTextFromPdf } from '@/lib/pdfTextExtractor'
 import { parseClientDataFromPdfText, ClientExtractionResult } from '@/lib/clientDataParser'
@@ -521,7 +530,306 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
         </CardContent>
       </Card>
 
-      {/* SEÇÃO 2: IMPORTAÇÃO DE ARQUIVO PDF (EXTRAÇÃO DE DADOS DO CLIENTE) */}
+      {/* SEÇÃO 2: CONTATOS DO CLIENTE (Financeiro, Estoque, RH e Representante Legal) */}
+      <Card className="border border-slate-200 card-shadow bg-white">
+        <CardHeader className="border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-[#1E3A5F]" />
+            <CardTitle className="text-lg font-bold text-slate-900">Contatos do Cliente</CardTitle>
+          </div>
+          <CardDescription className="text-slate-500">
+            Cadastre os contatos responsáveis por cada área da empresa do cliente (Nome, Telefone e
+            E-mail).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-6 space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* 1. Financeiro */}
+            <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 space-y-4 hover:border-slate-300 transition-colors">
+              <div className="flex items-center gap-2 pb-2 border-b border-slate-200 text-slate-800">
+                <div className="w-7 h-7 rounded-md bg-emerald-100 text-emerald-800 flex items-center justify-center">
+                  <DollarSign className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900">Financeiro</h4>
+                  <p className="text-[11px] text-slate-500">
+                    Contas a pagar/receber, tesouraria e faturamento
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="contFinNome"
+                    className="text-xs font-medium text-slate-700 flex items-center gap-1"
+                  >
+                    <User className="w-3 h-3 text-slate-400" />
+                    Nome para Contato
+                  </Label>
+                  <Input
+                    id="contFinNome"
+                    placeholder="Ex: Carlos Andrade"
+                    value={state.contFinNome}
+                    onChange={(e) => onChange({ contFinNome: e.target.value })}
+                    className="h-9 text-xs bg-white"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="contFinTelefone"
+                    className="text-xs font-medium text-slate-700 flex items-center gap-1"
+                  >
+                    <Phone className="w-3 h-3 text-slate-400" />
+                    Telefone
+                  </Label>
+                  <Input
+                    id="contFinTelefone"
+                    type="tel"
+                    placeholder="(00) 00000-0000"
+                    value={state.contFinTelefone}
+                    onChange={(e) => onChange({ contFinTelefone: formatPhoneBR(e.target.value) })}
+                    className="h-9 text-xs bg-white"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="contFinEmail"
+                    className="text-xs font-medium text-slate-700 flex items-center gap-1"
+                  >
+                    <Mail className="w-3 h-3 text-slate-400" />
+                    E-mail
+                  </Label>
+                  <Input
+                    id="contFinEmail"
+                    type="email"
+                    placeholder="financeiro@empresa.com.br"
+                    value={state.contFinEmail}
+                    onChange={(e) => onChange({ contFinEmail: e.target.value })}
+                    className="h-9 text-xs bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Estoque */}
+            <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 space-y-4 hover:border-slate-300 transition-colors">
+              <div className="flex items-center gap-2 pb-2 border-b border-slate-200 text-slate-800">
+                <div className="w-7 h-7 rounded-md bg-amber-100 text-amber-800 flex items-center justify-center">
+                  <Boxes className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900">Estoque</h4>
+                  <p className="text-[11px] text-slate-500">
+                    Logística, almoxarifado e suprimentos
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="contEstoqueNome"
+                    className="text-xs font-medium text-slate-700 flex items-center gap-1"
+                  >
+                    <User className="w-3 h-3 text-slate-400" />
+                    Nome para Contato
+                  </Label>
+                  <Input
+                    id="contEstoqueNome"
+                    placeholder="Ex: Mariana Silva"
+                    value={state.contEstoqueNome}
+                    onChange={(e) => onChange({ contEstoqueNome: e.target.value })}
+                    className="h-9 text-xs bg-white"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="contEstoqueTelefone"
+                    className="text-xs font-medium text-slate-700 flex items-center gap-1"
+                  >
+                    <Phone className="w-3 h-3 text-slate-400" />
+                    Telefone
+                  </Label>
+                  <Input
+                    id="contEstoqueTelefone"
+                    type="tel"
+                    placeholder="(00) 00000-0000"
+                    value={state.contEstoqueTelefone}
+                    onChange={(e) =>
+                      onChange({ contEstoqueTelefone: formatPhoneBR(e.target.value) })
+                    }
+                    className="h-9 text-xs bg-white"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="contEstoqueEmail"
+                    className="text-xs font-medium text-slate-700 flex items-center gap-1"
+                  >
+                    <Mail className="w-3 h-3 text-slate-400" />
+                    E-mail
+                  </Label>
+                  <Input
+                    id="contEstoqueEmail"
+                    type="email"
+                    placeholder="estoque@empresa.com.br"
+                    value={state.contEstoqueEmail}
+                    onChange={(e) => onChange({ contEstoqueEmail: e.target.value })}
+                    className="h-9 text-xs bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Recursos Humanos */}
+            <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 space-y-4 hover:border-slate-300 transition-colors">
+              <div className="flex items-center gap-2 pb-2 border-b border-slate-200 text-slate-800">
+                <div className="w-7 h-7 rounded-md bg-blue-100 text-blue-800 flex items-center justify-center">
+                  <Briefcase className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900">Recursos Humanos</h4>
+                  <p className="text-[11px] text-slate-500">
+                    Gestão de pessoas, folha e departamento pessoal
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="contRhNome"
+                    className="text-xs font-medium text-slate-700 flex items-center gap-1"
+                  >
+                    <User className="w-3 h-3 text-slate-400" />
+                    Nome para Contato
+                  </Label>
+                  <Input
+                    id="contRhNome"
+                    placeholder="Ex: Juliana Mendes"
+                    value={state.contRhNome}
+                    onChange={(e) => onChange({ contRhNome: e.target.value })}
+                    className="h-9 text-xs bg-white"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="contRhTelefone"
+                    className="text-xs font-medium text-slate-700 flex items-center gap-1"
+                  >
+                    <Phone className="w-3 h-3 text-slate-400" />
+                    Telefone
+                  </Label>
+                  <Input
+                    id="contRhTelefone"
+                    type="tel"
+                    placeholder="(00) 00000-0000"
+                    value={state.contRhTelefone}
+                    onChange={(e) => onChange({ contRhTelefone: formatPhoneBR(e.target.value) })}
+                    className="h-9 text-xs bg-white"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="contRhEmail"
+                    className="text-xs font-medium text-slate-700 flex items-center gap-1"
+                  >
+                    <Mail className="w-3 h-3 text-slate-400" />
+                    E-mail
+                  </Label>
+                  <Input
+                    id="contRhEmail"
+                    type="email"
+                    placeholder="rh@empresa.com.br"
+                    value={state.contRhEmail}
+                    onChange={(e) => onChange({ contRhEmail: e.target.value })}
+                    className="h-9 text-xs bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Representante Legal */}
+            <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 space-y-4 hover:border-slate-300 transition-colors">
+              <div className="flex items-center gap-2 pb-2 border-b border-slate-200 text-slate-800">
+                <div className="w-7 h-7 rounded-md bg-purple-100 text-purple-800 flex items-center justify-center">
+                  <Scale className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900">Representante Legal</h4>
+                  <p className="text-[11px] text-slate-500">
+                    Sócio administrador, procurador ou diretoria executiva
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="contLegalNome"
+                    className="text-xs font-medium text-slate-700 flex items-center gap-1"
+                  >
+                    <User className="w-3 h-3 text-slate-400" />
+                    Nome para Contato
+                  </Label>
+                  <Input
+                    id="contLegalNome"
+                    placeholder="Ex: Dr. Roberto Guimarães"
+                    value={state.contLegalNome}
+                    onChange={(e) => onChange({ contLegalNome: e.target.value })}
+                    className="h-9 text-xs bg-white"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="contLegalTelefone"
+                    className="text-xs font-medium text-slate-700 flex items-center gap-1"
+                  >
+                    <Phone className="w-3 h-3 text-slate-400" />
+                    Telefone
+                  </Label>
+                  <Input
+                    id="contLegalTelefone"
+                    type="tel"
+                    placeholder="(00) 00000-0000"
+                    value={state.contLegalTelefone}
+                    onChange={(e) => onChange({ contLegalTelefone: formatPhoneBR(e.target.value) })}
+                    className="h-9 text-xs bg-white"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="contLegalEmail"
+                    className="text-xs font-medium text-slate-700 flex items-center gap-1"
+                  >
+                    <Mail className="w-3 h-3 text-slate-400" />
+                    E-mail
+                  </Label>
+                  <Input
+                    id="contLegalEmail"
+                    type="email"
+                    placeholder="legal@empresa.com.br"
+                    value={state.contLegalEmail}
+                    onChange={(e) => onChange({ contLegalEmail: e.target.value })}
+                    className="h-9 text-xs bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* SEÇÃO 3: IMPORTAÇÃO DE ARQUIVO PDF (EXTRAÇÃO DE DADOS DO CLIENTE) */}
       <Card className="border border-slate-200 card-shadow bg-white">
         <CardHeader className="border-b border-slate-100 pb-4">
           <div className="flex items-center gap-2">

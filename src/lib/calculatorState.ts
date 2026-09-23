@@ -83,6 +83,23 @@ export function parseStateFromUrl(search: string): CalculatorState {
     clienteCidade: parseStr('clienteCidade', DEFAULT_CALCULATOR_STATE.clienteCidade),
     clienteUf: parseStr('clienteUf', DEFAULT_CALCULATOR_STATE.clienteUf),
 
+    // Client Contacts
+    contFinNome: parseStr('contFinNome', DEFAULT_CALCULATOR_STATE.contFinNome),
+    contFinTelefone: parseStr('contFinTelefone', DEFAULT_CALCULATOR_STATE.contFinTelefone),
+    contFinEmail: parseStr('contFinEmail', DEFAULT_CALCULATOR_STATE.contFinEmail),
+    contEstoqueNome: parseStr('contEstoqueNome', DEFAULT_CALCULATOR_STATE.contEstoqueNome),
+    contEstoqueTelefone: parseStr(
+      'contEstoqueTelefone',
+      DEFAULT_CALCULATOR_STATE.contEstoqueTelefone,
+    ),
+    contEstoqueEmail: parseStr('contEstoqueEmail', DEFAULT_CALCULATOR_STATE.contEstoqueEmail),
+    contRhNome: parseStr('contRhNome', DEFAULT_CALCULATOR_STATE.contRhNome),
+    contRhTelefone: parseStr('contRhTelefone', DEFAULT_CALCULATOR_STATE.contRhTelefone),
+    contRhEmail: parseStr('contRhEmail', DEFAULT_CALCULATOR_STATE.contRhEmail),
+    contLegalNome: parseStr('contLegalNome', DEFAULT_CALCULATOR_STATE.contLegalNome),
+    contLegalTelefone: parseStr('contLegalTelefone', DEFAULT_CALCULATOR_STATE.contLegalTelefone),
+    contLegalEmail: parseStr('contLegalEmail', DEFAULT_CALCULATOR_STATE.contLegalEmail),
+
     periodoInicio: parseStr('periodoInicio', DEFAULT_CALCULATOR_STATE.periodoInicio),
     periodoFim: parseStr('periodoFim', DEFAULT_CALCULATOR_STATE.periodoFim),
     dataEmissao: parseStr('dataEmissao', DEFAULT_CALCULATOR_STATE.dataEmissao),
@@ -143,6 +160,20 @@ export function serializeStateToUrl(state: CalculatorState): string {
   if (state.clienteCidade) params.set('clienteCidade', state.clienteCidade)
   if (state.clienteUf) params.set('clienteUf', state.clienteUf)
 
+  // Client Contacts
+  if (state.contFinNome) params.set('contFinNome', state.contFinNome)
+  if (state.contFinTelefone) params.set('contFinTelefone', state.contFinTelefone)
+  if (state.contFinEmail) params.set('contFinEmail', state.contFinEmail)
+  if (state.contEstoqueNome) params.set('contEstoqueNome', state.contEstoqueNome)
+  if (state.contEstoqueTelefone) params.set('contEstoqueTelefone', state.contEstoqueTelefone)
+  if (state.contEstoqueEmail) params.set('contEstoqueEmail', state.contEstoqueEmail)
+  if (state.contRhNome) params.set('contRhNome', state.contRhNome)
+  if (state.contRhTelefone) params.set('contRhTelefone', state.contRhTelefone)
+  if (state.contRhEmail) params.set('contRhEmail', state.contRhEmail)
+  if (state.contLegalNome) params.set('contLegalNome', state.contLegalNome)
+  if (state.contLegalTelefone) params.set('contLegalTelefone', state.contLegalTelefone)
+  if (state.contLegalEmail) params.set('contLegalEmail', state.contLegalEmail)
+
   if (state.periodoInicio) params.set('periodoInicio', state.periodoInicio)
   if (state.periodoFim) params.set('periodoFim', state.periodoFim)
   if (state.dataEmissao) params.set('dataEmissao', state.dataEmissao)
@@ -191,4 +222,24 @@ export function formatDateBR(dateStr: string): string {
     return `${d}/${m}/${y}`
   }
   return dateStr
+}
+
+/**
+ * Formats/masks Brazilian phone numbers as (XX) XXXXX-XXXX (mobile) or (XX) XXXX-XXXX (landline)
+ */
+export function formatPhoneBR(value: string): string {
+  if (!value) return ''
+  const digits = value.replace(/\D/g, '').slice(0, 11)
+  if (digits.length <= 2) {
+    return digits.length > 0 ? `(${digits}` : ''
+  }
+  if (digits.length <= 6) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2)}`
+  }
+  if (digits.length <= 10) {
+    // Landline: (XX) XXXX-XXXX
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`
+  }
+  // Mobile (11 digits): (XX) XXXXX-XXXX
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`
 }

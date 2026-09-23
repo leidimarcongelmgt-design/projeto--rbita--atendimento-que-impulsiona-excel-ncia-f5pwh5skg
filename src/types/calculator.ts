@@ -50,6 +50,20 @@ export interface CalculatorState {
   clienteCidade: string
   clienteUf: string
 
+  // Client Contacts
+  contFinNome: string
+  contFinTelefone: string
+  contFinEmail: string
+  contEstoqueNome: string
+  contEstoqueTelefone: string
+  contEstoqueEmail: string
+  contRhNome: string
+  contRhTelefone: string
+  contRhEmail: string
+  contLegalNome: string
+  contLegalTelefone: string
+  contLegalEmail: string
+
   periodoInicio: string
   periodoFim: string
   dataEmissao: string
@@ -101,6 +115,19 @@ export const DEFAULT_CALCULATOR_STATE: CalculatorState = {
   clienteEndereco: '',
   clienteCidade: '',
   clienteUf: '',
+
+  contFinNome: '',
+  contFinTelefone: '',
+  contFinEmail: '',
+  contEstoqueNome: '',
+  contEstoqueTelefone: '',
+  contEstoqueEmail: '',
+  contRhNome: '',
+  contRhTelefone: '',
+  contRhEmail: '',
+  contLegalNome: '',
+  contLegalTelefone: '',
+  contLegalEmail: '',
 
   periodoInicio: '',
   periodoFim: '',

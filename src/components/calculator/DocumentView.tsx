@@ -2,7 +2,18 @@ import React from 'react'
 import { CalculatorState, ComputedFinancials } from '@/types/calculator'
 import { formatBRL, formatDateBR, formatPercent } from '@/lib/calculatorState'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Printer, Building2, UserCheck, Calendar, FileText } from 'lucide-react'
+import {
+  ArrowLeft,
+  Printer,
+  Building2,
+  UserCheck,
+  Calendar,
+  FileText,
+  Phone,
+  Mail,
+  User,
+  Users,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AttachedPdf, formatFileSize } from '@/lib/pdfStorage'
 
@@ -382,8 +393,141 @@ export const DocumentView: React.FC<DocumentViewProps> = ({
           </div>
         </div>
 
-        {/* 3. ASSINATURAS DO DOCUMENTO */}
+        {/* 3. SEÇÃO: CONTATOS DO CLIENTE (Renderizado se algum campo estiver preenchido) */}
+        {(state.contFinNome ||
+          state.contFinTelefone ||
+          state.contFinEmail ||
+          state.contEstoqueNome ||
+          state.contEstoqueTelefone ||
+          state.contEstoqueEmail ||
+          state.contRhNome ||
+          state.contRhTelefone ||
+          state.contRhEmail ||
+          state.contLegalNome ||
+          state.contLegalTelefone ||
+          state.contLegalEmail) && (
+          <div className="mb-8 border border-slate-200 rounded p-4 bg-slate-50/40 print-break-inside-avoid">
+            <div className="flex items-center gap-2 border-b border-slate-200 pb-2 mb-3">
+              <Users className="w-4 h-4 text-[#1E3A5F]" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#1E3A5F]">
+                4. Contatos Responsáveis do Cliente
+              </h3>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              {/* Financeiro */}
+              {(state.contFinNome || state.contFinTelefone || state.contFinEmail) && (
+                <div className="p-3 bg-white rounded border border-slate-200/80 space-y-1">
+                  <p className="font-bold text-slate-800 text-[11px] uppercase tracking-wider text-emerald-800 border-b border-slate-100 pb-1 mb-1">
+                    Financeiro
+                  </p>
+                  {state.contFinNome && (
+                    <p className="font-semibold text-slate-800 flex items-center gap-1.5">
+                      <User className="w-3 h-3 text-slate-400 shrink-0" />
+                      <span className="truncate">{state.contFinNome}</span>
+                    </p>
+                  )}
+                  {state.contFinTelefone && (
+                    <p className="text-slate-600 flex items-center gap-1.5">
+                      <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                      <span className="tabular-nums">{state.contFinTelefone}</span>
+                    </p>
+                  )}
+                  {state.contFinEmail && (
+                    <p className="text-slate-600 flex items-center gap-1.5 break-all">
+                      <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                      <span>{state.contFinEmail}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Estoque */}
+              {(state.contEstoqueNome || state.contEstoqueTelefone || state.contEstoqueEmail) && (
+                <div className="p-3 bg-white rounded border border-slate-200/80 space-y-1">
+                  <p className="font-bold text-slate-800 text-[11px] uppercase tracking-wider text-amber-800 border-b border-slate-100 pb-1 mb-1">
+                    Estoque
+                  </p>
+                  {state.contEstoqueNome && (
+                    <p className="font-semibold text-slate-800 flex items-center gap-1.5">
+                      <User className="w-3 h-3 text-slate-400 shrink-0" />
+                      <span className="truncate">{state.contEstoqueNome}</span>
+                    </p>
+                  )}
+                  {state.contEstoqueTelefone && (
+                    <p className="text-slate-600 flex items-center gap-1.5">
+                      <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                      <span className="tabular-nums">{state.contEstoqueTelefone}</span>
+                    </p>
+                  )}
+                  {state.contEstoqueEmail && (
+                    <p className="text-slate-600 flex items-center gap-1.5 break-all">
+                      <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                      <span>{state.contEstoqueEmail}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Recursos Humanos */}
+              {(state.contRhNome || state.contRhTelefone || state.contRhEmail) && (
+                <div className="p-3 bg-white rounded border border-slate-200/80 space-y-1">
+                  <p className="font-bold text-slate-800 text-[11px] uppercase tracking-wider text-blue-800 border-b border-slate-100 pb-1 mb-1">
+                    Recursos Humanos
+                  </p>
+                  {state.contRhNome && (
+                    <p className="font-semibold text-slate-800 flex items-center gap-1.5">
+                      <User className="w-3 h-3 text-slate-400 shrink-0" />
+                      <span className="truncate">{state.contRhNome}</span>
+                    </p>
+                  )}
+                  {state.contRhTelefone && (
+                    <p className="text-slate-600 flex items-center gap-1.5">
+                      <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                      <span className="tabular-nums">{state.contRhTelefone}</span>
+                    </p>
+                  )}
+                  {state.contRhEmail && (
+                    <p className="text-slate-600 flex items-center gap-1.5 break-all">
+                      <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                      <span>{state.contRhEmail}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Representante Legal */}
+              {(state.contLegalNome || state.contLegalTelefone || state.contLegalEmail) && (
+                <div className="p-3 bg-white rounded border border-slate-200/80 space-y-1">
+                  <p className="font-bold text-slate-800 text-[11px] uppercase tracking-wider text-purple-800 border-b border-slate-100 pb-1 mb-1">
+                    Representante Legal
+                  </p>
+                  {state.contLegalNome && (
+                    <p className="font-semibold text-slate-800 flex items-center gap-1.5">
+                      <User className="w-3 h-3 text-slate-400 shrink-0" />
+                      <span className="truncate">{state.contLegalNome}</span>
+                    </p>
+                  )}
+                  {state.contLegalTelefone && (
+                    <p className="text-slate-600 flex items-center gap-1.5">
+                      <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                      <span className="tabular-nums">{state.contLegalTelefone}</span>
+                    </p>
+                  )}
+                  {state.contLegalEmail && (
+                    <p className="text-slate-600 flex items-center gap-1.5 break-all">
+                      <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                      <span>{state.contLegalEmail}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 4. ASSINATURAS DO DOCUMENTO */}
         <div className="mt-16 pt-8 border-t border-slate-200 print-break-inside-avoid">
+          {' '}
           <div className="grid grid-cols-2 gap-12 text-center text-xs">
             <div>
               <div className="border-b border-slate-400 w-3/4 mx-auto mb-2"></div>
@@ -395,7 +539,9 @@ export const DocumentView: React.FC<DocumentViewProps> = ({
             <div>
               <div className="border-b border-slate-400 w-3/4 mx-auto mb-2"></div>
               <p className="font-bold text-slate-800">
-                {state.clienteNome || 'Cliente / Representante Legal'}
+                {state.contLegalNome
+                  ? `${state.contLegalNome} (${state.clienteNome || 'Cliente'})`
+                  : state.clienteNome || 'Cliente / Representante Legal'}
               </p>
               <p className="text-slate-500">De Acordo / Ciência</p>
             </div>
