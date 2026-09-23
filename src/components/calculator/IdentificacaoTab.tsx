@@ -1,4 +1,4 @@
-import React, { useRef } from 'react'
+import React, { useRef, useState, useCallback } from 'react'
 import { CalculatorState } from '@/types/calculator'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -18,15 +18,21 @@ import {
   Download,
   CheckCircle2,
   ShieldCheck,
+  Sparkles,
+  Loader2,
 } from 'lucide-react'
-import { AttachedPdf, formatFileSize } from '@/lib/pdfStorage'
+import { AttachedPdf, formatFileSize, getAttachedPdfArrayBuffer } from '@/lib/pdfStorage'
+import { extractTextFromPdf } from '@/lib/pdfTextExtractor'
+import { parseClientDataFromPdfText, ClientExtractionResult } from '@/lib/clientDataParser'
+import { PdfDataReviewModal } from './PdfDataReviewModal'
+import { toast } from 'sonner'
 
 interface IdentificacaoTabProps {
   state: CalculatorState
   onChange: (patch: Partial<CalculatorState>) => void
   onGenerateDocument: () => void
   attachedPdf: AttachedPdf | null
-  onUploadPdf: (file: File) => void
+  onUploadPdf: (file: File) => Promise<ArrayBuffer | null> | void
   onRemovePdf: () => void
 }
 
@@ -41,6 +47,71 @@ export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
   const companyFileRef = useRef<HTMLInputElement>(null)
   const clientFileRef = useRef<HTMLInputElement>(null)
   const pdfFileRef = useRef<HTMLInputElement>(null)
+
+  // PDF Data Extraction states
+  const [isExtracting, setIsExtracting] = useState(false)
+  const [reviewModalOpen, setReviewModalOpen] = useState(false)
+  const [extractionResult, setExtractionResult] = useState<ClientExtractionResult | null>(null)
+  const [activePdfName, setActivePdfName] = useState<string>('')
+
+  // Process text and open review modal
+  const runExtractionOnBuffer = useCallback(
+    async (buffer: ArrayBuffer, pdfName: string) => {
+      setIsExtracting(true)
+      setActivePdfName(pdfName)
+      setReviewModalOpen(true)
+
+      try {
+        const textResult = await extractTextFromPdf(buffer)
+        const parsed = parseClientDataFromPdfText(
+          textResult.fullText,
+          state,
+          textResult.hasTextLayer,
+          textResult.totalPages,
+          textResult.error,
+        )
+        setExtractionResult(parsed)
+      } catch (err: unknown) {
+        console.error('Erro na extração de texto do PDF:', err)
+        setExtractionResult({
+          fields: [],
+          rawText: '',
+          hasTextLayer: false,
+          totalPages: 0,
+          errorMessage: 'Erro inesperado ao processar o conteúdo do PDF.',
+        })
+      } finally {
+        setIsExtracting(false)
+      }
+    },
+    [state],
+  )
+
+  // Trigger re-extraction manually on currently attached PDF
+  const handleManualExtraction = useCallback(async () => {
+    if (!attachedPdf) {
+      toast.error('Nenhum PDF anexado para extração.')
+      return
+    }
+    const buffer = await getAttachedPdfArrayBuffer(attachedPdf)
+    if (!buffer) {
+      toast.error('Não foi possível obter o conteúdo do PDF anexado para reprocessamento.')
+      return
+    }
+    await runExtractionOnBuffer(buffer, attachedPdf.name)
+  }, [attachedPdf, runExtractionOnBuffer])
+
+  // Apply chosen fields to calculator state and URL
+  const handleApplyExtractedData = useCallback(
+    (patch: Partial<CalculatorState>) => {
+      onChange(patch)
+      const count = Object.keys(patch).length
+      toast.success(
+        `${count} ${count === 1 ? 'campo do cliente preenchido' : 'campos do cliente preenchidos'} com sucesso!`,
+      )
+    },
+    [onChange],
+  )
 
   // Compress & resize image to data URL to preserve URL length
   const handleImageUpload = (
@@ -152,10 +223,17 @@ export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
     }
   }
 
-  const handlePdfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePdfChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    onUploadPdf(file)
+
+    // Read buffer first for auto-extraction
+    const buffer = await file.arrayBuffer()
+    await onUploadPdf(file)
+
+    // Trigger automatic extraction right upon import
+    runExtractionOnBuffer(buffer, file.name)
+
     // reset input so user can pick same file again if desired
     e.target.value = ''
   }
@@ -752,6 +830,26 @@ export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
                         <ExternalLink className="w-3.5 h-3.5" /> Abrir Documento em Nova Aba
                       </Button>
 
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleManualExtraction}
+                        disabled={isExtracting}
+                        className="text-xs h-9 px-4 border-blue-300 text-blue-700 hover:bg-blue-50 gap-2 font-medium bg-white"
+                        title="Extrair automaticamente dados do cliente a partir do texto deste PDF"
+                      >
+                        {isExtracting ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Extraindo Dados...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3.5 h-3.5 text-blue-600" /> Extrair Dados do
+                            Cliente
+                          </>
+                        )}
+                      </Button>
+
                       <a
                         href={attachedPdf.blobUrl}
                         download={attachedPdf.name}
@@ -864,6 +962,16 @@ export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
           </div>
         </CardContent>
       </Card>
+
+      {/* Modal de Revisão e Confirmação de Dados Extraídos do PDF */}
+      <PdfDataReviewModal
+        open={reviewModalOpen}
+        onOpenChange={setReviewModalOpen}
+        extractionResult={extractionResult}
+        onApply={handleApplyExtractedData}
+        isExtracting={isExtracting}
+        pdfName={activePdfName}
+      />
     </div>
   )
 }

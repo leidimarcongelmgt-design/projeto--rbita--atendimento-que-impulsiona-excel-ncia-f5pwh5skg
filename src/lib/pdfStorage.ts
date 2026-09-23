@@ -5,6 +5,10 @@ export interface AttachedPdf {
   uploadedAt: string
 }
 
+export function getMemoryPdf(): AttachedPdf | null {
+  return memoryPdf
+}
+
 const STORAGE_KEY = 'dossie_attached_pdf_meta'
 const STORAGE_DATA_KEY = 'dossie_attached_pdf_base64'
 // 3MB limit for sessionStorage
@@ -145,4 +149,44 @@ export function clearAttachedPdf(): void {
   } catch {
     // Ignore
   }
+}
+
+/**
+ * Retrieves the ArrayBuffer of the currently attached PDF (from memory or session)
+ */
+export async function getAttachedPdfArrayBuffer(
+  attached: AttachedPdf,
+): Promise<ArrayBuffer | null> {
+  // Try fetching from blobUrl first
+  if (attached.blobUrl) {
+    try {
+      const res = await fetch(attached.blobUrl)
+      if (res.ok) {
+        return await res.arrayBuffer()
+      }
+    } catch {
+      // Fallback below
+    }
+  }
+
+  // Fallback to sessionStorage base64 if available
+  if (typeof sessionStorage !== 'undefined') {
+    try {
+      const base64 = sessionStorage.getItem(STORAGE_DATA_KEY)
+      if (base64) {
+        const parts = base64.split(',')
+        const base64Content = parts[1] || parts[0] || ''
+        const byteCharacters = atob(base64Content)
+        const byteNumbers = new Uint8Array(byteCharacters.length)
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i)
+        }
+        return byteNumbers.buffer as ArrayBuffer
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  return null
 }

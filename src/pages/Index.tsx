@@ -60,17 +60,20 @@ export default function Index() {
   }, [state])
 
   // PDF handlers
-  const handleUploadPdf = useCallback(async (file: File) => {
+  const handleUploadPdf = useCallback(async (file: File): Promise<ArrayBuffer | null> => {
     if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
       toast.error('Por favor, selecione um arquivo no formato PDF (.pdf).')
-      return
+      return null
     }
     try {
+      const buffer = await file.arrayBuffer()
       const saved = await savePdfFile(file)
       setAttachedPdf(saved)
       toast.success(`PDF "${file.name}" importado com sucesso!`)
+      return buffer
     } catch {
       toast.error('Erro ao ler o arquivo PDF.')
+      return null
     }
   }, [])
 
