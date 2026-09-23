@@ -158,6 +158,25 @@ export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
               </div>
 
               <div className="flex items-center gap-2">
+                {state.logoData && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      // Preencher 100% da área do container
+                      onChange({
+                        logoWidth: 800,
+                        logoHeight: 250,
+                      })
+                    }}
+                    className="text-xs h-8 text-blue-700 border-blue-200 bg-blue-50/50 hover:bg-blue-100/70 gap-1.5"
+                    title="Expandir a logo para preencher todo o espaço disponível"
+                  >
+                    Preencher Todo o Espaço
+                  </Button>
+                )}
+
                 <Button
                   type="button"
                   variant="outline"
@@ -207,27 +226,45 @@ export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
               </div>
             </div>
 
-            {/* Preview Box */}
-            <div className="mt-4 flex flex-col items-center justify-center min-h-[140px] bg-white rounded border border-slate-200 p-4">
+            {/* Preview Box - Preenchimento total do espaço em branco */}
+            <div className="mt-4 flex flex-col items-center justify-center min-h-[160px] bg-white rounded-lg border border-slate-200 p-2 sm:p-4 overflow-hidden shadow-sm">
               {state.logoData ? (
-                <div className="flex flex-col items-center gap-2">
-                  <img
-                    src={state.logoData}
-                    alt="Logo Emissor"
+                <div className="flex flex-col items-center w-full">
+                  <div
+                    className="flex items-center justify-center w-full overflow-hidden rounded bg-slate-50/70 p-2 sm:p-4 transition-all duration-200"
                     style={{
-                      maxWidth: '100%',
-                      width: state.logoWidth ? `${Math.min(state.logoWidth, 600)}px` : 'auto',
-                      height: state.logoHeight ? `${Math.min(state.logoHeight, 200)}px` : 'auto',
-                      objectFit: 'contain',
+                      width: '100%',
+                      maxWidth: state.logoWidth ? `${Math.min(state.logoWidth, 1200)}px` : '100%',
+                      height: state.logoHeight ? `${Math.min(state.logoHeight, 600)}px` : 'auto',
+                      minHeight: '140px',
                     }}
-                    className="transition-all duration-200"
-                  />
-                  <span className="text-xs text-slate-400">
-                    {state.logoWidth}px × {state.logoHeight}px
-                  </span>
+                  >
+                    <img
+                      src={state.logoData}
+                      alt="Logo Emissor"
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        maxHeight: state.logoHeight
+                          ? `${Math.min(state.logoHeight, 600)}px`
+                          : '320px',
+                        objectFit: 'contain',
+                      }}
+                      className="transition-all duration-200 w-full drop-shadow-xs"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between w-full mt-2.5 pt-2 border-t border-slate-100 text-[11px] text-slate-500 px-1 gap-2">
+                    <span className="text-emerald-700 font-medium flex items-center gap-1.5 bg-emerald-50 px-2 py-0.5 rounded">
+                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      Logo preenchendo o espaço reservado
+                    </span>
+                    <span className="tabular-nums font-mono text-slate-400">
+                      {state.logoWidth}px × {state.logoHeight}px
+                    </span>
+                  </div>
                 </div>
               ) : (
-                <div className="text-center py-6 text-slate-400">
+                <div className="text-center py-8 text-slate-400">
                   <Building2 className="w-10 h-10 mx-auto mb-2 opacity-30 text-slate-500" />
                   <p className="text-xs">Nenhuma logo enviada para o emissor.</p>
                 </div>
@@ -374,6 +411,25 @@ export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
               </div>
 
               <div className="flex items-center gap-2">
+                {state.clientLogoData && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      // Preencher 100% da área do container
+                      onChange({
+                        clientLogoWidth: 600,
+                        clientLogoHeight: 220,
+                      })
+                    }}
+                    className="text-xs h-8 text-blue-700 border-blue-200 bg-blue-50/50 hover:bg-blue-100/70 gap-1.5"
+                    title="Expandir o logotipo para preencher todo o espaço disponível"
+                  >
+                    Preencher Todo o Espaço
+                  </Button>
+                )}
+
                 <Button
                   type="button"
                   variant="outline"
@@ -425,31 +481,49 @@ export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
               </div>
             </div>
 
-            {/* Preview Box */}
-            <div className="mt-4 flex flex-col items-center justify-center min-h-[120px] bg-white rounded border border-slate-200 p-4">
+            {/* Preview Box - Preenchimento total do espaço em branco */}
+            <div className="mt-4 flex flex-col items-center justify-center min-h-[140px] bg-white rounded-lg border border-slate-200 p-2 sm:p-4 overflow-hidden shadow-sm">
               {state.clientLogoData ? (
-                <div className="flex flex-col items-center gap-2">
-                  <img
-                    src={state.clientLogoData}
-                    alt="Logo Cliente"
+                <div className="flex flex-col items-center w-full">
+                  <div
+                    className="flex items-center justify-center w-full overflow-hidden rounded bg-slate-50/70 p-2 sm:p-4 transition-all duration-200"
                     style={{
-                      maxWidth: '100%',
-                      width: state.clientLogoWidth
-                        ? `${Math.min(state.clientLogoWidth, 400)}px`
-                        : 'auto',
+                      width: '100%',
+                      maxWidth: state.clientLogoWidth
+                        ? `${Math.min(state.clientLogoWidth, 800)}px`
+                        : '100%',
                       height: state.clientLogoHeight
-                        ? `${Math.min(state.clientLogoHeight, 200)}px`
+                        ? `${Math.min(state.clientLogoHeight, 400)}px`
                         : 'auto',
-                      objectFit: 'contain',
+                      minHeight: '120px',
                     }}
-                    className="transition-all duration-200"
-                  />
-                  <span className="text-xs text-slate-400">
-                    {state.clientLogoWidth}px × {state.clientLogoHeight}px
-                  </span>
+                  >
+                    <img
+                      src={state.clientLogoData}
+                      alt="Logo Cliente"
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        maxHeight: state.clientLogoHeight
+                          ? `${Math.min(state.clientLogoHeight, 400)}px`
+                          : '240px',
+                        objectFit: 'contain',
+                      }}
+                      className="transition-all duration-200 w-full drop-shadow-xs"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between w-full mt-2.5 pt-2 border-t border-slate-100 text-[11px] text-slate-500 px-1 gap-2">
+                    <span className="text-emerald-700 font-medium flex items-center gap-1.5 bg-emerald-50 px-2 py-0.5 rounded">
+                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      Logo preenchendo o espaço reservado
+                    </span>
+                    <span className="tabular-nums font-mono text-slate-400">
+                      {state.clientLogoWidth}px × {state.clientLogoHeight}px
+                    </span>
+                  </div>
                 </div>
               ) : (
-                <div className="text-center py-5 text-slate-400">
+                <div className="text-center py-6 text-slate-400">
                   <UserCheck className="w-8 h-8 mx-auto mb-2 opacity-30 text-slate-500" />
                   <p className="text-xs">Nenhum logotipo enviado para o cliente.</p>
                 </div>

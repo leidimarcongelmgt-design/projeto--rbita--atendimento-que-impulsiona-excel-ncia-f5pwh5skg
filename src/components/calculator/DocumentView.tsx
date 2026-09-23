@@ -51,17 +51,21 @@ export const DocumentView: React.FC<DocumentViewProps> = ({ state, computed, onB
         <div className="border-b-2 border-[#1E3A5F] pb-6 mb-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
             {/* Logo do Emissor ou Nome */}
-            <div className="space-y-2">
+            <div className="space-y-2 max-w-[340px]">
               {state.logoData ? (
-                <img
-                  src={state.logoData}
-                  alt={state.empresaNome || 'Logo Emissor'}
-                  style={{
-                    maxHeight: '70px',
-                    width: 'auto',
-                    objectFit: 'contain',
-                  }}
-                />
+                <div className="flex items-center max-w-[300px]">
+                  <img
+                    src={state.logoData}
+                    alt={state.empresaNome || 'Logo Emissor'}
+                    style={{
+                      maxHeight: state.logoHeight ? `${Math.min(state.logoHeight, 110)}px` : '90px',
+                      maxWidth: '100%',
+                      width: 'auto',
+                      objectFit: 'contain',
+                    }}
+                    className="drop-shadow-xs"
+                  />
+                </div>
               ) : (
                 <div className="flex items-center gap-2 text-[#1E3A5F]">
                   <Building2 className="w-6 h-6" />
@@ -88,19 +92,23 @@ export const DocumentView: React.FC<DocumentViewProps> = ({ state, computed, onB
             </div>
 
             {/* Logo do Cliente ou Dados */}
-            <div className="text-left sm:text-right space-y-2 self-start sm:self-auto">
+            <div className="text-left sm:text-right space-y-2 self-start sm:self-auto max-w-[340px]">
               {state.clientLogoData ? (
-                <img
-                  src={state.clientLogoData}
-                  alt={state.clienteNome || 'Logo Cliente'}
-                  style={{
-                    maxHeight: '65px',
-                    width: 'auto',
-                    objectFit: 'contain',
-                    marginLeft: 'auto',
-                  }}
-                  className="sm:ml-auto"
-                />
+                <div className="flex items-center sm:justify-end max-w-[300px] sm:ml-auto">
+                  <img
+                    src={state.clientLogoData}
+                    alt={state.clienteNome || 'Logo Cliente'}
+                    style={{
+                      maxHeight: state.clientLogoHeight
+                        ? `${Math.min(state.clientLogoHeight, 100)}px`
+                        : '85px',
+                      maxWidth: '100%',
+                      width: 'auto',
+                      objectFit: 'contain',
+                    }}
+                    className="sm:ml-auto drop-shadow-xs"
+                  />
+                </div>
               ) : (
                 <div className="flex items-center sm:justify-end gap-1.5 text-slate-500">
                   <UserCheck className="w-5 h-5 text-slate-400" />
