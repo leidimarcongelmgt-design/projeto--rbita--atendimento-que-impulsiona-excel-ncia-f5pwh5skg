@@ -55,12 +55,11 @@ interface ClienteTabProps {
   onChange: (patch: Partial<CalculatorState>) => void
   onNavigateTab: (tab: CalculatorState['tab']) => void
   onGenerateDocument: () => void
-  attachedPdf: AttachedPdf | null
-  onUploadPdf: (file: File, category?: PdfDocumentCategory) => Promise<ArrayBuffer | null> | void
-  onRemovePdf: (category?: PdfDocumentCategory) => void
   attachedCnpjPdf?: AttachedPdf | null
   attachedIePdf?: AttachedPdf | null
   attachedImPdf?: AttachedPdf | null
+  onUploadPdf: (file: File, category: PdfDocumentCategory) => Promise<ArrayBuffer | null> | void
+  onRemovePdf: (category: PdfDocumentCategory) => void
 }
 
 export const ClienteTab: React.FC<ClienteTabProps> = ({
@@ -68,15 +67,13 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
   onChange,
   onNavigateTab,
   onGenerateDocument,
-  attachedPdf,
-  onUploadPdf,
-  onRemovePdf,
   attachedCnpjPdf,
   attachedIePdf,
   attachedImPdf,
+  onUploadPdf,
+  onRemovePdf,
 }) => {
   const clientFileRef = useRef<HTMLInputElement>(null)
-  const pdfFileRef = useRef<HTMLInputElement>(null)
   const cnpjPdfFileRef = useRef<HTMLInputElement>(null)
   const iePdfFileRef = useRef<HTMLInputElement>(null)
   const imPdfFileRef = useRef<HTMLInputElement>(null)
@@ -87,7 +84,6 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
   const [extractionResult, setExtractionResult] = useState<ClientExtractionResult | null>(null)
   const [activePdfName, setActivePdfName] = useState<string>('')
   const [activeDocumentLabel, setActiveDocumentLabel] = useState<string>('')
-  const [activeDocType, setActiveDocType] = useState<DocumentExtractionType>('all')
 
   // Password Dialog states for protected PDFs
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false)
@@ -95,7 +91,7 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
   const [isUnlocking, setIsUnlocking] = useState(false)
   const pendingBufferRef = useRef<ArrayBuffer | null>(null)
   const pendingPdfNameRef = useRef<string>('')
-  const pendingDocTypeRef = useRef<DocumentExtractionType>('all')
+  const pendingDocTypeRef = useRef<DocumentExtractionType>('cnpj')
   const pendingDocLabelRef = useRef<string>('')
 
   // Process text and open review modal
@@ -103,14 +99,13 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
     async (
       buffer: ArrayBuffer,
       pdfName: string,
-      docType: DocumentExtractionType = 'all',
+      docType: DocumentExtractionType,
       docLabel = 'Documento PDF',
       password?: string,
     ) => {
       setIsExtracting(true)
       setActivePdfName(pdfName)
       setActiveDocumentLabel(docLabel)
-      setActiveDocType(docType)
       pendingBufferRef.current = buffer
       pendingPdfNameRef.current = pdfName
       pendingDocTypeRef.current = docType
@@ -329,21 +324,6 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
     } else {
       onChange({ clientLogoHeight: newHeight })
     }
-  }
-
-  const handlePdfChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    // Read buffer first for auto-extraction
-    const buffer = await file.arrayBuffer()
-    await onUploadPdf(file)
-
-    // Trigger automatic extraction right upon import
-    runExtractionOnBuffer(buffer, file.name, 'all', 'Documento Principal')
-
-    // reset input so user can pick same file again if desired
-    e.target.value = ''
   }
 
   const handleCnpjPdfChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -943,200 +923,6 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
               </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* SEÇÃO 3: IMPORTAÇÃO DE ARQUIVO PDF (EXTRAÇÃO DE DADOS DO CLIENTE) */}
-      <Card className="border border-slate-200 card-shadow bg-white">
-        <CardHeader className="border-b border-slate-100 pb-4">
-          <div className="flex items-center gap-2">
-            <FileText className="w-5 h-5 text-[#1E3A5F]" />
-            <CardTitle className="text-lg font-bold text-slate-900">
-              Documento Anexo (Arquivo PDF)
-            </CardTitle>
-          </div>
-          <CardDescription className="text-slate-500">
-            Importe o documento PDF do cliente (balancete, contrato, notas fiscais ou extrato) para
-            extração automática dos dados cadastrais e conferência.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-6 space-y-4">
-          <div className="rounded-lg border border-dashed border-slate-300 p-5 bg-slate-50/50">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
-              <div>
-                <Label className="text-sm font-semibold text-slate-800">
-                  {attachedPdf ? attachedPdf.name : 'Arquivo PDF'}
-                </Label>
-                <p className="text-xs text-slate-500">
-                  {attachedPdf ? (
-                    <>Tamanho: {formatFileSize(attachedPdf.size)} • Leitura local e segura</>
-                  ) : (
-                    'Aceita arquivos .pdf (processamento 100% no seu navegador)'
-                  )}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {attachedPdf && (
-                  <>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => window.open(attachedPdf.blobUrl, '_blank')}
-                      className="text-xs h-8 text-slate-600 gap-1.5"
-                      title="Abrir PDF em nova aba"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Abrir em nova aba</span>
-                    </Button>
-                    <a
-                      href={attachedPdf.blobUrl}
-                      download={attachedPdf.name}
-                      className="inline-flex"
-                    >
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="text-xs h-8 text-slate-600 gap-1.5"
-                        title="Baixar arquivo PDF"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Baixar</span>
-                      </Button>
-                    </a>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onRemovePdf('principal')}
-                      className="text-xs h-8 text-red-600 hover:text-red-700 hover:bg-red-50 gap-1"
-                      title="Remover documento PDF"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" /> Remover
-                    </Button>
-                  </>
-                )}
-
-                <input
-                  ref={pdfFileRef}
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  className="hidden"
-                  onChange={handlePdfChange}
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => pdfFileRef.current?.click()}
-                  className="bg-[#1E3A5F] hover:bg-[#16304F] text-white text-xs h-8 gap-1.5"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  {attachedPdf ? 'Trocar PDF' : 'Importar PDF'}
-                </Button>
-              </div>
-            </div>
-
-            {/* Visualização e Ações do PDF Anexo (Card Seguro e Responsivo) */}
-            <div className="mt-4 flex flex-col items-center justify-center bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
-              {attachedPdf ? (
-                <div className="w-full flex flex-col divide-y divide-slate-100">
-                  <div className="p-6 sm:p-8 bg-gradient-to-br from-slate-50 via-white to-blue-50/30 flex flex-col items-center text-center">
-                    <div className="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-[#1E3A5F] mb-4 shadow-xs">
-                      <FileText className="w-8 h-8" />
-                    </div>
-
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60 mb-2">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> PDF Conectado com Sucesso
-                    </div>
-
-                    <h4 className="text-base font-bold text-slate-800 break-all max-w-lg mb-1">
-                      {attachedPdf.name}
-                    </h4>
-
-                    <p className="text-xs text-slate-500 mb-6">
-                      Tamanho do documento: {formatFileSize(attachedPdf.size)} • Pronto para
-                      conferência
-                    </p>
-
-                    <div className="flex flex-wrap items-center justify-center gap-3">
-                      <Button
-                        type="button"
-                        onClick={() =>
-                          window.open(attachedPdf.blobUrl, '_blank', 'noopener,noreferrer')
-                        }
-                        className="bg-[#1E3A5F] hover:bg-[#16304F] text-white text-xs h-9 px-4 gap-2 font-medium shadow-xs"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" /> Abrir Documento em Nova Aba
-                      </Button>
-
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() =>
-                          handleManualExtraction(attachedPdf, 'all', 'Documento Principal')
-                        }
-                        disabled={isExtracting}
-                        className="text-xs h-9 px-4 border-blue-300 text-blue-700 hover:bg-blue-50 gap-2 font-medium bg-white"
-                        title="Extrair automaticamente dados do cliente a partir do texto deste PDF"
-                      >
-                        {isExtracting ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Extraindo Dados...
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="w-3.5 h-3.5 text-blue-600" /> Extrair Dados do
-                            Cliente
-                          </>
-                        )}
-                      </Button>
-
-                      <a
-                        href={attachedPdf.blobUrl}
-                        download={attachedPdf.name}
-                        className="inline-flex"
-                      >
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="text-xs h-9 px-4 text-slate-700 hover:text-slate-900 border-slate-300 gap-2 font-medium"
-                        >
-                          <Download className="w-3.5 h-3.5" /> Baixar Cópia Local
-                        </Button>
-                      </a>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between w-full py-2.5 px-4 bg-slate-50 text-xs text-slate-500">
-                    <div className="flex items-center gap-1.5 text-slate-600 text-[11px]">
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Arquivo processado localmente no navegador com total privacidade.</span>
-                    </div>
-                    <span className="text-[11px] text-slate-400">Disponível nesta sessão</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-12 px-4 text-slate-400">
-                  <FileText className="w-12 h-12 mx-auto mb-2 opacity-30 text-[#1E3A5F]" />
-                  <p className="text-sm font-medium text-slate-600 mb-1">
-                    Nenhum arquivo PDF importado
-                  </p>
-                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                    Clique em "Importar PDF" acima para selecionar um documento de apoio (balancete,
-                    extrato, contrato ou notas fiscais) para extração automática dos dados do
-                    cliente.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <p className="text-[11px] text-slate-400 mt-3">
-              Nota: O arquivo PDF fica disponível nesta sessão do navegador e não altera o link
-              compartilhado.
-            </p>
-          </div>
 
           <div className="mt-6 pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
             <Button
@@ -1158,7 +944,7 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
         </CardContent>
       </Card>
 
-      {/* SEÇÃO 4: DOCUMENTOS FISCAIS COMPLEMENTARES (CNPJ, INSCRIÇÃO ESTADUAL E INSCRIÇÃO MUNICIPAL) */}
+      {/* SEÇÃO 3: DOCUMENTOS FISCAIS DO CLIENTE (CNPJ, INSCRIÇÃO ESTADUAL E INSCRIÇÃO MUNICIPAL) */}
       <Card className="border border-slate-200 card-shadow bg-white">
         <CardHeader className="border-b border-slate-100 pb-4">
           <div className="flex items-center gap-2">
@@ -1169,11 +955,11 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
           </div>
           <CardDescription className="text-slate-500">
             Importe os PDFs oficiais dos registros fiscais do cliente (Cartão CNPJ, Inscrição
-            Estadual e Inscrição Municipal) como anexos separados com extração automática dos
-            números cadastrais.
+            Estadual e Inscrição Municipal) como anexos com extração automática dos números
+            cadastrais e dados do cliente.
           </CardDescription>
         </CardHeader>
-        <CardContent className="pt-6">
+        <CardContent className="pt-6 space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* 1. PDF do CNPJ (Cartão CNPJ) */}
             <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-5 flex flex-col justify-between hover:border-slate-300 transition-all">
@@ -1543,7 +1329,7 @@ export const ClienteTab: React.FC<ClienteTabProps> = ({
       <PdfPasswordDialog
         open={passwordDialogOpen}
         onOpenChange={setPasswordDialogOpen}
-        pdfName={activePdfName || attachedPdf?.name}
+        pdfName={activePdfName}
         errorMessage={passwordError}
         isSubmitting={isUnlocking}
         onSubmitPassword={handleSubmitPassword}
