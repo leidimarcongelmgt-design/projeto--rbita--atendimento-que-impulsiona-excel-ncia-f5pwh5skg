@@ -182,15 +182,9 @@ export const DocumentView: React.FC<DocumentViewProps> = ({
             </div>
 
             <div className="text-xs text-slate-600 flex items-center gap-3">
-              {(state.periodoInicio || state.periodoFim) && (
+              {state.dataEmissao && (
                 <span className="flex items-center gap-1">
                   <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                  <strong>Período:</strong> {formatDateBR(state.periodoInicio)} até{' '}
-                  {formatDateBR(state.periodoFim)}
-                </span>
-              )}
-              {state.dataEmissao && (
-                <span>
                   <strong>Emissão:</strong> {formatDateBR(state.dataEmissao)}
                 </span>
               )}

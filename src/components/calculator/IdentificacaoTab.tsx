@@ -336,55 +336,29 @@ export const IdentificacaoTab: React.FC<IdentificacaoTabProps> = ({
         </CardContent>
       </Card>
 
-      {/* SEÇÃO 2: PERÍODO E EMISSÃO */}
+      {/* SEÇÃO 2: DATA DE EMISSÃO */}
       <Card className="border border-slate-200 card-shadow bg-white">
         <CardHeader className="border-b border-slate-100 pb-4">
           <div className="flex items-center gap-2">
             <Calendar className="w-5 h-5 text-[#1E3A5F]" />
-            <CardTitle className="text-lg font-bold text-slate-900">Período e Emissão</CardTitle>
+            <CardTitle className="text-lg font-bold text-slate-900">Data de Emissão</CardTitle>
           </div>
           <CardDescription className="text-slate-500">
-            Defina o período de apuração contábil e a data de formalização do relatório.
+            Defina a data de formalização e emissão do relatório.
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <Label htmlFor="periodoInicio" className="text-xs font-medium text-slate-700">
-                Período Início
-              </Label>
-              <Input
-                id="periodoInicio"
-                type="date"
-                value={state.periodoInicio}
-                onChange={(e) => onChange({ periodoInicio: e.target.value })}
-                className="mt-1 h-9 bg-[#F9FAFB]"
-              />
-            </div>
-            <div>
-              <Label htmlFor="periodoFim" className="text-xs font-medium text-slate-700">
-                Período Fim
-              </Label>
-              <Input
-                id="periodoFim"
-                type="date"
-                value={state.periodoFim}
-                onChange={(e) => onChange({ periodoFim: e.target.value })}
-                className="mt-1 h-9 bg-[#F9FAFB]"
-              />
-            </div>
-            <div>
-              <Label htmlFor="dataEmissao" className="text-xs font-medium text-slate-700">
-                Data de Emissão
-              </Label>
-              <Input
-                id="dataEmissao"
-                type="date"
-                value={state.dataEmissao}
-                onChange={(e) => onChange({ dataEmissao: e.target.value })}
-                className="mt-1 h-9 bg-[#F9FAFB]"
-              />
-            </div>
+          <div className="max-w-xs">
+            <Label htmlFor="dataEmissao" className="text-xs font-medium text-slate-700">
+              Data de Emissão
+            </Label>
+            <Input
+              id="dataEmissao"
+              type="date"
+              value={state.dataEmissao}
+              onChange={(e) => onChange({ dataEmissao: e.target.value })}
+              className="mt-1 h-9 bg-[#F9FAFB]"
+            />
           </div>
 
           <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
