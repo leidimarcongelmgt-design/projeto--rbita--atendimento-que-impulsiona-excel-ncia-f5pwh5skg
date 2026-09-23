@@ -23,7 +23,7 @@ export interface CalculatorState {
   usarCalcFolha: number // 0 or 1, default 1
 
   // Active tab
-  tab: 'identificacao' | 'calculo' | 'tributos' | 'folha'
+  tab: 'identificacao' | 'cliente' | 'calculo' | 'tributos' | 'folha'
 
   // Identification & Branding
   logoWidth: number

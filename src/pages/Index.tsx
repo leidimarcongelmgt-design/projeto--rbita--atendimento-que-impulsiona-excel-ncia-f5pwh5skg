@@ -4,6 +4,7 @@ import { CalculatorState, DEFAULT_CALCULATOR_STATE, computeFinancials } from '@/
 import { parseStateFromUrl, serializeStateToUrl } from '@/lib/calculatorState'
 import { Header } from '@/components/calculator/Header'
 import { IdentificacaoTab } from '@/components/calculator/IdentificacaoTab'
+import { ClienteTab } from '@/components/calculator/ClienteTab'
 import { CalculoTab } from '@/components/calculator/CalculoTab'
 import { TributosTab } from '@/components/calculator/TributosTab'
 import { FolhaTab } from '@/components/calculator/FolhaTab'
@@ -141,6 +142,16 @@ export default function Index() {
               <IdentificacaoTab
                 state={state}
                 onChange={updateState}
+                onNavigateTab={handleTabChange}
+                onGenerateDocument={() => setIsDocumentMode(true)}
+              />
+            )}
+
+            {state.tab === 'cliente' && (
+              <ClienteTab
+                state={state}
+                onChange={updateState}
+                onNavigateTab={handleTabChange}
                 onGenerateDocument={() => setIsDocumentMode(true)}
                 attachedPdf={attachedPdf}
                 onUploadPdf={handleUploadPdf}

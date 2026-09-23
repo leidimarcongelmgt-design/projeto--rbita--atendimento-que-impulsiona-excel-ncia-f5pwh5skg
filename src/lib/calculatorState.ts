@@ -25,6 +25,7 @@ export function parseStateFromUrl(search: string): CalculatorState {
   let tab: CalculatorState['tab'] = DEFAULT_CALCULATOR_STATE.tab
   if (
     tabParam === 'identificacao' ||
+    tabParam === 'cliente' ||
     tabParam === 'calculo' ||
     tabParam === 'tributos' ||
     tabParam === 'folha'
