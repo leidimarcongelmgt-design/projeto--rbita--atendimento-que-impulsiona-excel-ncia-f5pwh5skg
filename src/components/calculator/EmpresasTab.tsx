@@ -261,9 +261,9 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                   </CardTitle>
                 </div>
                 <CardDescription className="text-slate-500 mt-1">
-                  Importe planilhas Excel (.xlsx ou .xls) com as 12 colunas padrão (EMPRESAS, CNPJ,
-                  REGIME TRIB., RAMO DE ATIVIDADE 2, ZONA, Nº FUNC., PESO, FILIAL, CONTÁBIL,
-                  ENTRADA, GRUPO, PESO).
+                  Importe planilhas Excel (.xlsx ou .xls) com as 10 colunas padrão (EMPRESAS, CNPJ,
+                  REGIME TRIB., RAMO DE ATIVIDADE 2, ZONA, Nº FUNC., FILIAL, CONTÁBIL, ENTRADA,
+                  GRUPO).
                 </CardDescription>
               </div>
 
@@ -308,11 +308,11 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                 <div className="flex items-center gap-2">
                   <Info className="w-4 h-4 text-purple-900" />
                   <span className="text-xs font-semibold text-slate-800 uppercase tracking-wide">
-                    Estrutura esperada do cabeçalho da planilha
+                    Estrutura esperada do cabeçalho da planilha (10 colunas)
                   </span>
                 </div>
                 <span className="text-[11px] text-slate-500">
-                  Duas colunas PESO mapeadas posicionalmente: PESO e PESO (2)
+                  Pesos gerenciados nas abas dedicadas de Dpto. Pessoal e Dpto. Fiscal
                 </span>
               </div>
 
@@ -413,7 +413,7 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
               </div>
             </div>
 
-            {/* Tabela com as 12 Colunas */}
+            {/* Tabela com as 10 Colunas */}
             {empresas.length === 0 ? (
               <div className="border border-dashed border-slate-300 rounded-lg p-12 text-center bg-slate-50/50">
                 <div className="w-12 h-12 rounded-full bg-slate-200/80 flex items-center justify-center mx-auto mb-3 text-slate-500">
@@ -421,9 +421,9 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                 </div>
                 <h3 className="text-sm font-semibold text-slate-800">Nenhuma empresa importada</h3>
                 <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 mb-5">
-                  Clique no botão abaixo para carregar uma planilha Excel com as colunas EMPRESAS,
-                  CNPJ, REGIME TRIB., RAMO DE ATIVIDADE 2, ZONA, Nº FUNC., PESO, FILIAL, CONTÁBIL,
-                  ENTRADA, GRUPO e PESO.
+                  Clique no botão abaixo para carregar uma planilha Excel com as 10 colunas padrão
+                  (EMPRESAS, CNPJ, REGIME TRIB., RAMO DE ATIVIDADE 2, ZONA, Nº FUNC., FILIAL,
+                  CONTÁBIL, ENTRADA e GRUPO).
                 </p>
                 <Button
                   type="button"
@@ -479,7 +479,7 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                     <tbody className="divide-y divide-slate-200 bg-white">
                       {filteredAndSortedEmpresas.length === 0 ? (
                         <tr>
-                          <td colSpan={14} className="py-8 text-center text-slate-500">
+                          <td colSpan={12} className="py-8 text-center text-slate-500">
                             Nenhum registro encontrado para o filtro "{searchQuery}".
                           </td>
                         </tr>
@@ -516,9 +516,6 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                             <td className="py-2.5 px-3 text-right font-mono text-slate-800 border-r border-slate-100 whitespace-nowrap">
                               {empresa.numFunc !== '' ? empresa.numFunc : '—'}
                             </td>
-                            <td className="py-2.5 px-3 text-right font-mono text-slate-800 border-r border-slate-100 whitespace-nowrap">
-                              {empresa.peso1 !== '' ? empresa.peso1 : '—'}
-                            </td>
                             <td className="py-2.5 px-3 text-slate-700 border-r border-slate-100 whitespace-nowrap">
                               {empresa.filial || '—'}
                             </td>
@@ -530,9 +527,6 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                             </td>
                             <td className="py-2.5 px-3 text-slate-700 border-r border-slate-100 whitespace-nowrap">
                               {empresa.grupo || '—'}
-                            </td>
-                            <td className="py-2.5 px-3 text-right font-mono text-slate-800 border-r border-slate-100 whitespace-nowrap">
-                              {empresa.peso2 !== '' ? empresa.peso2 : '—'}
                             </td>
                             <td className="py-2.5 px-3 text-center whitespace-nowrap">
                               <Tooltip>

@@ -88,16 +88,15 @@ export function clearEmpresasStorage(): void {
 }
 
 /**
- * Mapeia cabeçalhos da planilha para as propriedades de EmpresaRow.
- * Trata as duas colunas "PESO" estritamente por ordem posicional (primeiro PESO -> peso1, segundo PESO -> peso2).
+ * Mapeia cabeçalhos da planilha para as propriedades de EmpresaRow (10 colunas).
+ * Colunas de PESO são explicitamente ignoradas na aba Empresas (os pesos vivem na aba Dpto. Fiscal).
  */
 export function mapHeadersToFields(headers: string[]): {
-  mapping: Map<number, keyof Omit<EmpresaRow, 'id'>>
+  mapping: Map<number, keyof Omit<EmpresaRow, 'id' | 'peso1' | 'peso2'>>
   unrecognizedColumns: string[]
 } {
-  const mapping = new Map<number, keyof Omit<EmpresaRow, 'id'>>()
+  const mapping = new Map<number, keyof Omit<EmpresaRow, 'id' | 'peso1' | 'peso2'>>()
   const unrecognizedColumns: string[] = []
-  let pesoCount = 0
 
   headers.forEach((rawHeader, colIdx) => {
     const normalized = normalizeHeader(rawHeader)
@@ -136,19 +135,16 @@ export function mapHeadersToFields(headers: string[]): {
       normalized === 'qtd func'
     ) {
       mapping.set(colIdx, 'numFunc')
-    } else if (normalized === 'peso') {
-      // Mapeamento posicional para as duas colunas PESO
-      if (pesoCount === 0) {
-        mapping.set(colIdx, 'peso1')
-        pesoCount++
-      } else {
-        mapping.set(colIdx, 'peso2')
-        pesoCount++
-      }
-    } else if (normalized === 'peso 1' || normalized === 'peso1') {
-      mapping.set(colIdx, 'peso1')
-    } else if (normalized === 'peso 2' || normalized === 'peso2' || normalized === 'peso (2)') {
-      mapping.set(colIdx, 'peso2')
+    } else if (
+      normalized === 'peso' ||
+      normalized === 'peso 1' ||
+      normalized === 'peso1' ||
+      normalized === 'peso 2' ||
+      normalized === 'peso2' ||
+      normalized === 'peso (2)'
+    ) {
+      // Colunas de PESO são ignoradas na aba Empresas sem erro
+      return
     } else if (normalized === 'filial' || normalized.includes('filial')) {
       mapping.set(colIdx, 'filial')
     } else if (normalized === 'contabil' || normalized.includes('contabil')) {
@@ -217,19 +213,17 @@ export async function parseEmpresasFile(file: File): Promise<{
       continue
     }
 
-    const rowObj: Partial<EmpresaRow> = {
+    const rowObj: Partial<Omit<EmpresaRow, 'peso1' | 'peso2'>> = {
       empresas: '',
       cnpj: '',
       regimeTrib: '',
       ramoAtividade: '',
       zona: '',
       numFunc: '',
-      peso1: '',
       filial: '',
       contabil: '',
       entrada: '',
       grupo: '',
-      peso2: '',
     }
 
     rawRow.forEach((cellVal, colIdx) => {
@@ -264,12 +258,10 @@ export async function parseEmpresasFile(file: File): Promise<{
       ramoAtividade: (rowObj.ramoAtividade || '').toString().trim(),
       zona: (rowObj.zona || '').toString().trim(),
       numFunc: rowObj.numFunc ?? '',
-      peso1: rowObj.peso1 ?? '',
       filial: (rowObj.filial || '').toString().trim(),
       contabil: (rowObj.contabil || '').toString().trim(),
       entrada: (rowObj.entrada || '').toString().trim(),
       grupo: (rowObj.grupo || '').toString().trim(),
-      peso2: rowObj.peso2 ?? '',
     })
   }
 

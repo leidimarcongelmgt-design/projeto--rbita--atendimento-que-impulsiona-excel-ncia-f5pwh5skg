@@ -44,7 +44,7 @@ export function clearDptoFiscalStorage(): void {
 /**
  * Constrói lista a partir das Empresas existentes da aba Empresas.
  * Copia nome + CNPJ das empresas. Preserva pesos que o usuário já possa ter editado localmente.
- * Se não houver edição prévia, usa o peso1 (ou peso2) da empresa caso disponível.
+ * Se não houver edição prévia, entra com peso vazio (ou usa peso legado se porventura presente).
  */
 export function syncFiscalFromEmpresas(
   empresas: EmpresaRow[],
