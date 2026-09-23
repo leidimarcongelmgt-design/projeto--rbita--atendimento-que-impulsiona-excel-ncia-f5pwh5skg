@@ -21,7 +21,7 @@ export function parseStateFromUrl(search: string): CalculatorState {
     return val !== null ? val : def
   }
 
-  // 'identificacao', 'empresas', 'dpto-pessoal'/'pesos', ou 'fiscal-pesos'/'dpto-fiscal' são aceitos; qualquer outro faz fallback seguro para 'identificacao'
+  // 'identificacao', 'empresas', 'dpto-pessoal'/'pesos', 'fiscal-pesos'/'dpto-fiscal', ou 'contabil'/'dpto-contabil' são aceitos; qualquer outro faz fallback seguro para 'identificacao'
   const rawTab = params.get('tab')
   const tab: CalculatorState['tab'] =
     rawTab === 'empresas'
@@ -30,7 +30,9 @@ export function parseStateFromUrl(search: string): CalculatorState {
         ? 'dpto-pessoal'
         : rawTab === 'fiscal-pesos' || rawTab === 'dpto-fiscal'
           ? 'fiscal-pesos'
-          : 'identificacao'
+          : rawTab === 'contabil' || rawTab === 'dpto-contabil'
+            ? 'contabil'
+            : 'identificacao'
 
   return {
     tab,

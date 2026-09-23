@@ -6,13 +6,16 @@ import { IdentificacaoTab } from '@/components/calculator/IdentificacaoTab'
 import { EmpresasTab } from '@/components/calculator/EmpresasTab'
 import { DptoPessoalTab } from '@/components/calculator/DptoPessoalTab'
 import { DptoFiscalTab } from '@/components/calculator/DptoFiscalTab'
+import { DptoContabilTab } from '@/components/calculator/DptoContabilTab'
 import { DocumentView } from '@/components/calculator/DocumentView'
 import { EmpresaRow } from '@/types/empresa'
 import { DptoPessoalRow } from '@/types/dptoPessoal'
 import { DptoFiscalRow } from '@/types/dptoFiscal'
+import { DptoContabilRow } from '@/types/dptoContabil'
 import { loadEmpresasFromStorage, clearEmpresasStorage } from '@/lib/empresasService'
 import { loadDptoPessoalFromStorage, clearDptoPessoalStorage } from '@/lib/dptoPessoalService'
 import { loadDptoFiscalFromStorage, clearDptoFiscalStorage } from '@/lib/dptoFiscalService'
+import { loadDptoContabilFromStorage, clearDptoContabilStorage } from '@/lib/dptoContabilService'
 import { clearAllResizableColumnWidths } from '@/hooks/use-resizable-columns'
 import { toast } from 'sonner'
 
@@ -35,6 +38,11 @@ export default function Index() {
   // Dpto. Fiscal persistido em sessionStorage (não poluindo a URL)
   const [fiscalRows, setFiscalRows] = useState<DptoFiscalRow[]>(() => {
     return loadDptoFiscalFromStorage()
+  })
+
+  // Dpto. Contábil persistido em sessionStorage (não poluindo a URL)
+  const [contabilRows, setContabilRows] = useState<DptoContabilRow[]>(() => {
+    return loadDptoContabilFromStorage()
   })
 
   const [hasCopied, setHasCopied] = useState(false)
@@ -74,9 +82,11 @@ export default function Index() {
     setEmpresas([])
     setDptoRows([])
     setFiscalRows([])
+    setContabilRows([])
     clearEmpresasStorage()
     clearDptoPessoalStorage()
     clearDptoFiscalStorage()
+    clearDptoContabilStorage()
     clearAllResizableColumnWidths()
     setIsDocumentMode(false)
     const newQuery = serializeStateToUrl(nextState)
@@ -136,6 +146,13 @@ export default function Index() {
             )}
             {state.tab === 'fiscal-pesos' && (
               <DptoFiscalTab rows={fiscalRows} onRowsChange={setFiscalRows} empresas={empresas} />
+            )}
+            {state.tab === 'contabil' && (
+              <DptoContabilTab
+                rows={contabilRows}
+                onRowsChange={setContabilRows}
+                empresas={empresas}
+              />
             )}
           </div>
         )}

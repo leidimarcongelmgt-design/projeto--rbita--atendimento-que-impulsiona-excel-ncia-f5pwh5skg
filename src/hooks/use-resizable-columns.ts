@@ -8,6 +8,7 @@ export const RESIZABLE_STORAGE_KEYS = {
   EMPRESAS: 'dossie_col_widths_empresas',
   DPTO_PESSOAL: 'dossie_col_widths_dpto_pessoal',
   DPTO_FISCAL: 'dossie_col_widths_dpto_fiscal',
+  DPTO_CONTABIL: 'dossie_col_widths_dpto_contabil',
 } as const
 
 export function clearAllResizableColumnWidths(): void {
@@ -15,6 +16,7 @@ export function clearAllResizableColumnWidths(): void {
     sessionStorage.removeItem(RESIZABLE_STORAGE_KEYS.EMPRESAS)
     sessionStorage.removeItem(RESIZABLE_STORAGE_KEYS.DPTO_PESSOAL)
     sessionStorage.removeItem(RESIZABLE_STORAGE_KEYS.DPTO_FISCAL)
+    sessionStorage.removeItem(RESIZABLE_STORAGE_KEYS.DPTO_CONTABIL)
     window.dispatchEvent(new CustomEvent('dossie:column-widths-reset'))
   } catch (err) {
     console.error('Erro ao limpar larguras das colunas do sessionStorage:', err)

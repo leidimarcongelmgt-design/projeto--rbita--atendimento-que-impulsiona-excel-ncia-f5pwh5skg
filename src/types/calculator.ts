@@ -1,6 +1,6 @@
 export interface CalculatorState {
-  // Active tab (Identificação | Empresas | Dpto. Pessoal - Pesos | Dpto. Fiscal - Pesos)
-  tab: 'identificacao' | 'empresas' | 'dpto-pessoal' | 'fiscal-pesos'
+  // Active tab (Identificação | Empresas | Dpto. Pessoal - Pesos | Dpto. Fiscal - Pesos | Dpto. Contábil)
+  tab: 'identificacao' | 'empresas' | 'dpto-pessoal' | 'fiscal-pesos' | 'contabil'
 
   // Identification & Branding (Emissor)
   logoWidth: number
