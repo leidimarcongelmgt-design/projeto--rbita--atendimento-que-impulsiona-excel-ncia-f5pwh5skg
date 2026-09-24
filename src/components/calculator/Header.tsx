@@ -1,7 +1,9 @@
 import React from 'react'
 import { CalculatorState } from '@/types/calculator'
 import { Button } from '@/components/ui/button'
-import { FolderOpen, RotateCcw, Link2, Check } from 'lucide-react'
+import { FolderOpen, RotateCcw, Link2, Check, LogOut, User } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
+import { useNavigate } from 'react-router-dom'
 
 interface HeaderProps {
   onReset: () => void
@@ -20,6 +22,13 @@ export const Header: React.FC<HeaderProps> = ({
   onTabChange,
   isDocumentMode,
 }) => {
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
+  }
   const tabs: { id: CalculatorState['tab']; label: string }[] = [
     { id: 'identificacao', label: 'Identificação' },
     { id: 'empresas', label: 'Empresas' },
@@ -45,14 +54,23 @@ export const Header: React.FC<HeaderProps> = ({
                 Identificação do emissor e emissão de dossiê
               </p>
               <span className="text-[10px] font-mono bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">
-                v0.0.54
+                v0.0.61
               </span>
             </div>
           </div>
         </div>
 
-        {/* Global Action Buttons */}
-        <div className="flex items-center gap-2 self-end sm:self-auto">
+        {/* User Info & Global Action Buttons */}
+        <div className="flex items-center flex-wrap gap-2 self-end sm:self-auto">
+          {user && (
+            <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 bg-slate-100 rounded-md border border-slate-200 text-xs text-slate-700">
+              <User className="w-3.5 h-3.5 text-[#1E3A5F]" />
+              <span className="font-medium max-w-[140px] truncate" title={user.email || user.name}>
+                {user.name || user.email || 'Usuário'}
+              </span>
+            </div>
+          )}
+
           <Button
             type="button"
             variant="outline"
@@ -84,6 +102,18 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
             <span>Nova Consulta</span>
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleLogout}
+            className="text-xs h-8 text-slate-700 hover:text-red-600 hover:border-red-200 border-slate-300 gap-1.5 transition-all"
+            title="Sair da sessão"
+          >
+            <LogOut className="w-3.5 h-3.5 text-slate-500" />
+            <span>Sair</span>
           </Button>
         </div>
       </div>

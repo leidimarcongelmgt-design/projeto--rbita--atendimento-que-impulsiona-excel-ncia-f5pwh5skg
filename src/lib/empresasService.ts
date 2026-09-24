@@ -246,30 +246,36 @@ export async function fetchEmpresas(): Promise<EmpresaRow[]> {
     if (records && records.length > 0) {
       const mapped: EmpresaRow[] = records.map((r) => ({
         id: String(r.id || ''),
-        empresas: String(r.EMPRESAS ?? r.empresas ?? ''),
+        empresas: String(r.EMPRESAS ?? r.empresas ?? r.nome ?? ''),
         cnpj: String(r.CNPJ ?? r.cnpj ?? ''),
-        regimeTrib: String(r.REGIME_TRIB ?? r.regimeTrib ?? ''),
-        ramoAtividade: String(r.RAMO_ATIVIDADE_2 ?? r.ramoAtividade ?? ''),
+        regimeTrib: String(r.REGIME_TRIB ?? r.regimeTrib ?? r.regime_trib ?? ''),
+        ramoAtividade: String(r.RAMO_ATIVIDADE_2 ?? r.ramoAtividade ?? r.ramo_atividade ?? ''),
         filial: String(r.FILIAL ?? r.filial ?? ''),
         grupo: String(r.GRUPO ?? r.grupo ?? ''),
-        entrada: String(r.CLIENTE_DESDE ?? r.entrada ?? ''),
+        entrada: String(r.CLIENTE_DESDE ?? r.entrada ?? r.cliente_desde ?? ''),
         zona: String(r.ZONA ?? r.zona ?? ''),
         contabil: String(r.CONTABIL ?? r.contabil ?? ''),
-        numFunc: (r.NUM_FUNC ?? r.numFunc ?? '') as number | string,
-        pesoFolha: (r.PESO_FOLHA ?? r.pesoFolha ?? r.peso1 ?? '') as number | string,
-        pesoFiscal: (r.PESO_FISCAL ?? r.pesoFiscal ?? r.peso2 ?? '') as number | string,
+        numFunc: (r.NUM_FUNC ?? r.numFunc ?? r.num_func ?? '') as number | string,
+        pesoFolha: (r.PESO_FOLHA ?? r.pesoFolha ?? r.peso_folha ?? r.peso1 ?? '') as
+          | number
+          | string,
+        pesoFiscal: (r.PESO_FISCAL ?? r.pesoFiscal ?? r.peso_fiscal ?? r.peso2 ?? '') as
+          | number
+          | string,
         receitas: (r.RECEITAS ?? r.receitas ?? '') as number | string,
-        despCustos: (r.DESP_CUSTOS ?? r.despCustos ?? '') as number | string,
-        enviaSped: String(r.ENVIA_SPED ?? r.enviaSped ?? ''),
+        despCustos: (r.DESP_CUSTOS ?? r.despCustos ?? r.desp_custos ?? '') as number | string,
+        enviaSped: String(r.ENVIA_SPED ?? r.enviaSped ?? r.envia_sped ?? ''),
         observacoes: String(r.OBSERVACOES ?? r.observacoes ?? ''),
-        lnk: String(r.LNK ?? r.lnk ?? ''),
-        peso1: (r.PESO_FOLHA ?? r.pesoFolha ?? r.peso1 ?? '') as number | string,
-        peso2: (r.PESO_FISCAL ?? r.pesoFiscal ?? r.peso2 ?? '') as number | string,
+        lnk: String(r.LNK ?? r.lnk ?? r.lkn ?? ''),
+        peso1: (r.PESO_FOLHA ?? r.pesoFolha ?? r.peso_folha ?? r.peso1 ?? '') as number | string,
+        peso2: (r.PESO_FISCAL ?? r.pesoFiscal ?? r.peso_fiscal ?? r.peso2 ?? '') as number | string,
         isManual: Boolean(r.isManual),
         customFields:
           r.customFields && typeof r.customFields === 'object'
             ? (r.customFields as Record<string, string>)
-            : {},
+            : r.custom_columns && typeof r.custom_columns === 'object'
+              ? (r.custom_columns as Record<string, string>)
+              : {},
       }))
       try {
         localStorage.setItem(EMPRESAS_PERSIST_KEY, JSON.stringify(mapped))
@@ -335,6 +341,23 @@ export async function syncEmpresasToPocketBase(empresas: EmpresaRow[]): Promise<
             : null
 
       const payload = {
+        nome: emp.empresas || '',
+        cnpj: emp.cnpj || '',
+        regime_trib: emp.regimeTrib || '',
+        ramo_atividade: emp.ramoAtividade || '',
+        filial: emp.filial || '',
+        grupo: emp.grupo || '',
+        cliente_desde: emp.entrada || '',
+        zona: emp.zona || '',
+        contabil: emp.contabil || '',
+        num_func: String(emp.numFunc ?? ''),
+        peso_folha: String(emp.pesoFolha ?? ''),
+        peso_fiscal: String(emp.pesoFiscal ?? ''),
+        receitas: String(emp.receitas ?? ''),
+        desp_custos: String(emp.despCustos ?? ''),
+        envia_sped: emp.enviaSped || '',
+        observacoes: emp.observacoes || '',
+        lkn: emp.lnk || '',
         EMPRESAS: emp.empresas || '',
         CNPJ: emp.cnpj || '',
         REGIME_TRIB: emp.regimeTrib || '',
@@ -354,24 +377,17 @@ export async function syncEmpresasToPocketBase(empresas: EmpresaRow[]): Promise<
         LNK: emp.lnk || '',
         // Legados para máxima compatibilidade
         empresas: emp.empresas || '',
-        cnpj: emp.cnpj || '',
         regimeTrib: emp.regimeTrib || '',
         ramoAtividade: emp.ramoAtividade || '',
-        filial: emp.filial || '',
-        grupo: emp.grupo || '',
         entrada: emp.entrada || '',
-        zona: emp.zona || '',
-        contabil: emp.contabil || '',
         numFunc: numFuncNum,
         pesoFolha: pesoFolhaNum,
         pesoFiscal: pesoFiscalNum,
-        receitas: receitasNum,
         despCustos: despCustosNum,
         enviaSped: emp.enviaSped || '',
-        observacoes: emp.observacoes || '',
-        lnk: emp.lnk || '',
         isManual: emp.isManual ?? false,
         customFields: emp.customFields ?? {},
+        custom_columns: emp.customFields ?? {},
       }
 
       // PocketBase IDs têm 15 caracteres alfanuméricos
@@ -440,6 +456,23 @@ export async function saveEmpresaRecord(empresa: EmpresaRow): Promise<string | u
           : null
 
     const payload = {
+      nome: empresa.empresas || '',
+      cnpj: empresa.cnpj || '',
+      regime_trib: empresa.regimeTrib || '',
+      ramo_atividade: empresa.ramoAtividade || '',
+      filial: empresa.filial || '',
+      grupo: empresa.grupo || '',
+      cliente_desde: empresa.entrada || '',
+      zona: empresa.zona || '',
+      contabil: empresa.contabil || '',
+      num_func: String(empresa.numFunc ?? ''),
+      peso_folha: String(empresa.pesoFolha ?? ''),
+      peso_fiscal: String(empresa.pesoFiscal ?? ''),
+      receitas: String(empresa.receitas ?? ''),
+      desp_custos: String(empresa.despCustos ?? ''),
+      envia_sped: empresa.enviaSped || '',
+      observacoes: empresa.observacoes || '',
+      lkn: empresa.lnk || '',
       EMPRESAS: empresa.empresas || '',
       CNPJ: empresa.cnpj || '',
       REGIME_TRIB: empresa.regimeTrib || '',
@@ -459,24 +492,17 @@ export async function saveEmpresaRecord(empresa: EmpresaRow): Promise<string | u
       LNK: empresa.lnk || '',
       // Legados
       empresas: empresa.empresas || '',
-      cnpj: empresa.cnpj || '',
       regimeTrib: empresa.regimeTrib || '',
       ramoAtividade: empresa.ramoAtividade || '',
-      filial: empresa.filial || '',
-      grupo: empresa.grupo || '',
       entrada: empresa.entrada || '',
-      zona: empresa.zona || '',
-      contabil: empresa.contabil || '',
       numFunc: numFuncNum,
       pesoFolha: pesoFolhaNum,
       pesoFiscal: pesoFiscalNum,
-      receitas: receitasNum,
       despCustos: despCustosNum,
       enviaSped: empresa.enviaSped || '',
-      observacoes: empresa.observacoes || '',
-      lnk: empresa.lnk || '',
       isManual: empresa.isManual ?? false,
       customFields: empresa.customFields ?? {},
+      custom_columns: empresa.customFields ?? {},
     }
 
     const isValidPbId = empresa.id && empresa.id.length === 15 && !empresa.id.includes('-')

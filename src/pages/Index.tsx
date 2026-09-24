@@ -52,6 +52,7 @@ export default function Index() {
   }, [])
 
   // Carrega assincronamente os dados atualizados ao entrar no sistema ou ao alternar abas
+  // Carrega assincronamente os dados atualizados ao entrar no sistema ou ao alternar abas
   useEffect(() => {
     let isMounted = true
 
@@ -59,22 +60,22 @@ export default function Index() {
       try {
         if (state.tab === 'empresas') {
           const emp = await fetchEmpresas().catch(() => loadEmpresasFromStorage())
-          if (isMounted && emp && emp.length > 0) {
+          if (isMounted && emp) {
             setEmpresas(emp)
           }
         } else if (state.tab === 'dpto-pessoal') {
           const dpto = await fetchDptoPessoal().catch(() => loadDptoPessoalFromStorage())
-          if (isMounted && dpto && dpto.length > 0) {
+          if (isMounted && dpto) {
             setDptoRows(dpto)
           }
         } else if (state.tab === 'fiscal-pesos') {
           const fisc = await fetchDptoFiscal().catch(() => loadDptoFiscalFromStorage())
-          if (isMounted && fisc && fisc.length > 0) {
+          if (isMounted && fisc) {
             setFiscalRows(fisc)
           }
         } else if (state.tab === 'contabil') {
           const cont = await fetchDptoContabil().catch(() => loadDptoContabilFromStorage())
-          if (isMounted && cont && cont.length > 0) {
+          if (isMounted && cont) {
             setContabilRows(cont)
           }
         }

@@ -124,10 +124,10 @@ export async function fetchDptoPessoal(): Promise<DptoPessoalRow[]> {
     if (records && records.length > 0) {
       const mapped: DptoPessoalRow[] = records.map((r) => ({
         id: String(r.id || ''),
-        empresa: String(r.EMPRESAS ?? r.empresa ?? ''),
+        empresa: String(r.EMPRESAS ?? r.empresa ?? r.nome ?? ''),
         cnpj: String(r.CNPJ ?? r.cnpj ?? ''),
         zona: String(r.ZONA ?? r.zona ?? ''),
-        numFunc: (r.NUM_FUNC ?? r.numFunc ?? '') as number | string,
+        numFunc: (r.NUM_FUNC ?? r.numFunc ?? r.num_func ?? '') as number | string,
       }))
       try {
         localStorage.setItem(DPTO_PESSOAL_PERSIST_KEY, JSON.stringify(mapped))
@@ -163,13 +163,15 @@ export async function syncDptoPessoalToPocketBase(rows: DptoPessoalRow[]): Promi
             ? parseFloat(String(row.numFunc).replace(',', '.')) || null
             : null
       const payload = {
+        nome: row.empresa || '',
+        cnpj: row.cnpj || '',
+        zona: row.zona || '',
+        num_func: String(row.numFunc ?? ''),
         EMPRESAS: row.empresa || '',
         CNPJ: row.cnpj || '',
         ZONA: row.zona || '',
         NUM_FUNC: numFuncNum,
         empresa: row.empresa || '',
-        cnpj: row.cnpj || '',
-        zona: row.zona || '',
         numFunc: numFuncNum,
       }
 
@@ -210,13 +212,15 @@ export async function saveDptoPessoalRecord(row: DptoPessoalRow): Promise<string
           ? parseFloat(String(row.numFunc).replace(',', '.')) || null
           : null
     const payload = {
+      nome: row.empresa || '',
+      cnpj: row.cnpj || '',
+      zona: row.zona || '',
+      num_func: String(row.numFunc ?? ''),
       EMPRESAS: row.empresa || '',
       CNPJ: row.cnpj || '',
       ZONA: row.zona || '',
       NUM_FUNC: numFuncNum,
       empresa: row.empresa || '',
-      cnpj: row.cnpj || '',
-      zona: row.zona || '',
       numFunc: numFuncNum,
     }
 

@@ -123,7 +123,7 @@ export async function fetchDptoFiscal(): Promise<DptoFiscalRow[]> {
     if (records && records.length > 0) {
       const mapped: DptoFiscalRow[] = records.map((r) => ({
         id: String(r.id || ''),
-        empresa: String(r.EMPRESAS ?? r.empresa ?? ''),
+        empresa: String(r.EMPRESAS ?? r.empresa ?? r.nome ?? ''),
         cnpj: String(r.CNPJ ?? r.cnpj ?? ''),
         zona: String(r.ZONA ?? r.zona ?? ''),
         peso: (r.PESO ?? r.peso ?? '') as number | string,
@@ -162,14 +162,15 @@ export async function syncDptoFiscalToPocketBase(rows: DptoFiscalRow[]): Promise
             ? parseFloat(String(row.peso).replace(',', '.')) || null
             : null
       const payload = {
+        nome: row.empresa || '',
+        cnpj: row.cnpj || '',
+        zona: row.zona || '',
+        peso: String(row.peso ?? ''),
         EMPRESAS: row.empresa || '',
         CNPJ: row.cnpj || '',
         ZONA: row.zona || '',
         PESO: pesoNum,
         empresa: row.empresa || '',
-        cnpj: row.cnpj || '',
-        zona: row.zona || '',
-        peso: pesoNum,
       }
 
       const isValidPbId = row.id && row.id.length === 15 && !row.id.includes('-')
@@ -209,14 +210,15 @@ export async function saveDptoFiscalRecord(row: DptoFiscalRow): Promise<string |
           ? parseFloat(String(row.peso).replace(',', '.')) || null
           : null
     const payload = {
+      nome: row.empresa || '',
+      cnpj: row.cnpj || '',
+      zona: row.zona || '',
+      peso: String(row.peso ?? ''),
       EMPRESAS: row.empresa || '',
       CNPJ: row.cnpj || '',
       ZONA: row.zona || '',
       PESO: pesoNum,
       empresa: row.empresa || '',
-      cnpj: row.cnpj || '',
-      zona: row.zona || '',
-      peso: pesoNum,
     }
 
     const isValidPbId = row.id && row.id.length === 15 && !row.id.includes('-')

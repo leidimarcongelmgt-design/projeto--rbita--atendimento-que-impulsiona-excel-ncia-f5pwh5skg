@@ -124,7 +124,7 @@ export async function fetchDptoContabil(): Promise<DptoContabilRow[]> {
     if (records && records.length > 0) {
       const mapped: DptoContabilRow[] = records.map((r) => ({
         id: String(r.id || ''),
-        empresa: String(r.EMPRESAS ?? r.empresa ?? ''),
+        empresa: String(r.EMPRESAS ?? r.empresa ?? r.nome ?? ''),
         cnpj: String(r.CNPJ ?? r.cnpj ?? ''),
         zona: String(r.ZONA ?? r.zona ?? ''),
         contabil: String(r.CONTABIL ?? r.contabil ?? ''),
@@ -157,14 +157,15 @@ export async function syncDptoContabilToPocketBase(rows: DptoContabilRow[]): Pro
 
     for (const row of rows) {
       const payload = {
+        nome: row.empresa || '',
+        cnpj: row.cnpj || '',
+        zona: row.zona || '',
+        contabil: row.contabil || '',
         EMPRESAS: row.empresa || '',
         CNPJ: row.cnpj || '',
         ZONA: row.zona || '',
         CONTABIL: row.contabil || '',
         empresa: row.empresa || '',
-        cnpj: row.cnpj || '',
-        zona: row.zona || '',
-        contabil: row.contabil || '',
       }
 
       const isValidPbId = row.id && row.id.length === 15 && !row.id.includes('-')
@@ -198,14 +199,15 @@ export async function clearDptoContabilPocketBase(): Promise<void> {
 export async function saveDptoContabilRecord(row: DptoContabilRow): Promise<string | undefined> {
   try {
     const payload = {
+      nome: row.empresa || '',
+      cnpj: row.cnpj || '',
+      zona: row.zona || '',
+      contabil: row.contabil || '',
       EMPRESAS: row.empresa || '',
       CNPJ: row.cnpj || '',
       ZONA: row.zona || '',
       CONTABIL: row.contabil || '',
       empresa: row.empresa || '',
-      cnpj: row.cnpj || '',
-      zona: row.zona || '',
-      contabil: row.contabil || '',
     }
 
     const isValidPbId = row.id && row.id.length === 15 && !row.id.includes('-')
