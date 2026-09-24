@@ -228,7 +228,7 @@ export default function LoginPage() {
       </Card>
 
       <div className="mt-8 text-center text-xs text-slate-400">
-        DOSSIÊ DO CLIENTE • Versão 0.0.62 • Congel Contabilidade
+        DOSSIÊ DO CLIENTE • Versão 0.0.63 • Congel Contabilidade
       </div>
     </div>
   )

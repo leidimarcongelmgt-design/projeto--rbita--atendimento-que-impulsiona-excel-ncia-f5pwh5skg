@@ -288,7 +288,11 @@ export async function fetchEmpresas(): Promise<EmpresaRow[]> {
 
     // Backend está vazio mas temos dados locais: migração inicial
     if (localData.length > 0) {
-      syncEmpresasToPocketBase(localData).catch(() => {})
+      const alreadyMigrated = localStorage.getItem('orbita_empresas_migrated_v1') === 'true'
+      if (!alreadyMigrated) {
+        localStorage.setItem('orbita_empresas_migrated_v1', 'true')
+        syncEmpresasToPocketBase(localData).catch(() => {})
+      }
       return localData
     }
     return []
@@ -307,6 +311,15 @@ export async function syncEmpresasToPocketBase(empresas: EmpresaRow[]): Promise<
   try {
     const existing = await pb.collection(COLLECTION_NAME).getFullList({ requestKey: null })
     const existingIds = new Set(existing.map((e) => e.id))
+    const existingByCnpj = new Map<string, string>()
+    const existingByName = new Map<string, string>()
+
+    for (const item of existing) {
+      const c = cleanCNPJ((item.cnpj || item.CNPJ || '') as string)
+      if (c) existingByCnpj.set(c, item.id)
+      const n = normalizeHeader((item.nome || item.empresas || item.EMPRESAS || '') as string)
+      if (n) existingByName.set(n, item.id)
+    }
 
     for (const emp of empresas) {
       const numFuncNum =
@@ -392,10 +405,22 @@ export async function syncEmpresasToPocketBase(empresas: EmpresaRow[]): Promise<
 
       // PocketBase IDs têm 15 caracteres alfanuméricos
       const isValidPbId = emp.id && emp.id.length === 15 && !emp.id.includes('-')
-      if (isValidPbId && existingIds.has(emp.id)) {
-        await pb.collection(COLLECTION_NAME).update(emp.id, payload, { requestKey: null })
+      const targetId =
+        (isValidPbId && existingIds.has(emp.id) ? emp.id : undefined) ||
+        (cleanCNPJ(emp.cnpj) ? existingByCnpj.get(cleanCNPJ(emp.cnpj)) : undefined) ||
+        (normalizeHeader(emp.empresas)
+          ? existingByName.get(normalizeHeader(emp.empresas))
+          : undefined)
+
+      if (targetId) {
+        await pb.collection(COLLECTION_NAME).update(targetId, payload, { requestKey: null })
       } else {
-        await pb.collection(COLLECTION_NAME).create(payload, { requestKey: null })
+        const created = await pb.collection(COLLECTION_NAME).create(payload, { requestKey: null })
+        const c = cleanCNPJ(emp.cnpj)
+        if (c) existingByCnpj.set(c, created.id)
+        const n = normalizeHeader(emp.empresas)
+        if (n) existingByName.set(n, created.id)
+        existingIds.add(created.id)
       }
     }
     isPocketBaseAvailable = true
@@ -506,10 +531,24 @@ export async function saveEmpresaRecord(empresa: EmpresaRow): Promise<string | u
     }
 
     const isValidPbId = empresa.id && empresa.id.length === 15 && !empresa.id.includes('-')
-    if (isValidPbId) {
+    let targetId = isValidPbId ? empresa.id : undefined
+
+    if (!targetId) {
+      // Checa duplicidade por CNPJ ou nome antes de criar novo
+      const clean = cleanCNPJ(empresa.cnpj)
+      if (clean) {
+        const match = await pb
+          .collection(COLLECTION_NAME)
+          .getFirstListItem(`cnpj ~ "${empresa.cnpj}"`, { requestKey: null })
+          .catch(() => null)
+        if (match) targetId = match.id
+      }
+    }
+
+    if (targetId) {
       const updated = await pb
         .collection(COLLECTION_NAME)
-        .update(empresa.id, payload, { requestKey: null })
+        .update(targetId, payload, { requestKey: null })
       isPocketBaseAvailable = true
       return updated.id
     } else {

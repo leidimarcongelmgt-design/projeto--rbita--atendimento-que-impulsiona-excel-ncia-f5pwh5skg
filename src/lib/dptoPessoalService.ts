@@ -139,7 +139,11 @@ export async function fetchDptoPessoal(): Promise<DptoPessoalRow[]> {
     }
 
     if (localData.length > 0) {
-      syncDptoPessoalToPocketBase(localData).catch(() => {})
+      const alreadyMigrated = localStorage.getItem('orbita_dpto_pessoal_migrated_v1') === 'true'
+      if (!alreadyMigrated) {
+        localStorage.setItem('orbita_dpto_pessoal_migrated_v1', 'true')
+        syncDptoPessoalToPocketBase(localData).catch(() => {})
+      }
       return localData
     }
     return []
@@ -154,6 +158,15 @@ export async function syncDptoPessoalToPocketBase(rows: DptoPessoalRow[]): Promi
   try {
     const existing = await pb.collection(COLLECTION_NAME).getFullList({ requestKey: null })
     const existingIds = new Set(existing.map((e) => e.id))
+    const existingByCnpj = new Map<string, string>()
+    const existingByName = new Map<string, string>()
+
+    for (const item of existing) {
+      const c = cleanCNPJ((item.cnpj || item.CNPJ || '') as string)
+      if (c) existingByCnpj.set(c, item.id)
+      const n = normalizeHeader((item.nome || item.empresa || item.EMPRESAS || '') as string)
+      if (n) existingByName.set(n, item.id)
+    }
 
     for (const row of rows) {
       const numFuncNum =
@@ -176,10 +189,22 @@ export async function syncDptoPessoalToPocketBase(rows: DptoPessoalRow[]): Promi
       }
 
       const isValidPbId = row.id && row.id.length === 15 && !row.id.includes('-')
-      if (isValidPbId && existingIds.has(row.id)) {
-        await pb.collection(COLLECTION_NAME).update(row.id, payload, { requestKey: null })
+      const targetId =
+        (isValidPbId && existingIds.has(row.id) ? row.id : undefined) ||
+        (cleanCNPJ(row.cnpj) ? existingByCnpj.get(cleanCNPJ(row.cnpj)) : undefined) ||
+        (normalizeHeader(row.empresa)
+          ? existingByName.get(normalizeHeader(row.empresa))
+          : undefined)
+
+      if (targetId) {
+        await pb.collection(COLLECTION_NAME).update(targetId, payload, { requestKey: null })
       } else {
-        await pb.collection(COLLECTION_NAME).create(payload, { requestKey: null })
+        const created = await pb.collection(COLLECTION_NAME).create(payload, { requestKey: null })
+        const c = cleanCNPJ(row.cnpj)
+        if (c) existingByCnpj.set(c, created.id)
+        const n = normalizeHeader(row.empresa)
+        if (n) existingByName.set(n, created.id)
+        existingIds.add(created.id)
       }
     }
     isPocketBaseAvailable = true
@@ -225,10 +250,23 @@ export async function saveDptoPessoalRecord(row: DptoPessoalRow): Promise<string
     }
 
     const isValidPbId = row.id && row.id.length === 15 && !row.id.includes('-')
-    if (isValidPbId) {
+    let targetId = isValidPbId ? row.id : undefined
+
+    if (!targetId) {
+      const clean = cleanCNPJ(row.cnpj)
+      if (clean) {
+        const match = await pb
+          .collection(COLLECTION_NAME)
+          .getFirstListItem(`cnpj ~ "${row.cnpj}"`, { requestKey: null })
+          .catch(() => null)
+        if (match) targetId = match.id
+      }
+    }
+
+    if (targetId) {
       const updated = await pb
         .collection(COLLECTION_NAME)
-        .update(row.id, payload, { requestKey: null })
+        .update(targetId, payload, { requestKey: null })
       isPocketBaseAvailable = true
       return updated.id
     } else {

@@ -54,7 +54,7 @@ export const Header: React.FC<HeaderProps> = ({
                 Identificação do emissor e emissão de dossiê
               </p>
               <span className="text-[10px] font-mono bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">
-                v0.0.62
+                v0.0.63
               </span>
             </div>
           </div>
