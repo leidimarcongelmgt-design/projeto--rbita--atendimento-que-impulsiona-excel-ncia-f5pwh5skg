@@ -9,6 +9,9 @@ import {
   clearDptoContabilStorage,
   deleteDptoContabilRecord,
   saveDptoContabilRecord,
+  loadDptoContabilColumnOrderFromStorage,
+  saveDptoContabilColumnOrderToStorage,
+  clearDptoContabilColumnOrderStorage,
 } from '@/lib/dptoContabilService'
 import { useResizableColumns, RESIZABLE_STORAGE_KEYS } from '@/hooks/use-resizable-columns'
 import { ResizableTh } from '@/components/calculator/ResizableTh'
@@ -52,6 +55,8 @@ import {
   Plus,
   RefreshCw,
   FileSpreadsheet,
+  RotateCcw,
+  GripHorizontal,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -102,6 +107,119 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
   // Busca e ordenação
   const [searchQuery, setSearchQuery] = useState('')
   const [sortConfig, setSortConfig] = useState<SortConfig>(null)
+
+  // Ordem das colunas móveis da tabela Dpto. Contábil
+  const DEFAULT_DPTO_CONTABIL_COLUMNS: { field: SortField; label: string; numeric?: boolean }[] =
+    useMemo(
+      () => [
+        { field: 'empresa', label: 'EMPRESAS' },
+        { field: 'cnpj', label: 'CNPJ' },
+        { field: 'zona', label: 'ZONA' },
+        { field: 'contabil', label: 'CONTÁBIL' },
+      ],
+      [],
+    )
+
+  const [columnOrder, setColumnOrder] = useState<string[]>(() => {
+    return loadDptoContabilColumnOrderFromStorage()
+  })
+
+  const [draggedColKey, setDraggedColKey] = useState<string | null>(null)
+  const [dropTargetColKey, setDropTargetColKey] = useState<string | null>(null)
+  const [dropSide, setDropSide] = useState<'left' | 'right' | null>(null)
+
+  const orderedColumns = useMemo(() => {
+    const defaultFields = DEFAULT_DPTO_CONTABIL_COLUMNS
+    const map = new Map(defaultFields.map((col) => [col.field, col]))
+    const list: typeof defaultFields = []
+    const seen = new Set<string>()
+
+    columnOrder.forEach((key) => {
+      const col = map.get(key as SortField)
+      if (col) {
+        list.push(col)
+        seen.add(key)
+      }
+    })
+
+    defaultFields.forEach((col) => {
+      if (!seen.has(col.field)) {
+        list.push(col)
+        seen.add(col.field)
+      }
+    })
+
+    return list
+  }, [columnOrder, DEFAULT_DPTO_CONTABIL_COLUMNS])
+
+  const isCustomOrderActive = useMemo(() => {
+    if (columnOrder.length === 0) return false
+    const defaultKeys = DEFAULT_DPTO_CONTABIL_COLUMNS.map((c) => c.field)
+    return columnOrder.some((k, i) => k !== defaultKeys[i])
+  }, [columnOrder, DEFAULT_DPTO_CONTABIL_COLUMNS])
+
+  const handleColumnDragStart = (e: React.DragEvent<HTMLTableCellElement>, key: string) => {
+    setDraggedColKey(key)
+    e.dataTransfer.setData('text/plain', key)
+  }
+
+  const handleColumnDragOver = (e: React.DragEvent<HTMLTableCellElement>, targetKey: string) => {
+    if (!draggedColKey || draggedColKey === targetKey) {
+      setDropTargetColKey(null)
+      setDropSide(null)
+      return
+    }
+    const rect = e.currentTarget.getBoundingClientRect()
+    const midX = rect.left + rect.width / 2
+    const side = e.clientX < midX ? 'left' : 'right'
+    setDropTargetColKey(targetKey)
+    setDropSide(side)
+  }
+
+  const handleColumnDragLeave = (_e: React.DragEvent<HTMLTableCellElement>, targetKey: string) => {
+    if (dropTargetColKey === targetKey) {
+      setDropTargetColKey(null)
+      setDropSide(null)
+    }
+  }
+
+  const handleColumnDrop = (_e: React.DragEvent<HTMLTableCellElement>, targetKey: string) => {
+    if (!draggedColKey || draggedColKey === targetKey) {
+      setDraggedColKey(null)
+      setDropTargetColKey(null)
+      setDropSide(null)
+      return
+    }
+
+    const currentKeys = orderedColumns.map((c) => c.field)
+    const fromIndex = currentKeys.indexOf(draggedColKey as SortField)
+    if (fromIndex === -1) return
+
+    const remaining = currentKeys.filter((k) => k !== draggedColKey)
+    const targetIdxInRemaining = remaining.indexOf(targetKey as SortField)
+    const insertIdx = dropSide === 'right' ? targetIdxInRemaining + 1 : targetIdxInRemaining
+    const newOrder = [...remaining]
+    newOrder.splice(insertIdx, 0, draggedColKey as SortField)
+
+    setColumnOrder(newOrder)
+    saveDptoContabilColumnOrderToStorage(newOrder)
+    setDraggedColKey(null)
+    setDropTargetColKey(null)
+    setDropSide(null)
+    toast.success('Coluna reposicionada!')
+  }
+
+  const handleColumnDragEnd = () => {
+    setDraggedColKey(null)
+    setDropTargetColKey(null)
+    setDropSide(null)
+  }
+
+  const handleResetColumnOrder = () => {
+    clearDptoContabilColumnOrderStorage()
+    setColumnOrder([])
+    toast.info('Ordem original das colunas restaurada!')
+  }
 
   // Diálogo de Conflito de Importação
   const [pendingFileRows, setPendingFileRows] = useState<{
@@ -451,6 +569,19 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
                   <span>Importar Planilha</span>
                 </Button>
 
+                {isCustomOrderActive && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleResetColumnOrder}
+                    className="text-xs h-9 text-amber-800 hover:bg-amber-50 border-amber-300 gap-1.5 font-medium"
+                    title="Restaurar a ordem original das colunas"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-amber-700" />
+                    <span>Restaurar Ordem</span>
+                  </Button>
+                )}
+
                 {rows.length > 0 && (
                   <Button
                     type="button"
@@ -658,98 +789,47 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
                         >
                           #
                         </ResizableTh>
-                        <ResizableTh
-                          width={widths.empresa}
-                          minWidth={MIN_DPTO_CONTABIL_COL_WIDTHS.empresa}
-                          resizable={true}
-                          onResizeStart={(e) => startResize(e, 'empresa')}
-                          onHeaderClick={() => handleSort('empresa')}
-                          isDraggingRef={isDraggingRef}
-                          className="py-2.5 px-3 font-bold uppercase tracking-wider cursor-pointer hover:bg-purple-900/60 transition-colors border-r border-purple-950/40 overflow-hidden"
-                          title="Clique para ordenar por Empresa"
-                        >
-                          <div className="inline-flex items-center gap-1.5 w-full overflow-hidden">
-                            <span className="truncate">EMPRESAS</span>
-                            {sortConfig?.field === 'empresa' ? (
-                              sortConfig.direction === 'asc' ? (
-                                <ArrowUp className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
+                        {orderedColumns.map((col) => (
+                          <ResizableTh
+                            key={col.field}
+                            columnKey={col.field}
+                            draggableColumn={true}
+                            dropIndicator={dropTargetColKey === col.field ? dropSide : null}
+                            onColumnDragStart={handleColumnDragStart}
+                            onColumnDragOver={handleColumnDragOver}
+                            onColumnDragLeave={handleColumnDragLeave}
+                            onColumnDrop={handleColumnDrop}
+                            onColumnDragEnd={handleColumnDragEnd}
+                            width={widths[col.field]}
+                            minWidth={MIN_DPTO_CONTABIL_COL_WIDTHS[col.field]}
+                            resizable={true}
+                            onResizeStart={(e) => startResize(e, col.field)}
+                            onHeaderClick={() => handleSort(col.field)}
+                            isDraggingRef={isDraggingRef}
+                            className={`py-2.5 px-3 font-bold uppercase tracking-wider hover:bg-purple-900/60 transition-colors border-r border-purple-950/40 overflow-hidden ${
+                              col.numeric ? 'text-right' : 'text-left'
+                            }`}
+                            title={`Coluna ${col.label}. Arraste para mover ou clique para ordenar.`}
+                          >
+                            <div
+                              className={`inline-flex items-center gap-1.5 w-full overflow-hidden ${
+                                col.numeric ? 'justify-end' : 'justify-start'
+                              }`}
+                            >
+                              <GripHorizontal className="w-3 h-3 text-purple-300 opacity-40 hover:opacity-100 flex-shrink-0 cursor-grab" />
+                              <span className="truncate">{col.label}</span>
+                              {sortConfig?.field === col.field ? (
+                                sortConfig.direction === 'asc' ? (
+                                  <ArrowUp className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
+                                ) : (
+                                  <ArrowDown className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
+                                )
                               ) : (
-                                <ArrowDown className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
-                              )
-                            ) : (
-                              <ArrowUpDown className="w-3 h-3 text-purple-300 opacity-60 flex-shrink-0" />
-                            )}
-                          </div>
-                        </ResizableTh>
-                        <ResizableTh
-                          width={widths.cnpj}
-                          minWidth={MIN_DPTO_CONTABIL_COL_WIDTHS.cnpj}
-                          resizable={true}
-                          onResizeStart={(e) => startResize(e, 'cnpj')}
-                          onHeaderClick={() => handleSort('cnpj')}
-                          isDraggingRef={isDraggingRef}
-                          className="py-2.5 px-3 font-bold uppercase tracking-wider cursor-pointer hover:bg-purple-900/60 transition-colors border-r border-purple-950/40 overflow-hidden"
-                          title="Clique para ordenar por CNPJ"
-                        >
-                          <div className="inline-flex items-center gap-1.5 w-full overflow-hidden">
-                            <span className="truncate">CNPJ</span>
-                            {sortConfig?.field === 'cnpj' ? (
-                              sortConfig.direction === 'asc' ? (
-                                <ArrowUp className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
-                              ) : (
-                                <ArrowDown className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
-                              )
-                            ) : (
-                              <ArrowUpDown className="w-3 h-3 text-purple-300 opacity-60 flex-shrink-0" />
-                            )}
-                          </div>
-                        </ResizableTh>
-                        <ResizableTh
-                          width={widths.zona}
-                          minWidth={MIN_DPTO_CONTABIL_COL_WIDTHS.zona}
-                          resizable={true}
-                          onResizeStart={(e) => startResize(e, 'zona')}
-                          onHeaderClick={() => handleSort('zona')}
-                          isDraggingRef={isDraggingRef}
-                          className="py-2.5 px-3 font-bold uppercase tracking-wider cursor-pointer hover:bg-purple-900/60 transition-colors border-r border-purple-950/40 overflow-hidden"
-                          title="Clique para ordenar por Zona"
-                        >
-                          <div className="inline-flex items-center gap-1.5 w-full overflow-hidden">
-                            <span className="truncate">ZONA</span>
-                            {sortConfig?.field === 'zona' ? (
-                              sortConfig.direction === 'asc' ? (
-                                <ArrowUp className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
-                              ) : (
-                                <ArrowDown className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
-                              )
-                            ) : (
-                              <ArrowUpDown className="w-3 h-3 text-purple-300 opacity-60 flex-shrink-0" />
-                            )}
-                          </div>
-                        </ResizableTh>
-                        <ResizableTh
-                          width={widths.contabil}
-                          minWidth={MIN_DPTO_CONTABIL_COL_WIDTHS.contabil}
-                          resizable={true}
-                          onResizeStart={(e) => startResize(e, 'contabil')}
-                          onHeaderClick={() => handleSort('contabil')}
-                          isDraggingRef={isDraggingRef}
-                          className="py-2.5 px-3 font-bold uppercase tracking-wider cursor-pointer hover:bg-purple-900/60 transition-colors border-r border-purple-950/40 overflow-hidden"
-                          title="Clique para ordenar por Contábil"
-                        >
-                          <div className="inline-flex items-center gap-1.5 w-full overflow-hidden">
-                            <span className="truncate">CONTÁBIL</span>
-                            {sortConfig?.field === 'contabil' ? (
-                              sortConfig.direction === 'asc' ? (
-                                <ArrowUp className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
-                              ) : (
-                                <ArrowDown className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
-                              )
-                            ) : (
-                              <ArrowUpDown className="w-3 h-3 text-purple-300 opacity-60 flex-shrink-0" />
-                            )}
-                          </div>
-                        </ResizableTh>
+                                <ArrowUpDown className="w-3 h-3 text-purple-300 opacity-60 flex-shrink-0" />
+                              )}
+                            </div>
+                          </ResizableTh>
+                        ))}
                         <th
                           style={{
                             width: `${widths.acoes}px`,
@@ -774,41 +854,69 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
                             <td className="py-2.5 px-3 text-center text-slate-400 font-mono text-[11px] border-r border-slate-100 truncate">
                               {index + 1}
                             </td>
-                            <td className="py-2 px-3 border-r border-slate-100 overflow-hidden">
-                              <Input
-                                value={row.empresa}
-                                onChange={(e) => handleEmpresaChange(row.id, e.target.value)}
-                                className="h-8 text-xs font-medium text-slate-900 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
-                                placeholder="Nome da empresa"
-                              />
-                            </td>
-                            <td className="py-2 px-3 border-r border-slate-100 overflow-hidden">
-                              <Input
-                                type="text"
-                                value={row.cnpj || ''}
-                                onChange={(e) => handleCnpjChange(row.id, e.target.value)}
-                                className="h-8 text-xs font-mono text-slate-700 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
-                                placeholder="00.000.000/0000-00"
-                              />
-                            </td>
-                            <td className="py-2 px-3 border-r border-slate-100 overflow-hidden">
-                              <Input
-                                type="text"
-                                value={row.zona || ''}
-                                onChange={(e) => handleZonaChange(row.id, e.target.value)}
-                                className="h-8 text-xs text-slate-800 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
-                                placeholder="Zona..."
-                              />
-                            </td>
-                            <td className="py-2 px-3 border-r border-slate-100 overflow-hidden">
-                              <Input
-                                type="text"
-                                value={row.contabil}
-                                onChange={(e) => handleContabilChange(row.id, e.target.value)}
-                                className="h-8 text-xs font-medium text-slate-900 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
-                                placeholder="Valor contábil..."
-                              />
-                            </td>
+                            {orderedColumns.map((col) => {
+                              if (col.field === 'empresa') {
+                                return (
+                                  <td
+                                    key={col.field}
+                                    className="py-2 px-3 border-r border-slate-100 overflow-hidden"
+                                  >
+                                    <Input
+                                      value={row.empresa}
+                                      onChange={(e) => handleEmpresaChange(row.id, e.target.value)}
+                                      className="h-8 text-xs font-medium text-slate-900 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
+                                      placeholder="Nome da empresa"
+                                    />
+                                  </td>
+                                )
+                              }
+                              if (col.field === 'cnpj') {
+                                return (
+                                  <td
+                                    key={col.field}
+                                    className="py-2 px-3 border-r border-slate-100 overflow-hidden"
+                                  >
+                                    <Input
+                                      type="text"
+                                      value={row.cnpj || ''}
+                                      onChange={(e) => handleCnpjChange(row.id, e.target.value)}
+                                      className="h-8 text-xs font-mono text-slate-700 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
+                                      placeholder="00.000.000/0000-00"
+                                    />
+                                  </td>
+                                )
+                              }
+                              if (col.field === 'zona') {
+                                return (
+                                  <td
+                                    key={col.field}
+                                    className="py-2 px-3 border-r border-slate-100 overflow-hidden"
+                                  >
+                                    <Input
+                                      type="text"
+                                      value={row.zona || ''}
+                                      onChange={(e) => handleZonaChange(row.id, e.target.value)}
+                                      className="h-8 text-xs text-slate-800 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
+                                      placeholder="Zona..."
+                                    />
+                                  </td>
+                                )
+                              }
+                              return (
+                                <td
+                                  key={col.field}
+                                  className="py-2 px-3 border-r border-slate-100 overflow-hidden"
+                                >
+                                  <Input
+                                    type="text"
+                                    value={row.contabil}
+                                    onChange={(e) => handleContabilChange(row.id, e.target.value)}
+                                    className="h-8 text-xs font-medium text-slate-900 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
+                                    placeholder="Valor contábil..."
+                                  />
+                                </td>
+                              )
+                            })}
                             <td className="py-2.5 px-3 text-center whitespace-nowrap">
                               <Tooltip>
                                 <TooltipTrigger asChild>

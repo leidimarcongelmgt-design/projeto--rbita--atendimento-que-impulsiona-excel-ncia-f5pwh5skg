@@ -5,6 +5,7 @@ import pb from '@/lib/pocketbase/client'
 export const EMPRESAS_STORAGE_KEY = 'orbita_empresas'
 export const EMPRESAS_PERSIST_KEY = 'orbita_empresas_persistent'
 export const EMPRESAS_CUSTOM_COLUMNS_KEY = 'orbita_empresas_custom_columns'
+export const EMPRESAS_COLUMN_ORDER_KEY = 'orbita_empresas_column_order'
 const COLLECTION_NAME = 'empresas'
 
 /**
@@ -151,6 +152,50 @@ export function saveCustomColumnsToStorage(columns: CustomColumnDef[]): void {
     sessionStorage.setItem(EMPRESAS_CUSTOM_COLUMNS_KEY, JSON.stringify(columns))
   } catch {
     // quota exceeded ou ambiente restrito
+  }
+}
+
+/**
+ * Carrega a ordem salva das colunas da aba Empresas (localStorage com fallback sessionStorage)
+ */
+export function loadEmpresasColumnOrderFromStorage(): string[] {
+  try {
+    const raw =
+      localStorage.getItem(EMPRESAS_COLUMN_ORDER_KEY) ||
+      sessionStorage.getItem(EMPRESAS_COLUMN_ORDER_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.filter((k): k is string => typeof k === 'string')
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return []
+}
+
+/**
+ * Salva a ordem das colunas da aba Empresas no localStorage e sessionStorage
+ */
+export function saveEmpresasColumnOrderToStorage(columnOrder: string[]): void {
+  try {
+    localStorage.setItem(EMPRESAS_COLUMN_ORDER_KEY, JSON.stringify(columnOrder))
+    sessionStorage.setItem(EMPRESAS_COLUMN_ORDER_KEY, JSON.stringify(columnOrder))
+  } catch {
+    // quota exceeded ou ambiente restrito
+  }
+}
+
+/**
+ * Remove a ordem customizada das colunas, restaurando a ordem original
+ */
+export function clearEmpresasColumnOrderStorage(): void {
+  try {
+    localStorage.removeItem(EMPRESAS_COLUMN_ORDER_KEY)
+    sessionStorage.removeItem(EMPRESAS_COLUMN_ORDER_KEY)
+  } catch {
+    // ignore
   }
 }
 

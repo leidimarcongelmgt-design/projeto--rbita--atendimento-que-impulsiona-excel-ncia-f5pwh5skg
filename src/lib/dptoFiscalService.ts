@@ -6,6 +6,7 @@ import pb from '@/lib/pocketbase/client'
 
 export const DPTO_FISCAL_STORAGE_KEY = 'orbita_dpto_fiscal_pesos'
 export const DPTO_FISCAL_PERSIST_KEY = 'orbita_dpto_fiscal_pesos_persistent'
+export const DPTO_FISCAL_COLUMN_ORDER_KEY = 'orbita_dpto_fiscal_pesos_column_order'
 const COLLECTION_NAME = 'dpto_fiscal'
 
 let isPocketBaseAvailable: boolean | null = null
@@ -60,8 +61,8 @@ export function saveDptoFiscalToStorage(rows: DptoFiscalRow[]): void {
  */
 export function clearDptoFiscalStorage(): void {
   try {
-    localStorage.removeItem(DPTO_FISCAL_PERSIST_KEY)
     sessionStorage.removeItem(DPTO_FISCAL_STORAGE_KEY)
+    localStorage.removeItem(DPTO_FISCAL_PERSIST_KEY)
   } catch {
     // ignore
   }
@@ -69,6 +70,40 @@ export function clearDptoFiscalStorage(): void {
   clearDptoFiscalPocketBase().catch(() => {})
 }
 
+export function loadDptoFiscalColumnOrderFromStorage(): string[] {
+  try {
+    const raw =
+      localStorage.getItem(DPTO_FISCAL_COLUMN_ORDER_KEY) ||
+      sessionStorage.getItem(DPTO_FISCAL_COLUMN_ORDER_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.filter((k): k is string => typeof k === 'string')
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return []
+}
+
+export function saveDptoFiscalColumnOrderToStorage(order: string[]): void {
+  try {
+    localStorage.setItem(DPTO_FISCAL_COLUMN_ORDER_KEY, JSON.stringify(order))
+    sessionStorage.setItem(DPTO_FISCAL_COLUMN_ORDER_KEY, JSON.stringify(order))
+  } catch {
+    // ignore
+  }
+}
+
+export function clearDptoFiscalColumnOrderStorage(): void {
+  try {
+    localStorage.removeItem(DPTO_FISCAL_COLUMN_ORDER_KEY)
+    sessionStorage.removeItem(DPTO_FISCAL_COLUMN_ORDER_KEY)
+  } catch {
+    // ignore
+  }
+}
 /**
  * Busca registros no PocketBase com fallback para armazenamento local.
  * Se o backend estiver vazio e houver dados locais, migra automaticamente.

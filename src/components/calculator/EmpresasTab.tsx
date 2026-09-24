@@ -16,6 +16,9 @@ import {
   loadCustomColumnsFromStorage,
   saveCustomColumnsToStorage,
   sortEmpresasAlphabetically,
+  loadEmpresasColumnOrderFromStorage,
+  saveEmpresasColumnOrderToStorage,
+  clearEmpresasColumnOrderStorage,
 } from '@/lib/empresasService'
 import { useResizableColumns, RESIZABLE_STORAGE_KEYS } from '@/hooks/use-resizable-columns'
 import { ResizableTh } from '@/components/calculator/ResizableTh'
@@ -61,6 +64,8 @@ import {
   Pencil,
   ArrowDownAZ,
   ArrowUpAZ,
+  RotateCcw,
+  GripHorizontal,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -120,6 +125,16 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
   useEffect(() => {
     saveCustomColumnsToStorage(customColumns)
   }, [customColumns])
+
+  // Ordem salva das colunas móveis (chaves: 'empresas', 'cnpj', ..., ou col.id)
+  const [columnOrder, setColumnOrder] = useState<string[]>(() => {
+    return loadEmpresasColumnOrderFromStorage()
+  })
+
+  // Estados de Drag & Drop para reorganizar colunas
+  const [draggedColKey, setDraggedColKey] = useState<string | null>(null)
+  const [dropTargetColKey, setDropTargetColKey] = useState<string | null>(null)
+  const [dropSide, setDropSide] = useState<'left' | 'right' | null>(null)
 
   // Estados de busca e ordenação
   const [searchQuery, setSearchQuery] = useState('')
@@ -443,6 +458,11 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
     setCustomColumns(updatedCols)
     saveCustomColumnsToStorage(updatedCols)
 
+    // Remove da ordem das colunas
+    const updatedOrder = columnOrder.filter((k) => k !== colId)
+    setColumnOrder(updatedOrder)
+    saveEmpresasColumnOrderToStorage(updatedOrder)
+
     // Remove os valores correspondentes de todas as linhas de empresa
     const updatedEmpresas = empresas.map((emp) => {
       if (!emp.customFields || !(colId in emp.customFields)) return emp
@@ -510,6 +530,160 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
         : 'Linhas reordenadas permanentemente em ordem alfabética (Z → A)!',
     )
   }
+
+  // Lista unificada e ordenada de colunas móveis (fixas + personalizadas)
+  interface UnifiedColumnDef {
+    key: string
+    label: string
+    isCustom: boolean
+    numeric?: boolean
+    tooltip?: string
+  }
+
+  // Mapa de todas as colunas disponíveis
+  const availableColumnsMap = useMemo(() => {
+    const map = new Map<string, UnifiedColumnDef>()
+    EMPRESA_COLUMNS.forEach((col) => {
+      map.set(col.key, {
+        key: col.key,
+        label: col.label,
+        isCustom: false,
+        numeric: col.numeric,
+        tooltip: col.tooltip,
+      })
+    })
+    customColumns.forEach((col) => {
+      map.set(col.id, {
+        key: col.id,
+        label: col.label,
+        isCustom: true,
+      })
+    })
+    return map
+  }, [customColumns])
+
+  // Colunas ordenadas de acordo com columnOrder (ou padrão no final para novas)
+  const orderedColumns = useMemo<UnifiedColumnDef[]>(() => {
+    const list: UnifiedColumnDef[] = []
+    const seen = new Set<string>()
+
+    // 1. Aplica a ordem salva para as colunas existentes
+    columnOrder.forEach((key) => {
+      const col = availableColumnsMap.get(key)
+      if (col) {
+        list.push(col)
+        seen.add(key)
+      }
+    })
+
+    // 2. Adiciona colunas padrão que ainda não estavam no columnOrder
+    EMPRESA_COLUMNS.forEach((col) => {
+      if (!seen.has(col.key)) {
+        list.push({
+          key: col.key,
+          label: col.label,
+          isCustom: false,
+          numeric: col.numeric,
+          tooltip: col.tooltip,
+        })
+        seen.add(col.key)
+      }
+    })
+
+    // 3. Adiciona colunas personalizadas que ainda não estavam na ordem
+    customColumns.forEach((col) => {
+      if (!seen.has(col.id)) {
+        list.push({
+          key: col.id,
+          label: col.label,
+          isCustom: true,
+        })
+        seen.add(col.id)
+      }
+    })
+
+    return list
+  }, [columnOrder, availableColumnsMap, customColumns])
+
+  // Handlers para reordenação via Drag and Drop
+  const handleColumnDragStart = (e: React.DragEvent<HTMLTableCellElement>, key: string) => {
+    setDraggedColKey(key)
+    e.dataTransfer.setData('text/plain', key)
+  }
+
+  const handleColumnDragOver = (e: React.DragEvent<HTMLTableCellElement>, targetKey: string) => {
+    if (!draggedColKey || draggedColKey === targetKey) {
+      setDropTargetColKey(null)
+      setDropSide(null)
+      return
+    }
+    const rect = e.currentTarget.getBoundingClientRect()
+    const midX = rect.left + rect.width / 2
+    const side = e.clientX < midX ? 'left' : 'right'
+    setDropTargetColKey(targetKey)
+    setDropSide(side)
+  }
+
+  const handleColumnDragLeave = (_e: React.DragEvent<HTMLTableCellElement>, targetKey: string) => {
+    if (dropTargetColKey === targetKey) {
+      setDropTargetColKey(null)
+      setDropSide(null)
+    }
+  }
+
+  const handleColumnDrop = (_e: React.DragEvent<HTMLTableCellElement>, targetKey: string) => {
+    if (!draggedColKey || draggedColKey === targetKey) {
+      setDraggedColKey(null)
+      setDropTargetColKey(null)
+      setDropSide(null)
+      return
+    }
+
+    const currentKeys = orderedColumns.map((c) => c.key)
+    const fromIndex = currentKeys.indexOf(draggedColKey)
+    if (fromIndex === -1) return
+
+    // Remove do índice de origem
+    const remaining = currentKeys.filter((k) => k !== draggedColKey)
+    const targetIdxInRemaining = remaining.indexOf(targetKey)
+
+    const insertIdx = dropSide === 'right' ? targetIdxInRemaining + 1 : targetIdxInRemaining
+    const newOrder = [...remaining]
+    newOrder.splice(insertIdx, 0, draggedColKey)
+
+    setColumnOrder(newOrder)
+    saveEmpresasColumnOrderToStorage(newOrder)
+    setDraggedColKey(null)
+    setDropTargetColKey(null)
+    setDropSide(null)
+
+    const draggedDef = availableColumnsMap.get(draggedColKey)
+    const targetDef = availableColumnsMap.get(targetKey)
+    toast.success(
+      `Coluna "${draggedDef?.label || draggedColKey}" reposicionada ${dropSide === 'right' ? 'após' : 'antes de'} "${targetDef?.label || targetKey}".`,
+    )
+  }
+
+  const handleColumnDragEnd = () => {
+    setDraggedColKey(null)
+    setDropTargetColKey(null)
+    setDropSide(null)
+  }
+
+  // Restaura ordem original padrão
+  const handleResetColumnOrder = () => {
+    clearEmpresasColumnOrderStorage()
+    setColumnOrder([])
+    toast.info('Ordem original das colunas restaurada!')
+  }
+
+  // Verifica se a ordem atual difere da ordem padrão original
+  const isCustomOrderActive = useMemo(() => {
+    if (columnOrder.length === 0) return false
+    const defaultKeys = [...EMPRESA_COLUMNS.map((c) => c.key), ...customColumns.map((c) => c.id)]
+    if (columnOrder.length !== defaultKeys.length) return true
+    return columnOrder.some((key, idx) => key !== defaultKeys[idx])
+  }, [columnOrder, customColumns])
 
   // Filtragem e ordenação memoizadas
   const filteredAndSortedEmpresas = useMemo(() => {
@@ -658,6 +832,19 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                   <span>Ordem Alfabética ({alphabeticalDirection === 'asc' ? 'A→Z' : 'Z→A'})</span>
                 </Button>
 
+                {isCustomOrderActive && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleResetColumnOrder}
+                    className="text-xs h-9 text-amber-800 hover:bg-amber-50 border-amber-300 gap-1.5 font-medium"
+                    title="Restaurar as colunas para o posicionamento padrão original"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-amber-700" />
+                    <span>Restaurar Ordem Original das Colunas</span>
+                  </Button>
+                )}
+
                 <Button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
@@ -701,20 +888,15 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
               {/* Representação visual do cabeçalho (cores roxas como na imagem anexada) */}
               <div className="overflow-x-auto pb-1">
                 <div className="inline-flex min-w-full text-[11px] font-bold text-white tracking-wider rounded overflow-hidden shadow-xs border border-purple-950">
-                  {EMPRESA_COLUMNS.map((col) => (
+                  {orderedColumns.map((col) => (
                     <div
                       key={col.key}
-                      className="bg-[#380638] px-3 py-2 whitespace-nowrap text-center border-r border-purple-950/40"
+                      className={`${
+                        col.isCustom ? 'bg-[#4a0d4a] text-purple-200' : 'bg-[#380638]'
+                      } px-3 py-2 whitespace-nowrap text-center border-r border-purple-950/40`}
                     >
                       {col.label}
-                    </div>
-                  ))}
-                  {customColumns.map((col) => (
-                    <div
-                      key={col.id}
-                      className="bg-[#4a0d4a] px-3 py-2 whitespace-nowrap text-center border-r border-purple-950/40 text-purple-200"
-                    >
-                      {col.label} (extra)
+                      {col.isCustom ? ' (extra)' : ''}
                     </div>
                   ))}
                 </div>
@@ -846,60 +1028,55 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                         >
                           #
                         </ResizableTh>
-                        {EMPRESA_COLUMNS.map((col) => {
+                        {orderedColumns.map((col) => {
                           const isSorted = sortConfig?.key === col.key
+                          const colWidth = widths[col.key] || (col.isCustom ? 150 : 120)
+                          const minColWidth =
+                            MIN_EMPRESAS_COL_WIDTHS[col.key] || (col.isCustom ? 80 : 70)
+                          const customColObj = col.isCustom
+                            ? customColumns.find((c) => c.id === col.key)
+                            : null
+
                           return (
                             <ResizableTh
                               key={col.key}
-                              width={widths[col.key]}
-                              minWidth={MIN_EMPRESAS_COL_WIDTHS[col.key]}
+                              columnKey={col.key}
+                              draggableColumn={true}
+                              dropIndicator={dropTargetColKey === col.key ? dropSide : null}
+                              onColumnDragStart={handleColumnDragStart}
+                              onColumnDragOver={handleColumnDragOver}
+                              onColumnDragLeave={handleColumnDragLeave}
+                              onColumnDrop={handleColumnDrop}
+                              onColumnDragEnd={handleColumnDragEnd}
+                              width={colWidth}
+                              minWidth={minColWidth}
                               resizable={true}
                               onResizeStart={(e) => startResize(e, col.key)}
                               onHeaderClick={() => handleSort(col.key)}
                               isDraggingRef={isDraggingRef}
-                              className={`py-2.5 px-3 font-bold uppercase tracking-wider cursor-pointer hover:bg-purple-900/60 transition-colors border-r border-purple-950/40 whitespace-nowrap overflow-hidden ${
-                                col.numeric ? 'text-right' : 'text-left'
-                              }`}
-                              title={col.tooltip || `Clique para ordenar por ${col.label}`}
+                              className={`py-2.5 px-3 font-bold uppercase tracking-wider transition-colors border-r border-purple-950/40 whitespace-nowrap overflow-hidden ${
+                                col.isCustom
+                                  ? 'bg-[#420942] hover:bg-purple-900/60'
+                                  : 'hover:bg-purple-900/60'
+                              } ${col.numeric ? 'text-right' : 'text-left'}`}
+                              title={
+                                col.tooltip ||
+                                (col.isCustom
+                                  ? `Coluna personalizada: ${col.label}. Arraste para mover ou clique para ordenar.`
+                                  : `Coluna ${col.label}. Arraste para mover ou clique para ordenar.`)
+                              }
                             >
                               <div
                                 className={`inline-flex items-center gap-1.5 w-full overflow-hidden ${
-                                  col.numeric ? 'justify-end' : 'justify-start'
+                                  col.isCustom
+                                    ? 'justify-between'
+                                    : col.numeric
+                                      ? 'justify-end'
+                                      : 'justify-start'
                                 }`}
                               >
-                                <span className="truncate">{col.label}</span>
-                                {isSorted ? (
-                                  sortConfig.direction === 'asc' ? (
-                                    <ArrowUp className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
-                                  ) : (
-                                    <ArrowDown className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
-                                  )
-                                ) : (
-                                  <ArrowUpDown className="w-3 h-3 text-purple-300 opacity-60 flex-shrink-0" />
-                                )}
-                              </div>
-                            </ResizableTh>
-                          )
-                        })}
-
-                        {/* Cabeçalhos das Colunas Personalizadas */}
-                        {customColumns.map((col) => {
-                          const isSorted = sortConfig?.key === col.id
-                          const colWidth = widths[col.id] || 150
-                          return (
-                            <ResizableTh
-                              key={col.id}
-                              width={colWidth}
-                              minWidth={80}
-                              resizable={true}
-                              onResizeStart={(e) => startResize(e, col.id)}
-                              onHeaderClick={() => handleSort(col.id)}
-                              isDraggingRef={isDraggingRef}
-                              className="py-2.5 px-3 font-bold uppercase tracking-wider cursor-pointer hover:bg-purple-900/60 transition-colors border-r border-purple-950/40 whitespace-nowrap overflow-hidden bg-[#420942]"
-                              title={`Coluna personalizada: ${col.label}. Clique para ordenar.`}
-                            >
-                              <div className="inline-flex items-center justify-between gap-1.5 w-full overflow-hidden">
-                                <div className="inline-flex items-center gap-1 truncate">
+                                <div className="inline-flex items-center gap-1.5 truncate">
+                                  <GripHorizontal className="w-3 h-3 text-purple-300 opacity-40 hover:opacity-100 flex-shrink-0 cursor-grab" />
                                   <span className="truncate">{col.label}</span>
                                   {isSorted ? (
                                     sortConfig.direction === 'asc' ? (
@@ -912,48 +1089,49 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                                   )}
                                 </div>
 
-                                {/* Ações do Cabeçalho: Renomear / Excluir coluna */}
-                                <div
-                                  className="inline-flex items-center gap-0.5 flex-shrink-0"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setColumnToRename(col)
-                                          setRenamedColumnTitle(col.label)
-                                          setRenameColumnModalOpen(true)
-                                        }}
-                                        className="h-5 w-5 rounded p-0 text-purple-300 hover:text-white hover:bg-purple-800/80 inline-flex items-center justify-center transition-colors"
-                                      >
-                                        <Pencil className="w-3 h-3" />
-                                      </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top">
-                                      <span>Renomear coluna</span>
-                                    </TooltipContent>
-                                  </Tooltip>
+                                {col.isCustom && customColObj && (
+                                  <div
+                                    className="inline-flex items-center gap-0.5 flex-shrink-0"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setColumnToRename(customColObj)
+                                            setRenamedColumnTitle(customColObj.label)
+                                            setRenameColumnModalOpen(true)
+                                          }}
+                                          className="h-5 w-5 rounded p-0 text-purple-300 hover:text-white hover:bg-purple-800/80 inline-flex items-center justify-center transition-colors"
+                                        >
+                                          <Pencil className="w-3 h-3" />
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top">
+                                        <span>Renomear coluna</span>
+                                      </TooltipContent>
+                                    </Tooltip>
 
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setColumnToDelete(col)
-                                          setDeleteColumnModalOpen(true)
-                                        }}
-                                        className="h-5 w-5 rounded p-0 text-purple-300 hover:text-red-300 hover:bg-red-950/60 inline-flex items-center justify-center transition-colors"
-                                      >
-                                        <X className="w-3 h-3" />
-                                      </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top">
-                                      <span>Remover coluna</span>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </div>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setColumnToDelete(customColObj)
+                                            setDeleteColumnModalOpen(true)
+                                          }}
+                                          className="h-5 w-5 rounded p-0 text-purple-300 hover:text-red-300 hover:bg-red-950/60 inline-flex items-center justify-center transition-colors"
+                                        >
+                                          <X className="w-3 h-3" />
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top">
+                                        <span>Remover coluna</span>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </div>
+                                )}
                               </div>
                             </ResizableTh>
                           )
@@ -974,7 +1152,7 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                       {filteredAndSortedEmpresas.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={10 + customColumns.length}
+                            colSpan={2 + orderedColumns.length}
                             className="py-8 text-center text-slate-500"
                           >
                             Nenhum registro encontrado para o filtro "{searchQuery}".
@@ -997,102 +1175,57 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                                 )}
                               </div>
                             </td>
-                            <td className="py-1 px-1 border-r border-slate-100 overflow-hidden">
-                              <Input
-                                value={empresa.empresas}
-                                onChange={(e) =>
-                                  handleFieldChange(empresa.id, 'empresas', e.target.value)
-                                }
-                                className="h-8 text-xs font-medium text-slate-900 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
-                                placeholder="Nome da empresa"
-                              />
-                            </td>
-                            <td className="py-1 px-1 border-r border-slate-100 overflow-hidden">
-                              <Input
-                                value={empresa.cnpj}
-                                onChange={(e) =>
-                                  handleFieldChange(empresa.id, 'cnpj', e.target.value)
-                                }
-                                className="h-8 text-xs font-mono text-slate-700 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
-                                placeholder="00.000.000/0000-00"
-                              />
-                            </td>
-                            <td className="py-1 px-1 border-r border-slate-100 overflow-hidden">
-                              <Input
-                                value={empresa.regimeTrib}
-                                onChange={(e) =>
-                                  handleFieldChange(empresa.id, 'regimeTrib', e.target.value)
-                                }
-                                className="h-8 text-xs text-slate-700 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
-                                placeholder="Regime"
-                              />
-                            </td>
-                            <td className="py-1 px-1 border-r border-slate-100 overflow-hidden">
-                              <Input
-                                value={empresa.ramoAtividade}
-                                onChange={(e) =>
-                                  handleFieldChange(empresa.id, 'ramoAtividade', e.target.value)
-                                }
-                                className="h-8 text-xs text-slate-700 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
-                                placeholder="Ramo de atividade"
-                              />
-                            </td>
-                            <td className="py-1 px-1 border-r border-slate-100 overflow-hidden">
-                              <Input
-                                value={empresa.zona}
-                                onChange={(e) =>
-                                  handleFieldChange(empresa.id, 'zona', e.target.value)
-                                }
-                                className="h-8 text-xs text-slate-700 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
-                                placeholder="Zona"
-                              />
-                            </td>
-                            <td className="py-1 px-1 border-r border-slate-100 overflow-hidden">
-                              <Input
-                                value={empresa.filial}
-                                onChange={(e) =>
-                                  handleFieldChange(empresa.id, 'filial', e.target.value)
-                                }
-                                className="h-8 text-xs text-slate-700 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
-                                placeholder="Filial"
-                              />
-                            </td>
-                            <td className="py-1 px-1 border-r border-slate-100 overflow-hidden">
-                              <Input
-                                value={empresa.entrada}
-                                onChange={(e) =>
-                                  handleFieldChange(empresa.id, 'entrada', e.target.value)
-                                }
-                                className="h-8 text-xs text-slate-700 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
-                                placeholder="DD/MM/AAAA"
-                              />
-                            </td>
-                            <td className="py-1 px-1 border-r border-slate-100 overflow-hidden">
-                              <Input
-                                value={empresa.grupo}
-                                onChange={(e) =>
-                                  handleFieldChange(empresa.id, 'grupo', e.target.value)
-                                }
-                                className="h-8 text-xs text-slate-700 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
-                                placeholder="Grupo"
-                              />
-                            </td>
 
-                            {/* Células das Colunas Personalizadas (editáveis inline) */}
-                            {customColumns.map((col) => {
-                              const cellVal = empresa.customFields?.[col.id] ?? ''
+                            {/* Células na ordem dinâmica de orderedColumns */}
+                            {orderedColumns.map((col) => {
+                              if (col.isCustom) {
+                                const cellVal = empresa.customFields?.[col.key] ?? ''
+                                return (
+                                  <td
+                                    key={col.key}
+                                    className="py-1 px-1 border-r border-slate-100 overflow-hidden bg-purple-50/20"
+                                  >
+                                    <Input
+                                      value={cellVal}
+                                      onChange={(e) =>
+                                        handleCustomFieldChange(empresa.id, col.key, e.target.value)
+                                      }
+                                      className="h-8 text-xs text-slate-800 border-transparent hover:border-purple-300 focus:border-purple-700 bg-transparent focus:bg-white w-full"
+                                      placeholder="—"
+                                    />
+                                  </td>
+                                )
+                              }
+
+                              const fixedKey = col.key as EmpresaFixedColumnKey
+                              const cellVal = empresa[fixedKey] || ''
+                              const isEmpresaName = fixedKey === 'empresas'
+                              const isCnpj = fixedKey === 'cnpj'
+
                               return (
                                 <td
-                                  key={col.id}
-                                  className="py-1 px-1 border-r border-slate-100 overflow-hidden bg-purple-50/20"
+                                  key={col.key}
+                                  className="py-1 px-1 border-r border-slate-100 overflow-hidden"
                                 >
                                   <Input
                                     value={cellVal}
                                     onChange={(e) =>
-                                      handleCustomFieldChange(empresa.id, col.id, e.target.value)
+                                      handleFieldChange(empresa.id, fixedKey, e.target.value)
                                     }
-                                    className="h-8 text-xs text-slate-800 border-transparent hover:border-purple-300 focus:border-purple-700 bg-transparent focus:bg-white w-full"
-                                    placeholder="—"
+                                    className={`h-8 text-xs border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full ${
+                                      isEmpresaName
+                                        ? 'font-medium text-slate-900'
+                                        : isCnpj
+                                          ? 'font-mono text-slate-700'
+                                          : 'text-slate-700'
+                                    }`}
+                                    placeholder={
+                                      isEmpresaName
+                                        ? 'Nome da empresa'
+                                        : isCnpj
+                                          ? '00.000.000/0000-00'
+                                          : col.label
+                                    }
                                   />
                                 </td>
                               )
