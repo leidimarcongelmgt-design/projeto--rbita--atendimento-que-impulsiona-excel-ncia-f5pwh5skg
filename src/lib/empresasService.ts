@@ -250,12 +250,19 @@ export async function fetchEmpresas(): Promise<EmpresaRow[]> {
         cnpj: r.cnpj || '',
         regimeTrib: r.regimeTrib || '',
         ramoAtividade: r.ramoAtividade || '',
-        zona: r.zona || '',
         filial: r.filial || '',
-        entrada: r.entrada || '',
         grupo: r.grupo || '',
-        contabil: r.contabil,
-        numFunc: r.numFunc,
+        entrada: r.entrada || '',
+        zona: r.zona || '',
+        contabil: r.contabil || '',
+        numFunc: r.numFunc ?? '',
+        pesoFolha: (r as unknown as { pesoFolha?: string | number }).pesoFolha ?? r.peso1 ?? '',
+        pesoFiscal: (r as unknown as { pesoFiscal?: string | number }).pesoFiscal ?? r.peso2 ?? '',
+        receitas: (r as unknown as { receitas?: string | number }).receitas ?? '',
+        despCustos: (r as unknown as { despCustos?: string | number }).despCustos ?? '',
+        enviaSped: (r as unknown as { enviaSped?: string }).enviaSped || '',
+        observacoes: (r as unknown as { observacoes?: string }).observacoes || '',
+        lnk: (r as unknown as { lnk?: string }).lnk || '',
         peso1: r.peso1,
         peso2: r.peso2,
         isManual: Boolean(r.isManual),
@@ -296,14 +303,21 @@ export async function syncEmpresasToPocketBase(empresas: EmpresaRow[]): Promise<
         cnpj: emp.cnpj,
         regimeTrib: emp.regimeTrib,
         ramoAtividade: emp.ramoAtividade,
-        zona: emp.zona,
         filial: emp.filial,
-        entrada: emp.entrada,
         grupo: emp.grupo,
+        entrada: emp.entrada,
+        zona: emp.zona,
         contabil: emp.contabil || '',
         numFunc: String(emp.numFunc ?? ''),
-        peso1: String(emp.peso1 ?? ''),
-        peso2: String(emp.peso2 ?? ''),
+        pesoFolha: String(emp.pesoFolha ?? ''),
+        pesoFiscal: String(emp.pesoFiscal ?? ''),
+        receitas: String(emp.receitas ?? ''),
+        despCustos: String(emp.despCustos ?? ''),
+        enviaSped: emp.enviaSped || '',
+        observacoes: emp.observacoes || '',
+        lnk: emp.lnk || '',
+        peso1: String(emp.peso1 ?? emp.pesoFolha ?? ''),
+        peso2: String(emp.peso2 ?? emp.pesoFiscal ?? ''),
         isManual: emp.isManual ?? false,
         customFields: emp.customFields ?? {},
       }
@@ -347,14 +361,21 @@ export async function saveEmpresaRecord(empresa: EmpresaRow): Promise<string | u
       cnpj: empresa.cnpj,
       regimeTrib: empresa.regimeTrib,
       ramoAtividade: empresa.ramoAtividade,
-      zona: empresa.zona,
       filial: empresa.filial,
-      entrada: empresa.entrada,
       grupo: empresa.grupo,
+      entrada: empresa.entrada,
+      zona: empresa.zona,
       contabil: empresa.contabil || '',
       numFunc: String(empresa.numFunc ?? ''),
-      peso1: String(empresa.peso1 ?? ''),
-      peso2: String(empresa.peso2 ?? ''),
+      pesoFolha: String(empresa.pesoFolha ?? ''),
+      pesoFiscal: String(empresa.pesoFiscal ?? ''),
+      receitas: String(empresa.receitas ?? ''),
+      despCustos: String(empresa.despCustos ?? ''),
+      enviaSped: empresa.enviaSped || '',
+      observacoes: empresa.observacoes || '',
+      lnk: empresa.lnk || '',
+      peso1: String(empresa.peso1 ?? empresa.pesoFolha ?? ''),
+      peso2: String(empresa.peso2 ?? empresa.pesoFiscal ?? ''),
       isManual: empresa.isManual ?? false,
       customFields: empresa.customFields ?? {},
     }
@@ -396,16 +417,21 @@ export async function deleteEmpresaRecord(id: string): Promise<boolean> {
 }
 
 /**
- * Mapeia cabeçalhos da planilha para as propriedades de EmpresaRow (8 colunas ativas).
+ * Mapeia cabeçalhos da planilha para as propriedades de EmpresaRow.
+ * Reconhece todas as colunas solicitadas da planilha:
+ * EMPRESAS | CNPJ | REGIME TRIB. | RAMO DE ATIVIDADE 2 | FILIAL | GRUPO | CLIENTE DESDE | ZONA |
+ * CONTÁBIL | Nº FUNC. | PESO FOLHA | PESO FISCAL | RECEITAS | DESP./CUSTOS | ENVIA SPED | OBSERVAÇÕES | LNK
  */
+export type EmpresaFieldKey = keyof Omit<
+  EmpresaRow,
+  'id' | 'isManual' | 'customFields' | 'peso1' | 'peso2'
+>
+
 export function mapHeadersToFields(headers: string[]): {
-  mapping: Map<number, keyof Omit<EmpresaRow, 'id' | 'contabil' | 'numFunc' | 'peso1' | 'peso2'>>
+  mapping: Map<number, EmpresaFieldKey>
   unrecognizedColumns: string[]
 } {
-  const mapping = new Map<
-    number,
-    keyof Omit<EmpresaRow, 'id' | 'contabil' | 'numFunc' | 'peso1' | 'peso2'>
-  >()
+  const mapping = new Map<number, EmpresaFieldKey>()
   const unrecognizedColumns: string[] = []
 
   headers.forEach((rawHeader, colIdx) => {
@@ -434,29 +460,20 @@ export function mapHeadersToFields(headers: string[]): {
       normalized === 'ramo de atividade'
     ) {
       mapping.set(colIdx, 'ramoAtividade')
+    } else if (normalized === 'filial' || normalized.includes('filial')) {
+      mapping.set(colIdx, 'filial')
+    } else if (normalized === 'grupo' || normalized.includes('grupo')) {
+      mapping.set(colIdx, 'grupo')
+    } else if (
+      normalized === 'entrada' ||
+      normalized.includes('entrada') ||
+      normalized === 'cliente desde' ||
+      normalized.includes('cliente desde') ||
+      normalized === 'desde'
+    ) {
+      mapping.set(colIdx, 'entrada')
     } else if (normalized === 'zona' || normalized.startsWith('zona ')) {
       mapping.set(colIdx, 'zona')
-    } else if (
-      normalized.includes('func') ||
-      normalized === 'n func' ||
-      normalized === 'num func' ||
-      normalized === 'numero de funcionarios' ||
-      normalized === 'qtd func' ||
-      normalized === 'nº func' ||
-      normalized === 'nº func.' ||
-      normalized === 'colaboradores' ||
-      normalized === 'empregados'
-    ) {
-      return
-    } else if (
-      normalized === 'peso' ||
-      normalized === 'peso 1' ||
-      normalized === 'peso1' ||
-      normalized === 'peso 2' ||
-      normalized === 'peso2' ||
-      normalized === 'peso (2)'
-    ) {
-      return
     } else if (
       normalized === 'contabil' ||
       normalized.includes('contabil') ||
@@ -466,19 +483,88 @@ export function mapHeadersToFields(headers: string[]): {
       normalized === 'depto contabil' ||
       normalized === 'setor contabil'
     ) {
-      return
-    } else if (normalized === 'filial' || normalized.includes('filial')) {
-      mapping.set(colIdx, 'filial')
+      mapping.set(colIdx, 'contabil')
     } else if (
-      normalized === 'entrada' ||
-      normalized.includes('entrada') ||
-      normalized === 'cliente desde' ||
-      normalized.includes('cliente desde') ||
-      normalized === 'desde'
+      normalized === 'n func' ||
+      normalized === 'n func.' ||
+      normalized === 'no func' ||
+      normalized === 'no func.' ||
+      normalized === 'num func' ||
+      normalized === 'numero func' ||
+      normalized === 'numero funcionarios' ||
+      normalized === 'numero de funcionarios' ||
+      normalized === 'qtd func' ||
+      normalized === 'colaboradores' ||
+      normalized === 'empregados' ||
+      (normalized.includes('func') && !normalized.includes('peso'))
     ) {
-      mapping.set(colIdx, 'entrada')
-    } else if (normalized === 'grupo' || normalized.includes('grupo')) {
-      mapping.set(colIdx, 'grupo')
+      mapping.set(colIdx, 'numFunc')
+    } else if (
+      normalized === 'peso folha' ||
+      normalized === 'peso fol' ||
+      normalized === 'peso folh' ||
+      normalized.startsWith('peso fol') ||
+      normalized === 'peso folha de pagamento' ||
+      normalized === 'peso dp' ||
+      normalized === 'peso dpto pessoal'
+    ) {
+      mapping.set(colIdx, 'pesoFolha')
+    } else if (
+      normalized === 'peso fiscal' ||
+      normalized === 'peso fisc' ||
+      normalized.startsWith('peso fisc') ||
+      normalized === 'peso escrita' ||
+      normalized === 'peso dpto fiscal'
+    ) {
+      mapping.set(colIdx, 'pesoFiscal')
+    } else if (
+      normalized === 'receitas' ||
+      normalized === 'receita' ||
+      normalized === 'faturamento' ||
+      normalized.startsWith('receita')
+    ) {
+      mapping.set(colIdx, 'receitas')
+    } else if (
+      normalized === 'desp custos' ||
+      normalized === 'despcustos' ||
+      normalized === 'desp custos' ||
+      normalized === 'despesas custos' ||
+      normalized === 'despesa custo' ||
+      normalized === 'despesas e custos' ||
+      normalized === 'custos e despesas' ||
+      normalized === 'custos despesas' ||
+      normalized === 'desp' ||
+      normalized === 'despesas' ||
+      normalized === 'custos'
+    ) {
+      mapping.set(colIdx, 'despCustos')
+    } else if (
+      normalized === 'envia sped' ||
+      normalized === 'envio sped' ||
+      normalized === 'sped' ||
+      normalized.includes('sped')
+    ) {
+      mapping.set(colIdx, 'enviaSped')
+    } else if (
+      normalized === 'observacoes' ||
+      normalized === 'observacao' ||
+      normalized === 'obs' ||
+      normalized === 'observacoe' ||
+      normalized.startsWith('obs')
+    ) {
+      mapping.set(colIdx, 'observacoes')
+    } else if (
+      normalized === 'lnk' ||
+      normalized === 'link' ||
+      normalized === 'links' ||
+      normalized === 'url'
+    ) {
+      mapping.set(colIdx, 'lnk')
+    } else if (normalized === 'peso' || normalized === 'peso 1' || normalized === 'peso1') {
+      // Fallback genérico caso a planilha venha com apenas "PESO" ou "PESO 1"
+      mapping.set(colIdx, 'pesoFolha')
+    } else if (normalized === 'peso 2' || normalized === 'peso2' || normalized === 'peso (2)') {
+      mapping.set(colIdx, 'pesoFiscal')
     } else {
       unrecognizedColumns.push(rawHeader)
     }
@@ -496,7 +582,7 @@ function normalizeCellValue(val: unknown): string | number {
 }
 
 /**
- * Lê arquivo XLSX / XLS e extrai registros de empresas
+ * Lê arquivo XLSX / XLS e extrai registros de empresas com todas as colunas
  */
 export async function parseEmpresasFile(file: File): Promise<{
   rows: EmpresaRow[]
@@ -535,15 +621,24 @@ export async function parseEmpresasFile(file: File): Promise<{
       continue
     }
 
-    const rowObj: Partial<Omit<EmpresaRow, 'contabil' | 'numFunc' | 'peso1' | 'peso2'>> = {
+    const rowObj: Record<string, string | number> = {
       empresas: '',
       cnpj: '',
       regimeTrib: '',
       ramoAtividade: '',
-      zona: '',
       filial: '',
-      entrada: '',
       grupo: '',
+      entrada: '',
+      zona: '',
+      contabil: '',
+      numFunc: '',
+      pesoFolha: '',
+      pesoFiscal: '',
+      receitas: '',
+      despCustos: '',
+      enviaSped: '',
+      observacoes: '',
+      lnk: '',
     }
 
     rawRow.forEach((cellVal, colIdx) => {
@@ -553,7 +648,6 @@ export async function parseEmpresasFile(file: File): Promise<{
         if (field === 'cnpj') {
           rowObj.cnpj = formatCNPJ(val)
         } else {
-          // @ts-expect-error dynamic assign to matching rowObj field
           rowObj[field] = val
         }
       }
@@ -575,10 +669,21 @@ export async function parseEmpresasFile(file: File): Promise<{
       cnpj: cnpjVal ? formatCNPJ(cnpjVal) : '',
       regimeTrib: (rowObj.regimeTrib || '').toString().trim(),
       ramoAtividade: (rowObj.ramoAtividade || '').toString().trim(),
-      zona: (rowObj.zona || '').toString().trim(),
       filial: (rowObj.filial || '').toString().trim(),
-      entrada: (rowObj.entrada || '').toString().trim(),
       grupo: (rowObj.grupo || '').toString().trim(),
+      entrada: (rowObj.entrada || '').toString().trim(),
+      zona: (rowObj.zona || '').toString().trim(),
+      contabil: (rowObj.contabil || '').toString().trim(),
+      numFunc: rowObj.numFunc ?? '',
+      pesoFolha: rowObj.pesoFolha ?? '',
+      pesoFiscal: rowObj.pesoFiscal ?? '',
+      receitas: rowObj.receitas ?? '',
+      despCustos: rowObj.despCustos ?? '',
+      enviaSped: (rowObj.enviaSped || '').toString().trim(),
+      observacoes: (rowObj.observacoes || '').toString().trim(),
+      lnk: (rowObj.lnk || '').toString().trim(),
+      peso1: rowObj.pesoFolha ?? '',
+      peso2: rowObj.pesoFiscal ?? '',
     })
   }
 

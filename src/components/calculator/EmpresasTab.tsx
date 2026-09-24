@@ -84,12 +84,21 @@ const DEFAULT_EMPRESAS_COL_WIDTHS: { [key: string]: number } = {
   index: 48,
   empresas: 240,
   cnpj: 160,
-  regimeTrib: 140,
-  ramoAtividade: 200,
-  zona: 110,
+  regimeTrib: 130,
+  ramoAtividade: 180,
   filial: 90,
-  entrada: 100,
-  grupo: 120,
+  grupo: 110,
+  entrada: 105,
+  zona: 90,
+  contabil: 120,
+  numFunc: 95,
+  pesoFolha: 110,
+  pesoFiscal: 110,
+  receitas: 120,
+  despCustos: 120,
+  enviaSped: 110,
+  observacoes: 180,
+  lnk: 100,
   acoes: 64,
 }
 
@@ -99,10 +108,19 @@ const MIN_EMPRESAS_COL_WIDTHS: { [key: string]: number } = {
   cnpj: 120,
   regimeTrib: 90,
   ramoAtividade: 110,
-  zona: 70,
   filial: 60,
-  entrada: 80,
   grupo: 80,
+  entrada: 80,
+  zona: 70,
+  contabil: 80,
+  numFunc: 70,
+  pesoFolha: 80,
+  pesoFiscal: 80,
+  receitas: 80,
+  despCustos: 80,
+  enviaSped: 80,
+  observacoes: 100,
+  lnk: 70,
   acoes: 50,
 }
 
@@ -166,10 +184,19 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
   const [newCnpj, setNewCnpj] = useState('')
   const [newRegimeTrib, setNewRegimeTrib] = useState('')
   const [newRamoAtividade, setNewRamoAtividade] = useState('')
-  const [newZona, setNewZona] = useState('')
   const [newFilial, setNewFilial] = useState('')
-  const [newEntrada, setNewEntrada] = useState('')
   const [newGrupo, setNewGrupo] = useState('')
+  const [newEntrada, setNewEntrada] = useState('')
+  const [newZona, setNewZona] = useState('')
+  const [newContabil, setNewContabil] = useState('')
+  const [newNumFunc, setNewNumFunc] = useState('')
+  const [newPesoFolha, setNewPesoFolha] = useState('')
+  const [newPesoFiscal, setNewPesoFiscal] = useState('')
+  const [newReceitas, setNewReceitas] = useState('')
+  const [newDespCustos, setNewDespCustos] = useState('')
+  const [newEnviaSped, setNewEnviaSped] = useState('')
+  const [newObservacoes, setNewObservacoes] = useState('')
+  const [newLnk, setNewLnk] = useState('')
   const [newCustomValues, setNewCustomValues] = useState<Record<string, string>>({})
 
   // Diálogo para Adicionar Coluna Personalizada
@@ -355,10 +382,19 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
       cnpj: newCnpj.trim(),
       regimeTrib: newRegimeTrib.trim(),
       ramoAtividade: newRamoAtividade.trim(),
-      zona: newZona.trim(),
       filial: newFilial.trim(),
-      entrada: newEntrada.trim(),
       grupo: newGrupo.trim(),
+      entrada: newEntrada.trim(),
+      zona: newZona.trim(),
+      contabil: newContabil.trim(),
+      numFunc: newNumFunc.trim(),
+      pesoFolha: newPesoFolha.trim(),
+      pesoFiscal: newPesoFiscal.trim(),
+      receitas: newReceitas.trim(),
+      despCustos: newDespCustos.trim(),
+      enviaSped: newEnviaSped.trim(),
+      observacoes: newObservacoes.trim(),
+      lnk: newLnk.trim(),
       isManual: true,
       customFields: { ...newCustomValues },
     }
@@ -373,10 +409,19 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
     setNewCnpj('')
     setNewRegimeTrib('')
     setNewRamoAtividade('')
-    setNewZona('')
     setNewFilial('')
-    setNewEntrada('')
     setNewGrupo('')
+    setNewEntrada('')
+    setNewZona('')
+    setNewContabil('')
+    setNewNumFunc('')
+    setNewPesoFolha('')
+    setNewPesoFiscal('')
+    setNewReceitas('')
+    setNewDespCustos('')
+    setNewEnviaSped('')
+    setNewObservacoes('')
+    setNewLnk('')
     setNewCustomValues({})
     setAddModalOpen(false)
     toast.success(`Empresa "${trimmedNome}" cadastrada com sucesso!`)
@@ -701,10 +746,29 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
           : false
         const matchRegime = (item.regimeTrib || '').toLowerCase().includes(q)
         const matchRamo = (item.ramoAtividade || '').toLowerCase().includes(q)
-        const matchZona = (item.zona || '').toLowerCase().includes(q)
         const matchFilial = (item.filial || '').toLowerCase().includes(q)
-        const matchEntrada = (item.entrada || '').toLowerCase().includes(q)
         const matchGrupo = (item.grupo || '').toLowerCase().includes(q)
+        const matchEntrada = (item.entrada || '').toLowerCase().includes(q)
+        const matchZona = (item.zona || '').toLowerCase().includes(q)
+        const matchContabil = (item.contabil || '').toLowerCase().includes(q)
+        const matchNumFunc = String(item.numFunc ?? '')
+          .toLowerCase()
+          .includes(q)
+        const matchPesoFolha = String(item.pesoFolha ?? '')
+          .toLowerCase()
+          .includes(q)
+        const matchPesoFiscal = String(item.pesoFiscal ?? '')
+          .toLowerCase()
+          .includes(q)
+        const matchReceitas = String(item.receitas ?? '')
+          .toLowerCase()
+          .includes(q)
+        const matchDespCustos = String(item.despCustos ?? '')
+          .toLowerCase()
+          .includes(q)
+        const matchEnviaSped = (item.enviaSped || '').toLowerCase().includes(q)
+        const matchObs = (item.observacoes || '').toLowerCase().includes(q)
+        const matchLnk = (item.lnk || '').toLowerCase().includes(q)
 
         // Busca em colunas personalizadas
         let matchCustom = false
@@ -723,10 +787,19 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
           matchCnpjDigits ||
           matchRegime ||
           matchRamo ||
-          matchZona ||
           matchFilial ||
-          matchEntrada ||
           matchGrupo ||
+          matchEntrada ||
+          matchZona ||
+          matchContabil ||
+          matchNumFunc ||
+          matchPesoFolha ||
+          matchPesoFiscal ||
+          matchReceitas ||
+          matchDespCustos ||
+          matchEnviaSped ||
+          matchObs ||
+          matchLnk ||
           matchCustom
         )
       })
@@ -775,8 +848,10 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                   </CardTitle>
                 </div>
                 <CardDescription className="text-slate-500 mt-1">
-                  Importe planilhas Excel (.xlsx ou .xls) com as 8 colunas padrão (EMPRESAS, CNPJ,
-                  REGIME TRIB., RAMO DE ATIVIDADE 2, ZONA, FILIAL, CLIENTE DESDE, GRUPO).
+                  Importe planilhas Excel (.xlsx ou .xls) com todas as colunas de dados da empresa
+                  (EMPRESAS, CNPJ, REGIME TRIB., RAMO DE ATIVIDADE 2, FILIAL, GRUPO, ZONA, CONTÁBIL,
+                  Nº FUNC., PESO FOLHA, PESO FISCAL, RECEITAS, DESP./CUSTOS, ENVIA SPED,
+                  OBSERVAÇÕES, LNK).
                 </CardDescription>
               </div>
 
@@ -876,12 +951,12 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                 <div className="flex items-center gap-2">
                   <Info className="w-4 h-4 text-purple-900" />
                   <span className="text-xs font-semibold text-slate-800 uppercase tracking-wide">
-                    Estrutura esperada do cabeçalho da planilha (8 colunas)
+                    Estrutura esperada do cabeçalho da planilha ({EMPRESA_COLUMNS.length} colunas)
                   </span>
                 </div>
                 <span className="text-[11px] text-slate-500">
-                  CONTÁBIL, Nº FUNC. e Pesos gerenciados nas abas dedicadas de Dpto. Contábil, Dpto.
-                  Pessoal e Dpto. Fiscal
+                  Todas as colunas da planilha são importadas e editáveis. Arraste as colunas para
+                  reordenar.
                 </span>
               </div>
 
@@ -1000,9 +1075,10 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                 </div>
                 <h3 className="text-sm font-semibold text-slate-800">Nenhuma empresa importada</h3>
                 <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 mb-5">
-                  Clique no botão abaixo para carregar uma planilha Excel com as 8 colunas padrão
-                  (EMPRESAS, CNPJ, REGIME TRIB., RAMO DE ATIVIDADE 2, ZONA, FILIAL, CLIENTE DESDE e
-                  GRUPO).
+                  Clique no botão abaixo para carregar uma planilha Excel com as colunas da empresa
+                  (EMPRESAS, CNPJ, REGIME TRIB., RAMO DE ATIVIDADE 2, FILIAL, GRUPO, ZONA, CONTÁBIL,
+                  Nº FUNC., PESO FOLHA, PESO FISCAL, RECEITAS, DESP./CUSTOS, ENVIA SPED,
+                  OBSERVAÇÕES, LNK).
                 </p>
                 <Button
                   type="button"
@@ -1198,9 +1274,12 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                               }
 
                               const fixedKey = col.key as EmpresaFixedColumnKey
-                              const cellVal = empresa[fixedKey] || ''
+                              const rawVal = empresa[fixedKey]
+                              const cellVal =
+                                rawVal !== undefined && rawVal !== null ? String(rawVal) : ''
                               const isEmpresaName = fixedKey === 'empresas'
                               const isCnpj = fixedKey === 'cnpj'
+                              const isNumeric = col.numeric
 
                               return (
                                 <td
@@ -1217,14 +1296,16 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                                         ? 'font-medium text-slate-900'
                                         : isCnpj
                                           ? 'font-mono text-slate-700'
-                                          : 'text-slate-700'
+                                          : isNumeric
+                                            ? 'text-right font-mono text-slate-700'
+                                            : 'text-slate-700'
                                     }`}
                                     placeholder={
                                       isEmpresaName
                                         ? 'Nome da empresa'
                                         : isCnpj
                                           ? '00.000.000/0000-00'
-                                          : col.label
+                                          : '—'
                                     }
                                   />
                                 </td>
@@ -1379,7 +1460,7 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1">
                   <Label htmlFor="manualRamo" className="text-xs font-semibold text-slate-700">
                     RAMO DE ATIVIDADE 2
@@ -1394,24 +1475,6 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                 </div>
 
                 <div className="space-y-1">
-                  <Label
-                    htmlFor="manualEmpresaZona"
-                    className="text-xs font-semibold text-slate-700"
-                  >
-                    ZONA
-                  </Label>
-                  <Input
-                    id="manualEmpresaZona"
-                    placeholder="Ex: 01, Zona Sul, Matriz"
-                    value={newZona}
-                    onChange={(e) => setNewZona(e.target.value)}
-                    className="h-9 text-xs"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="space-y-1">
                   <Label htmlFor="manualFilial" className="text-xs font-semibold text-slate-700">
                     FILIAL
                   </Label>
@@ -1424,6 +1487,21 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                   />
                 </div>
 
+                <div className="space-y-1">
+                  <Label htmlFor="manualGrupo" className="text-xs font-semibold text-slate-700">
+                    GRUPO
+                  </Label>
+                  <Input
+                    id="manualGrupo"
+                    placeholder="Ex: Grupo A"
+                    value={newGrupo}
+                    onChange={(e) => setNewGrupo(e.target.value)}
+                    className="h-9 text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1">
                   <Label htmlFor="manualEntrada" className="text-xs font-semibold text-slate-700">
                     CLIENTE DESDE
@@ -1438,14 +1516,144 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                 </div>
 
                 <div className="space-y-1">
-                  <Label htmlFor="manualGrupo" className="text-xs font-semibold text-slate-700">
-                    GRUPO
+                  <Label
+                    htmlFor="manualEmpresaZona"
+                    className="text-xs font-semibold text-slate-700"
+                  >
+                    ZONA
                   </Label>
                   <Input
-                    id="manualGrupo"
-                    placeholder="Ex: Grupo A"
-                    value={newGrupo}
-                    onChange={(e) => setNewGrupo(e.target.value)}
+                    id="manualEmpresaZona"
+                    placeholder="Ex: 01, Zona Sul"
+                    value={newZona}
+                    onChange={(e) => setNewZona(e.target.value)}
+                    className="h-9 text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="manualContabil" className="text-xs font-semibold text-slate-700">
+                    CONTÁBIL
+                  </Label>
+                  <Input
+                    id="manualContabil"
+                    placeholder="Ex: Resp. Contábil"
+                    value={newContabil}
+                    onChange={(e) => setNewContabil(e.target.value)}
+                    className="h-9 text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="manualNumFunc" className="text-xs font-semibold text-slate-700">
+                    Nº FUNC.
+                  </Label>
+                  <Input
+                    id="manualNumFunc"
+                    placeholder="0"
+                    value={newNumFunc}
+                    onChange={(e) => setNewNumFunc(e.target.value)}
+                    className="h-9 text-xs font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="manualPesoFolha" className="text-xs font-semibold text-slate-700">
+                    PESO FOLHA
+                  </Label>
+                  <Input
+                    id="manualPesoFolha"
+                    placeholder="0"
+                    value={newPesoFolha}
+                    onChange={(e) => setNewPesoFolha(e.target.value)}
+                    className="h-9 text-xs font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="manualPesoFiscal"
+                    className="text-xs font-semibold text-slate-700"
+                  >
+                    PESO FISCAL
+                  </Label>
+                  <Input
+                    id="manualPesoFiscal"
+                    placeholder="0"
+                    value={newPesoFiscal}
+                    onChange={(e) => setNewPesoFiscal(e.target.value)}
+                    className="h-9 text-xs font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="manualReceitas" className="text-xs font-semibold text-slate-700">
+                    RECEITAS
+                  </Label>
+                  <Input
+                    id="manualReceitas"
+                    placeholder="0"
+                    value={newReceitas}
+                    onChange={(e) => setNewReceitas(e.target.value)}
+                    className="h-9 text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="manualDespCustos"
+                    className="text-xs font-semibold text-slate-700"
+                  >
+                    DESP./CUSTOS
+                  </Label>
+                  <Input
+                    id="manualDespCustos"
+                    placeholder="0"
+                    value={newDespCustos}
+                    onChange={(e) => setNewDespCustos(e.target.value)}
+                    className="h-9 text-xs font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="manualEnviaSped" className="text-xs font-semibold text-slate-700">
+                    ENVIA SPED
+                  </Label>
+                  <Input
+                    id="manualEnviaSped"
+                    placeholder="Sim / Não"
+                    value={newEnviaSped}
+                    onChange={(e) => setNewEnviaSped(e.target.value)}
+                    className="h-9 text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="manualObs" className="text-xs font-semibold text-slate-700">
+                    OBSERVAÇÕES
+                  </Label>
+                  <Input
+                    id="manualObs"
+                    placeholder="Notas..."
+                    value={newObservacoes}
+                    onChange={(e) => setNewObservacoes(e.target.value)}
+                    className="h-9 text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="manualLnk" className="text-xs font-semibold text-slate-700">
+                    LNK
+                  </Label>
+                  <Input
+                    id="manualLnk"
+                    placeholder="https://..."
+                    value={newLnk}
+                    onChange={(e) => setNewLnk(e.target.value)}
                     className="h-9 text-xs"
                   />
                 </div>
