@@ -16,11 +16,13 @@ export function getDptoPessoalBackendStatus(): boolean | null {
 }
 
 /**
- * Carrega a lista de Dpto. Pessoal síncrona (localStorage com migração de sessionStorage)
+ * Carrega a lista de Dpto. Pessoal síncrona do localStorage (com migração de sessionStorage)
  */
 export function loadDptoPessoalFromStorage(): DptoPessoalRow[] {
   try {
-    const persistent = localStorage.getItem(DPTO_PESSOAL_PERSIST_KEY)
+    const persistent =
+      localStorage.getItem(DPTO_PESSOAL_PERSIST_KEY) ||
+      localStorage.getItem(DPTO_PESSOAL_STORAGE_KEY)
     if (persistent) {
       const parsed = JSON.parse(persistent)
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -43,12 +45,12 @@ export function loadDptoPessoalFromStorage(): DptoPessoalRow[] {
 }
 
 /**
- * Salva a lista de Dpto. Pessoal permanentemente (localStorage + espelho sessionStorage + backend)
+ * Salva a lista de Dpto. Pessoal permanentemente no localStorage
  */
 export function saveDptoPessoalToStorage(rows: DptoPessoalRow[]): void {
   try {
     localStorage.setItem(DPTO_PESSOAL_PERSIST_KEY, JSON.stringify(rows))
-    sessionStorage.setItem(DPTO_PESSOAL_STORAGE_KEY, JSON.stringify(rows))
+    localStorage.setItem(DPTO_PESSOAL_STORAGE_KEY, JSON.stringify(rows))
   } catch {
     // quota exceeded ou ambiente restrito
   }
@@ -61,8 +63,9 @@ export function saveDptoPessoalToStorage(rows: DptoPessoalRow[]): void {
  */
 export function clearDptoPessoalStorage(): void {
   try {
-    sessionStorage.removeItem(DPTO_PESSOAL_STORAGE_KEY)
+    localStorage.removeItem(DPTO_PESSOAL_STORAGE_KEY)
     localStorage.removeItem(DPTO_PESSOAL_PERSIST_KEY)
+    sessionStorage.removeItem(DPTO_PESSOAL_STORAGE_KEY)
   } catch {
     // ignore
   }
@@ -90,7 +93,6 @@ export function loadDptoPessoalColumnOrderFromStorage(): string[] {
 export function saveDptoPessoalColumnOrderToStorage(order: string[]): void {
   try {
     localStorage.setItem(DPTO_PESSOAL_COLUMN_ORDER_KEY, JSON.stringify(order))
-    sessionStorage.setItem(DPTO_PESSOAL_COLUMN_ORDER_KEY, JSON.stringify(order))
   } catch {
     // ignore
   }
@@ -129,7 +131,7 @@ export async function fetchDptoPessoal(): Promise<DptoPessoalRow[]> {
       }))
       try {
         localStorage.setItem(DPTO_PESSOAL_PERSIST_KEY, JSON.stringify(mapped))
-        sessionStorage.setItem(DPTO_PESSOAL_STORAGE_KEY, JSON.stringify(mapped))
+        localStorage.setItem(DPTO_PESSOAL_STORAGE_KEY, JSON.stringify(mapped))
       } catch {
         /* intentionally ignored */
       }

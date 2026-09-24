@@ -93,7 +93,7 @@ const MIN_DPTO_FISCAL_COL_WIDTHS: { [key: string]: number } = {
 export const DptoFiscalTab: React.FC<DptoFiscalTabProps> = ({ rows, onRowsChange, empresas }) => {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Hook de controle de larguras com persistência em sessionStorage
+  // Hook de controle de larguras com persistência permanente em localStorage
   const { widths, startResize, isDraggingRef } = useResizableColumns(
     RESIZABLE_STORAGE_KEYS.DPTO_FISCAL,
     DEFAULT_DPTO_FISCAL_COL_WIDTHS,
@@ -243,7 +243,7 @@ export const DptoFiscalTab: React.FC<DptoFiscalTabProps> = ({ rows, onRowsChange
     unrecognized: string[]
   } | null>(null)
 
-  // Persiste no sessionStorage com chave própria distinta
+  // Persiste permanentemente no localStorage com chave própria distinta
   useEffect(() => {
     saveDptoFiscalToStorage(rows)
   }, [rows])
@@ -532,7 +532,8 @@ export const DptoFiscalTab: React.FC<DptoFiscalTabProps> = ({ rows, onRowsChange
                   </CardTitle>
                 </div>
                 <CardDescription className="text-slate-500 mt-1">
-                  Gerencie as informações de empresas, CNPJ, Zona e Peso Fiscal.
+                  Gerencie as informações de empresas, CNPJ, Zona e Peso Fiscal. Dados salvos
+                  permanentemente no seu navegador.
                 </CardDescription>
               </div>
 

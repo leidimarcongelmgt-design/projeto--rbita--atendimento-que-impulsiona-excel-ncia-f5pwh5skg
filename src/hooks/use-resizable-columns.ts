@@ -36,6 +36,10 @@ export function useResizableColumns(
     try {
       const stored = localStorage.getItem(storageKey) || sessionStorage.getItem(storageKey)
       if (stored) {
+        // Se estava apenas em sessionStorage, migra para localStorage permanentemente
+        if (!localStorage.getItem(storageKey)) {
+          localStorage.setItem(storageKey, stored)
+        }
         const parsed = JSON.parse(stored)
         return { ...defaultWidths, ...parsed }
       }
@@ -45,11 +49,11 @@ export function useResizableColumns(
     return defaultWidths
   })
 
-  // Sincroniza quando houver evento de reset (ex: Nova Consulta)
+  // Sincroniza quando houver evento de reset
   useEffect(() => {
     const handleResetEvent = () => {
       try {
-        const stored = localStorage.getItem(storageKey) || sessionStorage.getItem(storageKey)
+        const stored = localStorage.getItem(storageKey)
         if (!stored) {
           setWidths(defaultWidths)
         }
@@ -64,7 +68,7 @@ export function useResizableColumns(
     }
   }, [storageKey, defaultWidths])
 
-  // Salva no localStorage quando as larguras mudarem
+  // Salva permanentemente no localStorage quando as larguras mudarem
   const persistWidths = useCallback(
     (newWidths: ColumnWidthConfig) => {
       try {

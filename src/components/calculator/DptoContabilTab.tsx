@@ -97,7 +97,7 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Hook de controle de larguras com persistência em sessionStorage
+  // Hook de controle de larguras com persistência permanente em localStorage
   const { widths, startResize, isDraggingRef } = useResizableColumns(
     RESIZABLE_STORAGE_KEYS.DPTO_CONTABIL,
     DEFAULT_DPTO_CONTABIL_COL_WIDTHS,
@@ -247,7 +247,7 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
     unrecognized: string[]
   } | null>(null)
 
-  // Persiste no sessionStorage com chave própria distinta
+  // Persiste permanentemente no localStorage com chave própria distinta
   useEffect(() => {
     saveDptoContabilToStorage(rows)
   }, [rows])
@@ -523,8 +523,9 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
                   <CardTitle className="text-lg font-bold text-slate-900">Dpto. Contábil</CardTitle>
                 </div>
                 <CardDescription className="text-slate-500 mt-1">
-                  Gerencie as informações de empresas, CNPJ, Zona e Contábil.
-                </CardDescription>
+                  Gerencie as informações de empresas, CNPJ, Zona e Status do Dpto. Contábil. Dados
+                  salvos permanentemente no seu navegador.
+                </CardDescription>{' '}
               </div>
 
               {/* Botões de Ação do Topo */}

@@ -97,11 +97,12 @@ export function sortEmpresasAlphabetically(
 }
 
 /**
- * Carrega a lista de empresas síncrona do localStorage (com migração de sessionStorage)
+ * Carrega a lista de empresas síncrona do localStorage (com migração de sessionStorage para localStorage)
  */
 export function loadEmpresasFromStorage(): EmpresaRow[] {
   try {
-    const persistent = localStorage.getItem(EMPRESAS_PERSIST_KEY)
+    const persistent =
+      localStorage.getItem(EMPRESAS_PERSIST_KEY) || localStorage.getItem(EMPRESAS_STORAGE_KEY)
     if (persistent) {
       const parsed = JSON.parse(persistent)
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -124,7 +125,7 @@ export function loadEmpresasFromStorage(): EmpresaRow[] {
 }
 
 /**
- * Carrega a lista de colunas personalizadas cadastradas pelo usuário
+ * Carrega a lista de colunas personalizadas cadastradas pelo usuário permanentemente do localStorage
  */
 export function loadCustomColumnsFromStorage(): CustomColumnDef[] {
   try {
@@ -144,19 +145,18 @@ export function loadCustomColumnsFromStorage(): CustomColumnDef[] {
 }
 
 /**
- * Salva a lista de colunas personalizadas no localStorage e sessionStorage
+ * Salva a lista de colunas personalizadas no localStorage (persistência permanente)
  */
 export function saveCustomColumnsToStorage(columns: CustomColumnDef[]): void {
   try {
     localStorage.setItem(EMPRESAS_CUSTOM_COLUMNS_KEY, JSON.stringify(columns))
-    sessionStorage.setItem(EMPRESAS_CUSTOM_COLUMNS_KEY, JSON.stringify(columns))
   } catch {
     // quota exceeded ou ambiente restrito
   }
 }
 
 /**
- * Carrega a ordem salva das colunas da aba Empresas (localStorage com fallback sessionStorage)
+ * Carrega a ordem salva das colunas da aba Empresas (localStorage com fallback para migração)
  */
 export function loadEmpresasColumnOrderFromStorage(): string[] {
   try {
@@ -176,12 +176,11 @@ export function loadEmpresasColumnOrderFromStorage(): string[] {
 }
 
 /**
- * Salva a ordem das colunas da aba Empresas no localStorage e sessionStorage
+ * Salva a ordem das colunas da aba Empresas no localStorage (persistência permanente)
  */
 export function saveEmpresasColumnOrderToStorage(columnOrder: string[]): void {
   try {
     localStorage.setItem(EMPRESAS_COLUMN_ORDER_KEY, JSON.stringify(columnOrder))
-    sessionStorage.setItem(EMPRESAS_COLUMN_ORDER_KEY, JSON.stringify(columnOrder))
   } catch {
     // quota exceeded ou ambiente restrito
   }
@@ -200,26 +199,27 @@ export function clearEmpresasColumnOrderStorage(): void {
 }
 
 /**
- * Salva a lista de empresas localmente (localStorage + sessionStorage) e sincroniza assincronamente com o banco
+ * Salva a lista de empresas localmente de forma permanente no localStorage
  */
 export function saveEmpresasToStorage(empresas: EmpresaRow[]): void {
   try {
     localStorage.setItem(EMPRESAS_PERSIST_KEY, JSON.stringify(empresas))
-    sessionStorage.setItem(EMPRESAS_STORAGE_KEY, JSON.stringify(empresas))
+    localStorage.setItem(EMPRESAS_STORAGE_KEY, JSON.stringify(empresas))
   } catch {
     // quota exceeded ou ambiente restrito
   }
 
-  // Dispara sincronização em segundo plano
+  // Dispara sincronização em segundo plano se configurado
   syncEmpresasToPocketBase(empresas).catch(() => {})
 }
 
 /**
- * Limpa o armazenamento de empresas (local e no backend se disponível)
+ * Limpa o armazenamento de empresas (localStorage e backend se disponível)
  */
 export function clearEmpresasStorage(): void {
   try {
     localStorage.removeItem(EMPRESAS_PERSIST_KEY)
+    localStorage.removeItem(EMPRESAS_STORAGE_KEY)
     sessionStorage.removeItem(EMPRESAS_STORAGE_KEY)
   } catch {
     // ignore
@@ -273,7 +273,7 @@ export async function fetchEmpresas(): Promise<EmpresaRow[]> {
       }))
       try {
         localStorage.setItem(EMPRESAS_PERSIST_KEY, JSON.stringify(mapped))
-        sessionStorage.setItem(EMPRESAS_STORAGE_KEY, JSON.stringify(mapped))
+        localStorage.setItem(EMPRESAS_STORAGE_KEY, JSON.stringify(mapped))
       } catch {
         /* intentionally ignored */
       }

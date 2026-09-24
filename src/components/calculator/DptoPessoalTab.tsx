@@ -93,7 +93,7 @@ const MIN_DPTO_PESSOAL_COL_WIDTHS: { [key: string]: number } = {
 export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChange, empresas }) => {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Hook de controle de larguras com persistência em sessionStorage
+  // Hook de controle de larguras com persistência permanente em localStorage
   const { widths, startResize, isDraggingRef } = useResizableColumns(
     RESIZABLE_STORAGE_KEYS.DPTO_PESSOAL,
     DEFAULT_DPTO_PESSOAL_COL_WIDTHS,
@@ -243,7 +243,7 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
     unrecognized: string[]
   } | null>(null)
 
-  // Persiste no sessionStorage sempre que a lista mudar
+  // Persiste permanentemente no localStorage sempre que a lista mudar
   useEffect(() => {
     saveDptoPessoalToStorage(rows)
   }, [rows])
@@ -537,7 +537,8 @@ export const DptoPessoalTab: React.FC<DptoPessoalTabProps> = ({ rows, onRowsChan
                   </CardTitle>
                 </div>
                 <CardDescription className="text-slate-500 mt-1">
-                  Gerencie as informações de empresas, CNPJ, Zona e Nº de Funcionários.
+                  Gerencie as informações de empresas, CNPJ, Zona e Nº de Funcionários. Dados salvos
+                  permanentemente no seu navegador.
                 </CardDescription>
               </div>
 

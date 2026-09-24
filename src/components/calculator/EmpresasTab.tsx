@@ -132,7 +132,7 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
     return loadCustomColumnsFromStorage()
   })
 
-  // Hook de controle de largura das colunas redimensionáveis com persistência em sessionStorage/localStorage
+  // Hook de controle de largura das colunas redimensionáveis com persistência permanente em localStorage
   const { widths, startResize, isDraggingRef } = useResizableColumns(
     RESIZABLE_STORAGE_KEYS.EMPRESAS,
     DEFAULT_EMPRESAS_COL_WIDTHS,
@@ -848,10 +848,9 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                   </CardTitle>
                 </div>
                 <CardDescription className="text-slate-500 mt-1">
-                  Importe planilhas Excel (.xlsx ou .xls) com todas as colunas de dados da empresa
-                  (EMPRESAS, CNPJ, REGIME TRIB., RAMO DE ATIVIDADE 2, FILIAL, GRUPO, ZONA, CONTÁBIL,
-                  Nº FUNC., PESO FOLHA, PESO FISCAL, RECEITAS, DESP./CUSTOS, ENVIA SPED,
-                  OBSERVAÇÕES, LNK).
+                  Importe planilhas Excel (.xlsx ou .xls) com todas as colunas de dados da empresa.
+                  Os dados, edições manuais e larguras ficam salvos permanentemente no seu navegador
+                  (sem necessidade de reimportar ao recarregar).
                 </CardDescription>
               </div>
 

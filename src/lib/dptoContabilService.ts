@@ -16,11 +16,13 @@ export function getDptoContabilBackendStatus(): boolean | null {
 }
 
 /**
- * Carrega a lista de Dpto. Contábil síncrona (localStorage com migração de sessionStorage)
+ * Carrega a lista de Dpto. Contábil síncrona do localStorage (com migração de sessionStorage)
  */
 export function loadDptoContabilFromStorage(): DptoContabilRow[] {
   try {
-    const persistent = localStorage.getItem(DPTO_CONTABIL_PERSIST_KEY)
+    const persistent =
+      localStorage.getItem(DPTO_CONTABIL_PERSIST_KEY) ||
+      localStorage.getItem(DPTO_CONTABIL_STORAGE_KEY)
     if (persistent) {
       const parsed = JSON.parse(persistent)
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -43,12 +45,12 @@ export function loadDptoContabilFromStorage(): DptoContabilRow[] {
 }
 
 /**
- * Salva a lista de Dpto. Contábil permanentemente
+ * Salva a lista de Dpto. Contábil permanentemente no localStorage
  */
 export function saveDptoContabilToStorage(rows: DptoContabilRow[]): void {
   try {
     localStorage.setItem(DPTO_CONTABIL_PERSIST_KEY, JSON.stringify(rows))
-    sessionStorage.setItem(DPTO_CONTABIL_STORAGE_KEY, JSON.stringify(rows))
+    localStorage.setItem(DPTO_CONTABIL_STORAGE_KEY, JSON.stringify(rows))
   } catch {
     // quota exceeded ou ambiente restrito
   }
@@ -61,8 +63,9 @@ export function saveDptoContabilToStorage(rows: DptoContabilRow[]): void {
  */
 export function clearDptoContabilStorage(): void {
   try {
-    sessionStorage.removeItem(DPTO_CONTABIL_STORAGE_KEY)
+    localStorage.removeItem(DPTO_CONTABIL_STORAGE_KEY)
     localStorage.removeItem(DPTO_CONTABIL_PERSIST_KEY)
+    sessionStorage.removeItem(DPTO_CONTABIL_STORAGE_KEY)
   } catch {
     // ignore
   }
@@ -90,7 +93,6 @@ export function loadDptoContabilColumnOrderFromStorage(): string[] {
 export function saveDptoContabilColumnOrderToStorage(order: string[]): void {
   try {
     localStorage.setItem(DPTO_CONTABIL_COLUMN_ORDER_KEY, JSON.stringify(order))
-    sessionStorage.setItem(DPTO_CONTABIL_COLUMN_ORDER_KEY, JSON.stringify(order))
   } catch {
     // ignore
   }
@@ -129,7 +131,7 @@ export async function fetchDptoContabil(): Promise<DptoContabilRow[]> {
       }))
       try {
         localStorage.setItem(DPTO_CONTABIL_PERSIST_KEY, JSON.stringify(mapped))
-        sessionStorage.setItem(DPTO_CONTABIL_STORAGE_KEY, JSON.stringify(mapped))
+        localStorage.setItem(DPTO_CONTABIL_STORAGE_KEY, JSON.stringify(mapped))
       } catch {
         /* intentionally ignored */
       }
