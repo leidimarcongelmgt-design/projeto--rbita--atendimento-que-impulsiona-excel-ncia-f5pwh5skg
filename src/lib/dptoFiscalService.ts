@@ -2,40 +2,132 @@ import * as XLSX from 'xlsx'
 import { DptoFiscalRow, DptoFiscalImportResult } from '@/types/dptoFiscal'
 import { EmpresaRow } from '@/types/empresa'
 import { normalizeHeader, formatCNPJ, cleanCNPJ } from '@/lib/empresasService'
+import pb from '@/lib/pocketbase/client'
 
 export const DPTO_FISCAL_STORAGE_KEY = 'orbita_dpto_fiscal_pesos'
+export const DPTO_FISCAL_PERSIST_KEY = 'orbita_dpto_fiscal_pesos_persistent'
+const COLLECTION_NAME = 'dpto_fiscal'
 
 /**
- * Carrega a lista de Dpto. Fiscal - Pesos persistida em sessionStorage
+ * Carrega a lista de Dpto. Fiscal - Pesos síncrona (localStorage com migração de sessionStorage)
  */
 export function loadDptoFiscalFromStorage(): DptoFiscalRow[] {
   try {
-    const raw = sessionStorage.getItem(DPTO_FISCAL_STORAGE_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : []
+    const persistent = localStorage.getItem(DPTO_FISCAL_PERSIST_KEY)
+    if (persistent) {
+      const parsed = JSON.parse(persistent)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed
+      }
+    }
+
+    const sessionRaw = sessionStorage.getItem(DPTO_FISCAL_STORAGE_KEY)
+    if (sessionRaw) {
+      const parsedSession = JSON.parse(sessionRaw)
+      if (Array.isArray(parsedSession) && parsedSession.length > 0) {
+        saveDptoFiscalToStorage(parsedSession)
+        return parsedSession
+      }
+    }
+    return []
   } catch {
     return []
   }
 }
 
 /**
- * Salva a lista de Dpto. Fiscal - Pesos no sessionStorage
+ * Salva a lista de Dpto. Fiscal permanentemente
  */
 export function saveDptoFiscalToStorage(rows: DptoFiscalRow[]): void {
   try {
+    localStorage.setItem(DPTO_FISCAL_PERSIST_KEY, JSON.stringify(rows))
     sessionStorage.setItem(DPTO_FISCAL_STORAGE_KEY, JSON.stringify(rows))
   } catch {
     // quota exceeded ou ambiente restrito
   }
+
+  syncDptoFiscalToPocketBase(rows).catch(() => {})
 }
 
 /**
- * Limpa o sessionStorage de Dpto. Fiscal - Pesos
+ * Limpa o armazenamento de Dpto. Fiscal
  */
 export function clearDptoFiscalStorage(): void {
   try {
+    localStorage.removeItem(DPTO_FISCAL_PERSIST_KEY)
     sessionStorage.removeItem(DPTO_FISCAL_STORAGE_KEY)
+  } catch {
+    // ignore
+  }
+
+  clearDptoFiscalPocketBase().catch(() => {})
+}
+
+/**
+ * Busca registros no PocketBase com fallback para armazenamento local
+ */
+export async function fetchDptoFiscal(): Promise<DptoFiscalRow[]> {
+  const localData = loadDptoFiscalFromStorage()
+
+  try {
+    const records = await pb.collection(COLLECTION_NAME).getFullList<DptoFiscalRow>({
+      sort: 'created',
+      requestKey: null,
+    })
+
+    if (records && records.length > 0) {
+      const mapped: DptoFiscalRow[] = records.map((r) => ({
+        id: r.id,
+        empresa: r.empresa || '',
+        cnpj: r.cnpj || '',
+        zona: r.zona || '',
+        peso: r.peso ?? '',
+      }))
+      localStorage.setItem(DPTO_FISCAL_PERSIST_KEY, JSON.stringify(mapped))
+      sessionStorage.setItem(DPTO_FISCAL_STORAGE_KEY, JSON.stringify(mapped))
+      return mapped
+    }
+
+    if (localData.length > 0) {
+      syncDptoFiscalToPocketBase(localData).catch(() => {})
+    }
+  } catch {
+    // Silencioso se backend indisponível
+  }
+
+  return localData
+}
+
+async function syncDptoFiscalToPocketBase(rows: DptoFiscalRow[]): Promise<void> {
+  try {
+    const existing = await pb.collection(COLLECTION_NAME).getFullList({ requestKey: null })
+    const existingIds = new Set(existing.map((e) => e.id))
+
+    for (const row of rows) {
+      const payload = {
+        empresa: row.empresa,
+        cnpj: row.cnpj || '',
+        zona: row.zona || '',
+        peso: String(row.peso ?? ''),
+      }
+
+      if (row.id && existingIds.has(row.id)) {
+        await pb.collection(COLLECTION_NAME).update(row.id, payload, { requestKey: null })
+      } else {
+        await pb.collection(COLLECTION_NAME).create(payload, { requestKey: null })
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+
+async function clearDptoFiscalPocketBase(): Promise<void> {
+  try {
+    const list = await pb.collection(COLLECTION_NAME).getFullList({ requestKey: null })
+    for (const r of list) {
+      await pb.collection(COLLECTION_NAME).delete(r.id, { requestKey: null })
+    }
   } catch {
     // ignore
   }
@@ -43,8 +135,6 @@ export function clearDptoFiscalStorage(): void {
 
 /**
  * Constrói lista a partir das Empresas existentes da aba Empresas.
- * Copia nome, CNPJ e Zona das empresas. Preserva edições locais já feitas na aba Dpto. Fiscal.
- * Se não houver edição prévia, entra com peso vazio (ou usa peso legado se porventura presente).
  */
 export function syncFiscalFromEmpresas(
   empresas: EmpresaRow[],
@@ -101,11 +191,7 @@ export function syncFiscalFromEmpresas(
 }
 
 /**
- * Mapeia cabeçalhos para colunas de Dpto. Fiscal:
- * - EMPRESAS (empresa, razao social, nome)
- * - PESO (peso fiscal, peso 1, peso1, peso)
- * - CNPJ (opcional, para mapeamento tolerante)
- * - ZONA (opcional, variações: zona, zona 2, etc.)
+ * Mapeia cabeçalhos para colunas de Dpto. Fiscal
  */
 export function mapFiscalHeaders(headers: string[]): {
   empresaColIdx: number
@@ -162,7 +248,7 @@ export function mapFiscalHeaders(headers: string[]): {
 }
 
 /**
- * Lê arquivo XLSX / XLS e extrai colunas de EMPRESA e PESO (e CNPJ se presente)
+ * Lê arquivo XLSX / XLS e extrai colunas de EMPRESA e PESO
  */
 export async function parseDptoFiscalFile(file: File): Promise<{
   rows: DptoFiscalRow[]
@@ -192,7 +278,6 @@ export async function parseDptoFiscalFile(file: File): Promise<{
   const { empresaColIdx, pesoColIdx, cnpjColIdx, zonaColIdx, unrecognizedColumns } =
     mapFiscalHeaders(headerRow)
 
-  // Se não identificou coluna de empresa, não é possível associar
   if (empresaColIdx === -1) {
     return { rows: [], ignoredRowsCount: 0, unrecognizedColumns }
   }
@@ -243,7 +328,7 @@ export async function parseDptoFiscalFile(file: File): Promise<{
 }
 
 /**
- * Mescla novos registros de Dpto. Fiscal com existentes (replace ou append/merge por nome/CNPJ da empresa)
+ * Mescla novos registros de Dpto. Fiscal com existentes
  */
 export function mergeDptoFiscalRows(
   existing: DptoFiscalRow[],

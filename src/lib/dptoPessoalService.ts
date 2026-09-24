@@ -2,40 +2,132 @@ import * as XLSX from 'xlsx'
 import { DptoPessoalRow, DptoImportResult } from '@/types/dptoPessoal'
 import { EmpresaRow } from '@/types/empresa'
 import { normalizeHeader, formatCNPJ, cleanCNPJ } from '@/lib/empresasService'
+import pb from '@/lib/pocketbase/client'
 
 export const DPTO_PESSOAL_STORAGE_KEY = 'orbita_dpto_pessoal'
+export const DPTO_PESSOAL_PERSIST_KEY = 'orbita_dpto_pessoal_persistent'
+const COLLECTION_NAME = 'dpto_pessoal'
 
 /**
- * Carrega a lista de Dpto. Pessoal persistida em sessionStorage
+ * Carrega a lista de Dpto. Pessoal síncrona (localStorage com migração de sessionStorage)
  */
 export function loadDptoPessoalFromStorage(): DptoPessoalRow[] {
   try {
-    const raw = sessionStorage.getItem(DPTO_PESSOAL_STORAGE_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : []
+    const persistent = localStorage.getItem(DPTO_PESSOAL_PERSIST_KEY)
+    if (persistent) {
+      const parsed = JSON.parse(persistent)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed
+      }
+    }
+
+    const sessionRaw = sessionStorage.getItem(DPTO_PESSOAL_STORAGE_KEY)
+    if (sessionRaw) {
+      const parsedSession = JSON.parse(sessionRaw)
+      if (Array.isArray(parsedSession) && parsedSession.length > 0) {
+        saveDptoPessoalToStorage(parsedSession)
+        return parsedSession
+      }
+    }
+    return []
   } catch {
     return []
   }
 }
 
 /**
- * Salva a lista de Dpto. Pessoal no sessionStorage
+ * Salva a lista de Dpto. Pessoal permanentemente (localStorage + espelho sessionStorage + backend)
  */
 export function saveDptoPessoalToStorage(rows: DptoPessoalRow[]): void {
   try {
+    localStorage.setItem(DPTO_PESSOAL_PERSIST_KEY, JSON.stringify(rows))
     sessionStorage.setItem(DPTO_PESSOAL_STORAGE_KEY, JSON.stringify(rows))
   } catch {
     // quota exceeded ou ambiente restrito
   }
+
+  syncDptoPessoalToPocketBase(rows).catch(() => {})
 }
 
 /**
- * Limpa o sessionStorage de Dpto. Pessoal
+ * Limpa o armazenamento de Dpto. Pessoal
  */
 export function clearDptoPessoalStorage(): void {
   try {
+    localStorage.removeItem(DPTO_PESSOAL_PERSIST_KEY)
     sessionStorage.removeItem(DPTO_PESSOAL_STORAGE_KEY)
+  } catch {
+    // ignore
+  }
+
+  clearDptoPessoalPocketBase().catch(() => {})
+}
+
+/**
+ * Busca registros no PocketBase com fallback para armazenamento local
+ */
+export async function fetchDptoPessoal(): Promise<DptoPessoalRow[]> {
+  const localData = loadDptoPessoalFromStorage()
+
+  try {
+    const records = await pb.collection(COLLECTION_NAME).getFullList<DptoPessoalRow>({
+      sort: 'created',
+      requestKey: null,
+    })
+
+    if (records && records.length > 0) {
+      const mapped: DptoPessoalRow[] = records.map((r) => ({
+        id: r.id,
+        empresa: r.empresa || '',
+        cnpj: r.cnpj || '',
+        zona: r.zona || '',
+        numFunc: r.numFunc ?? '',
+      }))
+      localStorage.setItem(DPTO_PESSOAL_PERSIST_KEY, JSON.stringify(mapped))
+      sessionStorage.setItem(DPTO_PESSOAL_STORAGE_KEY, JSON.stringify(mapped))
+      return mapped
+    }
+
+    if (localData.length > 0) {
+      syncDptoPessoalToPocketBase(localData).catch(() => {})
+    }
+  } catch {
+    // Silencioso se PocketBase estiver indisponível
+  }
+
+  return localData
+}
+
+async function syncDptoPessoalToPocketBase(rows: DptoPessoalRow[]): Promise<void> {
+  try {
+    const existing = await pb.collection(COLLECTION_NAME).getFullList({ requestKey: null })
+    const existingIds = new Set(existing.map((e) => e.id))
+
+    for (const row of rows) {
+      const payload = {
+        empresa: row.empresa,
+        cnpj: row.cnpj || '',
+        zona: row.zona || '',
+        numFunc: String(row.numFunc ?? ''),
+      }
+
+      if (row.id && existingIds.has(row.id)) {
+        await pb.collection(COLLECTION_NAME).update(row.id, payload, { requestKey: null })
+      } else {
+        await pb.collection(COLLECTION_NAME).create(payload, { requestKey: null })
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+
+async function clearDptoPessoalPocketBase(): Promise<void> {
+  try {
+    const list = await pb.collection(COLLECTION_NAME).getFullList({ requestKey: null })
+    for (const r of list) {
+      await pb.collection(COLLECTION_NAME).delete(r.id, { requestKey: null })
+    }
   } catch {
     // ignore
   }
@@ -43,8 +135,6 @@ export function clearDptoPessoalStorage(): void {
 
 /**
  * Constrói lista inicial ou sincronizada a partir das Empresas existentes.
- * Copia nome, CNPJ e Zona das empresas. Preserva edições locais já feitas na aba Dpto. Pessoal.
- * Se não houver edição prévia, entra com numFunc vazio (ou numFunc legado se porventura presente no registro de empresa).
  */
 export function syncFromEmpresas(
   empresas: EmpresaRow[],
@@ -99,11 +189,7 @@ export function syncFromEmpresas(
 }
 
 /**
- * Mapeia cabeçalhos para colunas de Dpto. Pessoal:
- * - EMPRESAS (ou variações: empresa, razao social, nome)
- * - Nº FUNC. (ou variações: func, num func, numero de funcionarios, qtd func)
- * - CNPJ (opcional, para identificação e correspondência)
- * - ZONA (opcional, variações: zona, zona 2, etc.)
+ * Mapeia cabeçalhos para colunas de Dpto. Pessoal
  */
 export function mapDptoHeaders(headers: string[]): {
   empresaColIdx: number
@@ -191,7 +277,6 @@ export async function parseDptoPessoalFile(file: File): Promise<{
   const { empresaColIdx, numFuncColIdx, cnpjColIdx, zonaColIdx, unrecognizedColumns } =
     mapDptoHeaders(headerRow)
 
-  // Se não identificou coluna de empresa, não é possível associar o número
   if (empresaColIdx === -1) {
     return { rows: [], ignoredRowsCount: 0, unrecognizedColumns }
   }
@@ -246,7 +331,7 @@ export async function parseDptoPessoalFile(file: File): Promise<{
 }
 
 /**
- * Mescla novos registros com existentes (replace ou append/merge por nome ou CNPJ da empresa)
+ * Mescla novos registros com existentes
  */
 export function mergeDptoRows(
   existing: DptoPessoalRow[],

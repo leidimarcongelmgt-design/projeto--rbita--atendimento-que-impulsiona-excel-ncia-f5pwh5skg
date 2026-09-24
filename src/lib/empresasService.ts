@@ -1,7 +1,10 @@
 import * as XLSX from 'xlsx'
 import { EmpresaRow, ImportResult } from '@/types/empresa'
+import pb from '@/lib/pocketbase/client'
 
 export const EMPRESAS_STORAGE_KEY = 'orbita_empresas'
+export const EMPRESAS_PERSIST_KEY = 'orbita_empresas_persistent'
+const COLLECTION_NAME = 'empresas'
 
 /**
  * Remove acentos, pontuação, múltiplos espaços e converte para minúsculas
@@ -52,36 +55,160 @@ export function cleanCNPJ(value: string | number | null | undefined): string {
 }
 
 /**
- * Carrega a lista de empresas persistida em sessionStorage
+ * Carrega a lista de empresas síncrona (do localStorage permanente ou migração inicial do sessionStorage)
  */
 export function loadEmpresasFromStorage(): EmpresaRow[] {
   try {
-    const raw = sessionStorage.getItem(EMPRESAS_STORAGE_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : []
+    // 1. Tenta carregar do localStorage permanente
+    const persistent = localStorage.getItem(EMPRESAS_PERSIST_KEY)
+    if (persistent) {
+      const parsed = JSON.parse(persistent)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed
+      }
+    }
+
+    // 2. Migração automática: se houver dados no sessionStorage da sessão anterior/atual, copia para permanente
+    const sessionRaw = sessionStorage.getItem(EMPRESAS_STORAGE_KEY)
+    if (sessionRaw) {
+      const parsedSession = JSON.parse(sessionRaw)
+      if (Array.isArray(parsedSession) && parsedSession.length > 0) {
+        saveEmpresasToStorage(parsedSession)
+        return parsedSession
+      }
+    }
+    return []
   } catch {
     return []
   }
 }
 
 /**
- * Salva a lista de empresas no sessionStorage
+ * Salva a lista de empresas de forma permanente (localStorage + sync assíncrono com PocketBase)
  */
 export function saveEmpresasToStorage(empresas: EmpresaRow[]): void {
   try {
+    // Persistência permanente no navegador
+    localStorage.setItem(EMPRESAS_PERSIST_KEY, JSON.stringify(empresas))
+    // Mantém sessionStorage espelhado para retrocompatibilidade
     sessionStorage.setItem(EMPRESAS_STORAGE_KEY, JSON.stringify(empresas))
   } catch {
     // quota exceeded ou ambiente restrito
   }
+
+  // Tenta sincronizar com o PocketBase em segundo plano (se disponível)
+  syncEmpresasToPocketBase(empresas).catch(() => {
+    // Falha silenciosa no backend — dados já estão garantidos no localStorage
+  })
 }
 
 /**
- * Limpa o sessionStorage de empresas
+ * Limpa o armazenamento de empresas (permanente e de sessão)
  */
 export function clearEmpresasStorage(): void {
   try {
+    localStorage.removeItem(EMPRESAS_PERSIST_KEY)
     sessionStorage.removeItem(EMPRESAS_STORAGE_KEY)
+  } catch {
+    // ignore
+  }
+
+  // Remove também no backend PocketBase se a coleção existir
+  clearEmpresasPocketBase().catch(() => {})
+}
+
+/**
+ * Busca empresas no PocketBase com fallback automático para o armazenamento local
+ */
+export async function fetchEmpresas(): Promise<EmpresaRow[]> {
+  const localData = loadEmpresasFromStorage()
+
+  try {
+    // Tenta carregar até 1000 registros do backend
+    const records = await pb.collection(COLLECTION_NAME).getFullList<EmpresaRow>({
+      sort: 'created',
+      requestKey: null,
+    })
+
+    if (records && records.length > 0) {
+      const mapped: EmpresaRow[] = records.map((r) => ({
+        id: r.id,
+        empresas: r.empresas || '',
+        cnpj: r.cnpj || '',
+        regimeTrib: r.regimeTrib || '',
+        ramoAtividade: r.ramoAtividade || '',
+        zona: r.zona || '',
+        filial: r.filial || '',
+        entrada: r.entrada || '',
+        grupo: r.grupo || '',
+        contabil: r.contabil,
+        numFunc: r.numFunc,
+        peso1: r.peso1,
+        peso2: r.peso2,
+      }))
+      // Atualiza o cache permanente
+      localStorage.setItem(EMPRESAS_PERSIST_KEY, JSON.stringify(mapped))
+      sessionStorage.setItem(EMPRESAS_STORAGE_KEY, JSON.stringify(mapped))
+      return mapped
+    }
+
+    // Se o backend estiver vazio mas houver dados locais, faz o seed para o backend
+    if (localData.length > 0) {
+      syncEmpresasToPocketBase(localData).catch(() => {})
+    }
+  } catch {
+    // PocketBase indisponível ou coleção ainda não criada: usa dados locais com segurança
+  }
+
+  return localData
+}
+
+/**
+ * Sincroniza dados com o PocketBase (se a coleção estiver configurada)
+ */
+async function syncEmpresasToPocketBase(empresas: EmpresaRow[]): Promise<void> {
+  try {
+    // Se a coleção não existir ou retornar 404, o catch captura
+    const existing = await pb.collection(COLLECTION_NAME).getFullList({ requestKey: null })
+    const existingIds = new Set(existing.map((e) => e.id))
+
+    // Cria ou atualiza registros
+    for (const emp of empresas) {
+      const payload = {
+        empresas: emp.empresas,
+        cnpj: emp.cnpj,
+        regimeTrib: emp.regimeTrib,
+        ramoAtividade: emp.ramoAtividade,
+        zona: emp.zona,
+        filial: emp.filial,
+        entrada: emp.entrada,
+        grupo: emp.grupo,
+        contabil: emp.contabil || '',
+        numFunc: String(emp.numFunc ?? ''),
+        peso1: String(emp.peso1 ?? ''),
+        peso2: String(emp.peso2 ?? ''),
+      }
+
+      if (emp.id && existingIds.has(emp.id)) {
+        await pb.collection(COLLECTION_NAME).update(emp.id, payload, { requestKey: null })
+      } else {
+        await pb.collection(COLLECTION_NAME).create(payload, { requestKey: null })
+      }
+    }
+  } catch {
+    // Silencioso se PocketBase não estiver respondendo
+  }
+}
+
+/**
+ * Limpa todos os registros de empresas no PocketBase
+ */
+async function clearEmpresasPocketBase(): Promise<void> {
+  try {
+    const list = await pb.collection(COLLECTION_NAME).getFullList({ requestKey: null })
+    for (const r of list) {
+      await pb.collection(COLLECTION_NAME).delete(r.id, { requestKey: null })
+    }
   } catch {
     // ignore
   }
@@ -89,8 +216,6 @@ export function clearEmpresasStorage(): void {
 
 /**
  * Mapeia cabeçalhos da planilha para as propriedades de EmpresaRow (8 colunas ativas).
- * Colunas de PESO, Nº FUNC. e CONTÁBIL são explicitamente ignoradas na aba Empresas
- * (pesos vivem no Dpto. Fiscal, Nº FUNC. no Dpto. Pessoal e CONTÁBIL na aba Dpto. Contábil).
  */
 export function mapHeadersToFields(headers: string[]): {
   mapping: Map<number, keyof Omit<EmpresaRow, 'id' | 'contabil' | 'numFunc' | 'peso1' | 'peso2'>>
@@ -142,7 +267,6 @@ export function mapHeadersToFields(headers: string[]): {
       normalized === 'colaboradores' ||
       normalized === 'empregados'
     ) {
-      // Coluna Nº FUNC. é ignorada na aba Empresas sem erro (gerenciada no Dpto. Pessoal)
       return
     } else if (
       normalized === 'peso' ||
@@ -152,7 +276,6 @@ export function mapHeadersToFields(headers: string[]): {
       normalized === 'peso2' ||
       normalized === 'peso (2)'
     ) {
-      // Colunas de PESO são ignoradas na aba Empresas sem erro
       return
     } else if (
       normalized === 'contabil' ||
@@ -163,7 +286,6 @@ export function mapHeadersToFields(headers: string[]): {
       normalized === 'depto contabil' ||
       normalized === 'setor contabil'
     ) {
-      // Coluna CONTÁBIL é ignorada na aba Empresas sem erro (gerenciada no Dpto. Contábil)
       return
     } else if (normalized === 'filial' || normalized.includes('filial')) {
       mapping.set(colIdx, 'filial')

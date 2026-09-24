@@ -2,40 +2,132 @@ import * as XLSX from 'xlsx'
 import { DptoContabilRow, DptoContabilImportResult } from '@/types/dptoContabil'
 import { EmpresaRow } from '@/types/empresa'
 import { normalizeHeader, formatCNPJ, cleanCNPJ } from '@/lib/empresasService'
+import pb from '@/lib/pocketbase/client'
 
 export const DPTO_CONTABIL_STORAGE_KEY = 'orbita_dpto_contabil'
+export const DPTO_CONTABIL_PERSIST_KEY = 'orbita_dpto_contabil_persistent'
+const COLLECTION_NAME = 'dpto_contabil'
 
 /**
- * Carrega a lista de Dpto. Contábil persistida em sessionStorage
+ * Carrega a lista de Dpto. Contábil síncrona (localStorage com migração de sessionStorage)
  */
 export function loadDptoContabilFromStorage(): DptoContabilRow[] {
   try {
-    const raw = sessionStorage.getItem(DPTO_CONTABIL_STORAGE_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : []
+    const persistent = localStorage.getItem(DPTO_CONTABIL_PERSIST_KEY)
+    if (persistent) {
+      const parsed = JSON.parse(persistent)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed
+      }
+    }
+
+    const sessionRaw = sessionStorage.getItem(DPTO_CONTABIL_STORAGE_KEY)
+    if (sessionRaw) {
+      const parsedSession = JSON.parse(sessionRaw)
+      if (Array.isArray(parsedSession) && parsedSession.length > 0) {
+        saveDptoContabilToStorage(parsedSession)
+        return parsedSession
+      }
+    }
+    return []
   } catch {
     return []
   }
 }
 
 /**
- * Salva a lista de Dpto. Contábil no sessionStorage
+ * Salva a lista de Dpto. Contábil permanentemente
  */
 export function saveDptoContabilToStorage(rows: DptoContabilRow[]): void {
   try {
+    localStorage.setItem(DPTO_CONTABIL_PERSIST_KEY, JSON.stringify(rows))
     sessionStorage.setItem(DPTO_CONTABIL_STORAGE_KEY, JSON.stringify(rows))
   } catch {
     // quota exceeded ou ambiente restrito
   }
+
+  syncDptoContabilToPocketBase(rows).catch(() => {})
 }
 
 /**
- * Limpa o sessionStorage de Dpto. Contábil
+ * Limpa o armazenamento de Dpto. Contábil
  */
 export function clearDptoContabilStorage(): void {
   try {
+    localStorage.removeItem(DPTO_CONTABIL_PERSIST_KEY)
     sessionStorage.removeItem(DPTO_CONTABIL_STORAGE_KEY)
+  } catch {
+    // ignore
+  }
+
+  clearDptoContabilPocketBase().catch(() => {})
+}
+
+/**
+ * Busca registros no PocketBase com fallback para armazenamento local
+ */
+export async function fetchDptoContabil(): Promise<DptoContabilRow[]> {
+  const localData = loadDptoContabilFromStorage()
+
+  try {
+    const records = await pb.collection(COLLECTION_NAME).getFullList<DptoContabilRow>({
+      sort: 'created',
+      requestKey: null,
+    })
+
+    if (records && records.length > 0) {
+      const mapped: DptoContabilRow[] = records.map((r) => ({
+        id: r.id,
+        empresa: r.empresa || '',
+        cnpj: r.cnpj || '',
+        zona: r.zona || '',
+        contabil: r.contabil || '',
+      }))
+      localStorage.setItem(DPTO_CONTABIL_PERSIST_KEY, JSON.stringify(mapped))
+      sessionStorage.setItem(DPTO_CONTABIL_STORAGE_KEY, JSON.stringify(mapped))
+      return mapped
+    }
+
+    if (localData.length > 0) {
+      syncDptoContabilToPocketBase(localData).catch(() => {})
+    }
+  } catch {
+    // Silencioso se backend indisponível
+  }
+
+  return localData
+}
+
+async function syncDptoContabilToPocketBase(rows: DptoContabilRow[]): Promise<void> {
+  try {
+    const existing = await pb.collection(COLLECTION_NAME).getFullList({ requestKey: null })
+    const existingIds = new Set(existing.map((e) => e.id))
+
+    for (const row of rows) {
+      const payload = {
+        empresa: row.empresa,
+        cnpj: row.cnpj || '',
+        zona: row.zona || '',
+        contabil: row.contabil || '',
+      }
+
+      if (row.id && existingIds.has(row.id)) {
+        await pb.collection(COLLECTION_NAME).update(row.id, payload, { requestKey: null })
+      } else {
+        await pb.collection(COLLECTION_NAME).create(payload, { requestKey: null })
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+
+async function clearDptoContabilPocketBase(): Promise<void> {
+  try {
+    const list = await pb.collection(COLLECTION_NAME).getFullList({ requestKey: null })
+    for (const r of list) {
+      await pb.collection(COLLECTION_NAME).delete(r.id, { requestKey: null })
+    }
   } catch {
     // ignore
   }
@@ -43,9 +135,6 @@ export function clearDptoContabilStorage(): void {
 
 /**
  * Constrói lista a partir das Empresas existentes da aba Empresas.
- * Preserva edições que o usuário já possa ter feito localmente na aba Contábil.
- * Como a coluna CONTÁBIL foi removida da aba Empresas, novas linhas entram com valor em branco
- * (ou com valor legado se existir em sessões antigas).
  */
 export function syncContabilFromEmpresas(
   empresas: EmpresaRow[],
@@ -100,10 +189,7 @@ export function syncContabilFromEmpresas(
 }
 
 /**
- * Mapeia cabeçalhos para colunas de Dpto. Contábil:
- * - EMPRESAS (empresa, razao social, nome)
- * - CONTÁBIL (contabil, dpto contabil, depto contabil, setor contabil)
- * - CNPJ (opcional, para identificação e correspondência)
+ * Mapeia cabeçalhos para colunas de Dpto. Contábil
  */
 export function mapContabilHeaders(headers: string[]): {
   empresaColIdx: number
@@ -158,7 +244,7 @@ export function mapContabilHeaders(headers: string[]): {
 }
 
 /**
- * Lê arquivo XLSX / XLS e extrai colunas de EMPRESA e CONTÁBIL (e CNPJ se presente)
+ * Lê arquivo XLSX / XLS e extrai colunas de EMPRESA e CONTÁBIL
  */
 export async function parseDptoContabilFile(file: File): Promise<{
   rows: DptoContabilRow[]
@@ -188,7 +274,6 @@ export async function parseDptoContabilFile(file: File): Promise<{
   const { empresaColIdx, contabilColIdx, cnpjColIdx, zonaColIdx, unrecognizedColumns } =
     mapContabilHeaders(headerRow)
 
-  // Se não identificou coluna de empresa, não é possível associar
   if (empresaColIdx === -1) {
     return { rows: [], ignoredRowsCount: 0, unrecognizedColumns }
   }
@@ -234,7 +319,7 @@ export async function parseDptoContabilFile(file: File): Promise<{
 }
 
 /**
- * Mescla novos registros de Dpto. Contábil com existentes (replace ou append/merge por nome/CNPJ da empresa)
+ * Mescla novos registros de Dpto. Contábil com existentes
  */
 export function mergeDptoContabilRows(
   existing: DptoContabilRow[],

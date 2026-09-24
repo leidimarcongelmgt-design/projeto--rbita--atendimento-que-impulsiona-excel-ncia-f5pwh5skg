@@ -13,13 +13,17 @@ export const RESIZABLE_STORAGE_KEYS = {
 
 export function clearAllResizableColumnWidths(): void {
   try {
+    localStorage.removeItem(RESIZABLE_STORAGE_KEYS.EMPRESAS)
+    localStorage.removeItem(RESIZABLE_STORAGE_KEYS.DPTO_PESSOAL)
+    localStorage.removeItem(RESIZABLE_STORAGE_KEYS.DPTO_FISCAL)
+    localStorage.removeItem(RESIZABLE_STORAGE_KEYS.DPTO_CONTABIL)
     sessionStorage.removeItem(RESIZABLE_STORAGE_KEYS.EMPRESAS)
     sessionStorage.removeItem(RESIZABLE_STORAGE_KEYS.DPTO_PESSOAL)
     sessionStorage.removeItem(RESIZABLE_STORAGE_KEYS.DPTO_FISCAL)
     sessionStorage.removeItem(RESIZABLE_STORAGE_KEYS.DPTO_CONTABIL)
     window.dispatchEvent(new CustomEvent('dossie:column-widths-reset'))
   } catch (err) {
-    console.error('Erro ao limpar larguras das colunas do sessionStorage:', err)
+    console.error('Erro ao limpar larguras das colunas:', err)
   }
 }
 
@@ -30,7 +34,7 @@ export function useResizableColumns(
 ) {
   const [widths, setWidths] = useState<ColumnWidthConfig>(() => {
     try {
-      const stored = sessionStorage.getItem(storageKey)
+      const stored = localStorage.getItem(storageKey) || sessionStorage.getItem(storageKey)
       if (stored) {
         const parsed = JSON.parse(stored)
         return { ...defaultWidths, ...parsed }
@@ -45,7 +49,7 @@ export function useResizableColumns(
   useEffect(() => {
     const handleResetEvent = () => {
       try {
-        const stored = sessionStorage.getItem(storageKey)
+        const stored = localStorage.getItem(storageKey) || sessionStorage.getItem(storageKey)
         if (!stored) {
           setWidths(defaultWidths)
         }
@@ -60,11 +64,11 @@ export function useResizableColumns(
     }
   }, [storageKey, defaultWidths])
 
-  // Salva no sessionStorage quando as larguras mudarem
+  // Salva no localStorage quando as larguras mudarem
   const persistWidths = useCallback(
     (newWidths: ColumnWidthConfig) => {
       try {
-        sessionStorage.setItem(storageKey, JSON.stringify(newWidths))
+        localStorage.setItem(storageKey, JSON.stringify(newWidths))
       } catch (err) {
         console.error('Erro ao salvar larguras das colunas:', err)
       }
@@ -145,6 +149,7 @@ export function useResizableColumns(
 
   const resetWidths = useCallback(() => {
     try {
+      localStorage.removeItem(storageKey)
       sessionStorage.removeItem(storageKey)
     } catch {
       // Ignora erro

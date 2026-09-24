@@ -12,11 +12,10 @@ import { EmpresaRow } from '@/types/empresa'
 import { DptoPessoalRow } from '@/types/dptoPessoal'
 import { DptoFiscalRow } from '@/types/dptoFiscal'
 import { DptoContabilRow } from '@/types/dptoContabil'
-import { loadEmpresasFromStorage, clearEmpresasStorage } from '@/lib/empresasService'
-import { loadDptoPessoalFromStorage, clearDptoPessoalStorage } from '@/lib/dptoPessoalService'
-import { loadDptoFiscalFromStorage, clearDptoFiscalStorage } from '@/lib/dptoFiscalService'
-import { loadDptoContabilFromStorage, clearDptoContabilStorage } from '@/lib/dptoContabilService'
-import { clearAllResizableColumnWidths } from '@/hooks/use-resizable-columns'
+import { loadEmpresasFromStorage, fetchEmpresas } from '@/lib/empresasService'
+import { loadDptoPessoalFromStorage, fetchDptoPessoal } from '@/lib/dptoPessoalService'
+import { loadDptoFiscalFromStorage, fetchDptoFiscal } from '@/lib/dptoFiscalService'
+import { loadDptoContabilFromStorage, fetchDptoContabil } from '@/lib/dptoContabilService'
 import { toast } from 'sonner'
 
 export default function Index() {
@@ -25,22 +24,22 @@ export default function Index() {
     return parseStateFromUrl(window.location.search)
   })
 
-  // Empresas persistidas em sessionStorage (não poluindo a URL)
+  // Empresas persistidas permanentemente (carrega inicial síncrono para render instantâneo)
   const [empresas, setEmpresas] = useState<EmpresaRow[]>(() => {
     return loadEmpresasFromStorage()
   })
 
-  // Dpto. Pessoal persistido em sessionStorage (não poluindo a URL)
+  // Dpto. Pessoal persistido permanentemente
   const [dptoRows, setDptoRows] = useState<DptoPessoalRow[]>(() => {
     return loadDptoPessoalFromStorage()
   })
 
-  // Dpto. Fiscal persistido em sessionStorage (não poluindo a URL)
+  // Dpto. Fiscal persistido permanentemente
   const [fiscalRows, setFiscalRows] = useState<DptoFiscalRow[]>(() => {
     return loadDptoFiscalFromStorage()
   })
 
-  // Dpto. Contábil persistido em sessionStorage (não poluindo a URL)
+  // Dpto. Contábil persistido permanentemente
   const [contabilRows, setContabilRows] = useState<DptoContabilRow[]>(() => {
     return loadDptoContabilFromStorage()
   })
@@ -50,6 +49,45 @@ export default function Index() {
 
   useEffect(() => {
     document.title = 'DOSSIÊ DO CLIENTE'
+  }, [])
+
+  // Carrega assincronamente os dados atualizados ao entrar no sistema
+  useEffect(() => {
+    let isMounted = true
+
+    const loadAllPersistentData = async () => {
+      try {
+        const [emp, dpto, fisc, cont] = await Promise.allSettled([
+          fetchEmpresas(),
+          fetchDptoPessoal(),
+          fetchDptoFiscal(),
+          fetchDptoContabil(),
+        ])
+
+        if (!isMounted) return
+
+        if (emp.status === 'fulfilled' && emp.value.length > 0) {
+          setEmpresas(emp.value)
+        }
+        if (dpto.status === 'fulfilled' && dpto.value.length > 0) {
+          setDptoRows(dpto.value)
+        }
+        if (fisc.status === 'fulfilled' && fisc.value.length > 0) {
+          setFiscalRows(fisc.value)
+        }
+        if (cont.status === 'fulfilled' && cont.value.length > 0) {
+          setContabilRows(cont.value)
+        }
+      } catch (err) {
+        console.error('Erro ao sincronizar dados persistentes:', err)
+      }
+    }
+
+    loadAllPersistentData()
+
+    return () => {
+      isMounted = false
+    }
   }, [])
 
   // Listen to external popstate/URL changes
@@ -75,23 +113,17 @@ export default function Index() {
     })
   }, [])
 
-  // Reset all parameters to reference defaults ("Nova Consulta")
+  // "Nova Consulta": redefine apenas os parâmetros da URL da aba Identificação,
+  // SEM apagar as informações persistentes do banco/tabelas!
   const handleReset = useCallback(() => {
     const nextState = { ...DEFAULT_CALCULATOR_STATE }
     setState(nextState)
-    setEmpresas([])
-    setDptoRows([])
-    setFiscalRows([])
-    setContabilRows([])
-    clearEmpresasStorage()
-    clearDptoPessoalStorage()
-    clearDptoFiscalStorage()
-    clearDptoContabilStorage()
-    clearAllResizableColumnWidths()
     setIsDocumentMode(false)
     const newQuery = serializeStateToUrl(nextState)
     window.history.replaceState(null, '', `${window.location.pathname}${newQuery}`)
-    toast.info('Valores redefinidos para os padrões da referência.')
+    toast.info(
+      'Nova Consulta iniciada: parâmetros de Identificação redefinidos. Dados das tabelas permanecem fixos.',
+    )
   }, [])
 
   // Copy current URL to clipboard with confirmation toast
