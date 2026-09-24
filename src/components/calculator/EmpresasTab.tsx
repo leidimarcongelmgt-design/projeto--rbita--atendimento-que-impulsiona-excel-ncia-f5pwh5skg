@@ -15,6 +15,7 @@ import {
   saveEmpresaRecord,
   loadCustomColumnsFromStorage,
   saveCustomColumnsToStorage,
+  sortEmpresasAlphabetically,
 } from '@/lib/empresasService'
 import { useResizableColumns, RESIZABLE_STORAGE_KEYS } from '@/hooks/use-resizable-columns'
 import { ResizableTh } from '@/components/calculator/ResizableTh'
@@ -58,6 +59,8 @@ import {
   Plus,
   Columns,
   Pencil,
+  ArrowDownAZ,
+  ArrowUpAZ,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -121,6 +124,7 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
   // Estados de busca e ordenação
   const [searchQuery, setSearchQuery] = useState('')
   const [sortConfig, setSortConfig] = useState<SortConfig>(null)
+  const [alphabeticalDirection, setAlphabeticalDirection] = useState<'asc' | 'desc'>('asc')
 
   // Estado para diálogo de conflito (quando já existem empresas e o usuário faz novo upload)
   const [pendingFileRows, setPendingFileRows] = useState<{
@@ -481,6 +485,32 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
     })
   }
 
+  // Ordenação permanente de todas as linhas pelo nome da empresa (A→Z / Z→A)
+  const handleSortAlphabetically = () => {
+    if (empresas.length === 0) {
+      toast.info('Não há empresas para ordenar.')
+      return
+    }
+
+    const nextDirection = alphabeticalDirection === 'asc' ? 'desc' : 'asc'
+    const targetDirection = alphabeticalDirection // aplica a direção atual indicada no botão, depois alterna
+    const sorted = sortEmpresasAlphabetically(empresas, targetDirection)
+
+    // Atualiza permanentemente no estado e no storage
+    onEmpresasChange(sorted)
+    saveEmpresasToStorage(sorted)
+
+    // Se houver sortConfig ativo na coluna 'empresas', alinha a indicação visual; se for em outra coluna, remove
+    setSortConfig({ key: 'empresas', direction: targetDirection })
+    setAlphabeticalDirection(nextDirection)
+
+    toast.success(
+      targetDirection === 'asc'
+        ? 'Linhas reordenadas permanentemente em ordem alfabética (A → Z)!'
+        : 'Linhas reordenadas permanentemente em ordem alfabética (Z → A)!',
+    )
+  }
+
   // Filtragem e ordenação memoizadas
   const filteredAndSortedEmpresas = useMemo(() => {
     let result = [...empresas]
@@ -606,6 +636,26 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                 >
                   <Columns className="w-3.5 h-3.5 text-purple-800" />
                   <span>Adicionar Coluna</span>
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleSortAlphabetically}
+                  disabled={empresas.length === 0}
+                  className="text-xs h-9 text-[#1E3A5F] hover:bg-slate-100 hover:text-[#16304F] border-slate-300 gap-1.5 font-medium transition-colors disabled:opacity-50"
+                  title={
+                    alphabeticalDirection === 'asc'
+                      ? 'Reordenar permanentemente as linhas de A a Z pelo nome da empresa'
+                      : 'Reordenar permanentemente as linhas de Z a A pelo nome da empresa'
+                  }
+                >
+                  {alphabeticalDirection === 'asc' ? (
+                    <ArrowDownAZ className="w-3.5 h-3.5 text-[#1E3A5F]" />
+                  ) : (
+                    <ArrowUpAZ className="w-3.5 h-3.5 text-[#1E3A5F]" />
+                  )}
+                  <span>Ordem Alfabética ({alphabeticalDirection === 'asc' ? 'A→Z' : 'Z→A'})</span>
                 </Button>
 
                 <Button

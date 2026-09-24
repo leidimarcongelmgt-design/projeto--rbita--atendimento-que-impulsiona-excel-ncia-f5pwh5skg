@@ -64,6 +64,38 @@ export function cleanCNPJ(value: string | number | null | undefined): string {
 }
 
 /**
+ * Ordena permanentemente um array de EmpresaRow pelo nome da empresa (coluna EMPRESAS)
+ * ignorando acentuação, maiúsculas/minúsculas e pontuação (ex: 'Água' ao lado de 'Agua').
+ */
+export function sortEmpresasAlphabetically(
+  empresas: EmpresaRow[],
+  direction: 'asc' | 'desc' = 'asc',
+): EmpresaRow[] {
+  return [...empresas].sort((a, b) => {
+    const nomeA = (a.empresas || '').trim()
+    const nomeB = (b.empresas || '').trim()
+
+    // Se ambos estiverem vazios, usa CNPJ como desempate
+    if (!nomeA && !nomeB) {
+      return (a.cnpj || '').localeCompare(b.cnpj || '', 'pt-BR')
+    }
+    if (!nomeA) return 1
+    if (!nomeB) return -1
+
+    // Compara em pt-BR com sensibilidade base (ignora acentos e caixa)
+    const cmp = nomeA.localeCompare(nomeB, 'pt-BR', {
+      sensitivity: 'base',
+      numeric: true,
+    })
+
+    // Em caso de empate na forma base, desempata pela string exata com case/acentos
+    const finalCmp = cmp !== 0 ? cmp : nomeA.localeCompare(nomeB, 'pt-BR', { numeric: true })
+
+    return direction === 'asc' ? finalCmp : -finalCmp
+  })
+}
+
+/**
  * Carrega a lista de empresas síncrona do localStorage (com migração de sessionStorage)
  */
 export function loadEmpresasFromStorage(): EmpresaRow[] {
