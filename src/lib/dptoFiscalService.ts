@@ -112,7 +112,7 @@ export async function fetchDptoFiscal(): Promise<DptoFiscalRow[]> {
   const localData = loadDptoFiscalFromStorage()
 
   try {
-    const records = await pb.collection(COLLECTION_NAME).getFullList<DptoFiscalRow>({
+    const records = await pb.collection(COLLECTION_NAME).getFullList<Record<string, unknown>>({
       sort: 'created',
       requestKey: null,
     })
@@ -121,11 +121,11 @@ export async function fetchDptoFiscal(): Promise<DptoFiscalRow[]> {
 
     if (records && records.length > 0) {
       const mapped: DptoFiscalRow[] = records.map((r) => ({
-        id: r.id,
-        empresa: r.empresa || '',
-        cnpj: r.cnpj || '',
-        zona: r.zona || '',
-        peso: r.peso ?? '',
+        id: String(r.id || ''),
+        empresa: String(r.EMPRESAS ?? r.empresa ?? ''),
+        cnpj: String(r.CNPJ ?? r.cnpj ?? ''),
+        zona: String(r.ZONA ?? r.zona ?? ''),
+        peso: (r.PESO ?? r.peso ?? '') as number | string,
       }))
       try {
         localStorage.setItem(DPTO_FISCAL_PERSIST_KEY, JSON.stringify(mapped))
@@ -138,7 +138,9 @@ export async function fetchDptoFiscal(): Promise<DptoFiscalRow[]> {
 
     if (localData.length > 0) {
       syncDptoFiscalToPocketBase(localData).catch(() => {})
+      return localData
     }
+    return []
   } catch {
     isPocketBaseAvailable = false
   }
@@ -152,11 +154,21 @@ export async function syncDptoFiscalToPocketBase(rows: DptoFiscalRow[]): Promise
     const existingIds = new Set(existing.map((e) => e.id))
 
     for (const row of rows) {
+      const pesoNum =
+        typeof row.peso === 'number'
+          ? row.peso
+          : row.peso
+            ? parseFloat(String(row.peso).replace(',', '.')) || null
+            : null
       const payload = {
-        empresa: row.empresa,
+        EMPRESAS: row.empresa || '',
+        CNPJ: row.cnpj || '',
+        ZONA: row.zona || '',
+        PESO: pesoNum,
+        empresa: row.empresa || '',
         cnpj: row.cnpj || '',
         zona: row.zona || '',
-        peso: String(row.peso ?? ''),
+        peso: pesoNum,
       }
 
       const isValidPbId = row.id && row.id.length === 15 && !row.id.includes('-')
@@ -189,11 +201,21 @@ export async function clearDptoFiscalPocketBase(): Promise<void> {
  */
 export async function saveDptoFiscalRecord(row: DptoFiscalRow): Promise<string | undefined> {
   try {
+    const pesoNum =
+      typeof row.peso === 'number'
+        ? row.peso
+        : row.peso
+          ? parseFloat(String(row.peso).replace(',', '.')) || null
+          : null
     const payload = {
-      empresa: row.empresa,
+      EMPRESAS: row.empresa || '',
+      CNPJ: row.cnpj || '',
+      ZONA: row.zona || '',
+      PESO: pesoNum,
+      empresa: row.empresa || '',
       cnpj: row.cnpj || '',
       zona: row.zona || '',
-      peso: String(row.peso ?? ''),
+      peso: pesoNum,
     }
 
     const isValidPbId = row.id && row.id.length === 15 && !row.id.includes('-')

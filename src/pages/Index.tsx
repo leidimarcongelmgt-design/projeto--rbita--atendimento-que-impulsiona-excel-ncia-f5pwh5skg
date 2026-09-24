@@ -51,44 +51,44 @@ export default function Index() {
     document.title = 'DOSSIÊ DO CLIENTE'
   }, [])
 
-  // Carrega assincronamente os dados atualizados ao entrar no sistema
+  // Carrega assincronamente os dados atualizados ao entrar no sistema ou ao alternar abas
   useEffect(() => {
     let isMounted = true
 
-    const loadAllPersistentData = async () => {
+    const loadPersistentDataForTab = async () => {
       try {
-        const [emp, dpto, fisc, cont] = await Promise.allSettled([
-          fetchEmpresas(),
-          fetchDptoPessoal(),
-          fetchDptoFiscal(),
-          fetchDptoContabil(),
-        ])
-
-        if (!isMounted) return
-
-        if (emp.status === 'fulfilled' && emp.value.length > 0) {
-          setEmpresas(emp.value)
+        if (state.tab === 'empresas') {
+          const emp = await fetchEmpresas().catch(() => loadEmpresasFromStorage())
+          if (isMounted && emp && emp.length > 0) {
+            setEmpresas(emp)
+          }
+        } else if (state.tab === 'dpto-pessoal') {
+          const dpto = await fetchDptoPessoal().catch(() => loadDptoPessoalFromStorage())
+          if (isMounted && dpto && dpto.length > 0) {
+            setDptoRows(dpto)
+          }
+        } else if (state.tab === 'fiscal-pesos') {
+          const fisc = await fetchDptoFiscal().catch(() => loadDptoFiscalFromStorage())
+          if (isMounted && fisc && fisc.length > 0) {
+            setFiscalRows(fisc)
+          }
+        } else if (state.tab === 'contabil') {
+          const cont = await fetchDptoContabil().catch(() => loadDptoContabilFromStorage())
+          if (isMounted && cont && cont.length > 0) {
+            setContabilRows(cont)
+          }
         }
-        if (dpto.status === 'fulfilled' && dpto.value.length > 0) {
-          setDptoRows(dpto.value)
-        }
-        if (fisc.status === 'fulfilled' && fisc.value.length > 0) {
-          setFiscalRows(fisc.value)
-        }
-        if (cont.status === 'fulfilled' && cont.value.length > 0) {
-          setContabilRows(cont.value)
-        }
-      } catch (err) {
-        console.error('Erro ao sincronizar dados persistentes:', err)
+      } catch {
+        // Falha no backend silenciada com fallback local
       }
     }
 
-    loadAllPersistentData()
+    loadPersistentDataForTab()
 
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [state.tab])
 
   // Listen to external popstate/URL changes
   useEffect(() => {

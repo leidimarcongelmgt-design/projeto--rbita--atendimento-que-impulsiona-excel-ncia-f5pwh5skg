@@ -236,7 +236,7 @@ export async function fetchEmpresas(): Promise<EmpresaRow[]> {
   const localData = loadEmpresasFromStorage()
 
   try {
-    const records = await pb.collection(COLLECTION_NAME).getFullList<EmpresaRow>({
+    const records = await pb.collection(COLLECTION_NAME).getFullList<Record<string, unknown>>({
       sort: 'created',
       requestKey: null,
     })
@@ -245,28 +245,31 @@ export async function fetchEmpresas(): Promise<EmpresaRow[]> {
 
     if (records && records.length > 0) {
       const mapped: EmpresaRow[] = records.map((r) => ({
-        id: r.id,
-        empresas: r.empresas || '',
-        cnpj: r.cnpj || '',
-        regimeTrib: r.regimeTrib || '',
-        ramoAtividade: r.ramoAtividade || '',
-        filial: r.filial || '',
-        grupo: r.grupo || '',
-        entrada: r.entrada || '',
-        zona: r.zona || '',
-        contabil: r.contabil || '',
-        numFunc: r.numFunc ?? '',
-        pesoFolha: (r as unknown as { pesoFolha?: string | number }).pesoFolha ?? r.peso1 ?? '',
-        pesoFiscal: (r as unknown as { pesoFiscal?: string | number }).pesoFiscal ?? r.peso2 ?? '',
-        receitas: (r as unknown as { receitas?: string | number }).receitas ?? '',
-        despCustos: (r as unknown as { despCustos?: string | number }).despCustos ?? '',
-        enviaSped: (r as unknown as { enviaSped?: string }).enviaSped || '',
-        observacoes: (r as unknown as { observacoes?: string }).observacoes || '',
-        lnk: (r as unknown as { lnk?: string }).lnk || '',
-        peso1: r.peso1,
-        peso2: r.peso2,
+        id: String(r.id || ''),
+        empresas: String(r.EMPRESAS ?? r.empresas ?? ''),
+        cnpj: String(r.CNPJ ?? r.cnpj ?? ''),
+        regimeTrib: String(r.REGIME_TRIB ?? r.regimeTrib ?? ''),
+        ramoAtividade: String(r.RAMO_ATIVIDADE_2 ?? r.ramoAtividade ?? ''),
+        filial: String(r.FILIAL ?? r.filial ?? ''),
+        grupo: String(r.GRUPO ?? r.grupo ?? ''),
+        entrada: String(r.CLIENTE_DESDE ?? r.entrada ?? ''),
+        zona: String(r.ZONA ?? r.zona ?? ''),
+        contabil: String(r.CONTABIL ?? r.contabil ?? ''),
+        numFunc: (r.NUM_FUNC ?? r.numFunc ?? '') as number | string,
+        pesoFolha: (r.PESO_FOLHA ?? r.pesoFolha ?? r.peso1 ?? '') as number | string,
+        pesoFiscal: (r.PESO_FISCAL ?? r.pesoFiscal ?? r.peso2 ?? '') as number | string,
+        receitas: (r.RECEITAS ?? r.receitas ?? '') as number | string,
+        despCustos: (r.DESP_CUSTOS ?? r.despCustos ?? '') as number | string,
+        enviaSped: String(r.ENVIA_SPED ?? r.enviaSped ?? ''),
+        observacoes: String(r.OBSERVACOES ?? r.observacoes ?? ''),
+        lnk: String(r.LNK ?? r.lnk ?? ''),
+        peso1: (r.PESO_FOLHA ?? r.pesoFolha ?? r.peso1 ?? '') as number | string,
+        peso2: (r.PESO_FISCAL ?? r.pesoFiscal ?? r.peso2 ?? '') as number | string,
         isManual: Boolean(r.isManual),
-        customFields: r.customFields && typeof r.customFields === 'object' ? r.customFields : {},
+        customFields:
+          r.customFields && typeof r.customFields === 'object'
+            ? (r.customFields as Record<string, string>)
+            : {},
       }))
       try {
         localStorage.setItem(EMPRESAS_PERSIST_KEY, JSON.stringify(mapped))
@@ -280,7 +283,9 @@ export async function fetchEmpresas(): Promise<EmpresaRow[]> {
     // Backend está vazio mas temos dados locais: migração inicial
     if (localData.length > 0) {
       syncEmpresasToPocketBase(localData).catch(() => {})
+      return localData
     }
+    return []
   } catch {
     isPocketBaseAvailable = false
     // Backend indisponível: app continua funcionando sem interrupção usando dados locais
@@ -298,26 +303,73 @@ export async function syncEmpresasToPocketBase(empresas: EmpresaRow[]): Promise<
     const existingIds = new Set(existing.map((e) => e.id))
 
     for (const emp of empresas) {
+      const numFuncNum =
+        typeof emp.numFunc === 'number'
+          ? emp.numFunc
+          : emp.numFunc
+            ? parseFloat(String(emp.numFunc).replace(',', '.')) || null
+            : null
+      const pesoFolhaNum =
+        typeof emp.pesoFolha === 'number'
+          ? emp.pesoFolha
+          : emp.pesoFolha
+            ? parseFloat(String(emp.pesoFolha).replace(',', '.')) || null
+            : null
+      const pesoFiscalNum =
+        typeof emp.pesoFiscal === 'number'
+          ? emp.pesoFiscal
+          : emp.pesoFiscal
+            ? parseFloat(String(emp.pesoFiscal).replace(',', '.')) || null
+            : null
+      const receitasNum =
+        typeof emp.receitas === 'number'
+          ? emp.receitas
+          : emp.receitas
+            ? parseFloat(String(emp.receitas).replace(',', '.')) || null
+            : null
+      const despCustosNum =
+        typeof emp.despCustos === 'number'
+          ? emp.despCustos
+          : emp.despCustos
+            ? parseFloat(String(emp.despCustos).replace(',', '.')) || null
+            : null
+
       const payload = {
-        empresas: emp.empresas,
-        cnpj: emp.cnpj,
-        regimeTrib: emp.regimeTrib,
-        ramoAtividade: emp.ramoAtividade,
-        filial: emp.filial,
-        grupo: emp.grupo,
-        entrada: emp.entrada,
-        zona: emp.zona,
+        EMPRESAS: emp.empresas || '',
+        CNPJ: emp.cnpj || '',
+        REGIME_TRIB: emp.regimeTrib || '',
+        RAMO_ATIVIDADE_2: emp.ramoAtividade || '',
+        FILIAL: emp.filial || '',
+        GRUPO: emp.grupo || '',
+        CLIENTE_DESDE: emp.entrada || '',
+        ZONA: emp.zona || '',
+        CONTABIL: emp.contabil || '',
+        NUM_FUNC: numFuncNum,
+        PESO_FOLHA: pesoFolhaNum,
+        PESO_FISCAL: pesoFiscalNum,
+        RECEITAS: receitasNum,
+        DESP_CUSTOS: despCustosNum,
+        ENVIA_SPED: emp.enviaSped || '',
+        OBSERVACOES: emp.observacoes || '',
+        LNK: emp.lnk || '',
+        // Legados para máxima compatibilidade
+        empresas: emp.empresas || '',
+        cnpj: emp.cnpj || '',
+        regimeTrib: emp.regimeTrib || '',
+        ramoAtividade: emp.ramoAtividade || '',
+        filial: emp.filial || '',
+        grupo: emp.grupo || '',
+        entrada: emp.entrada || '',
+        zona: emp.zona || '',
         contabil: emp.contabil || '',
-        numFunc: String(emp.numFunc ?? ''),
-        pesoFolha: String(emp.pesoFolha ?? ''),
-        pesoFiscal: String(emp.pesoFiscal ?? ''),
-        receitas: String(emp.receitas ?? ''),
-        despCustos: String(emp.despCustos ?? ''),
+        numFunc: numFuncNum,
+        pesoFolha: pesoFolhaNum,
+        pesoFiscal: pesoFiscalNum,
+        receitas: receitasNum,
+        despCustos: despCustosNum,
         enviaSped: emp.enviaSped || '',
         observacoes: emp.observacoes || '',
         lnk: emp.lnk || '',
-        peso1: String(emp.peso1 ?? emp.pesoFolha ?? ''),
-        peso2: String(emp.peso2 ?? emp.pesoFiscal ?? ''),
         isManual: emp.isManual ?? false,
         customFields: emp.customFields ?? {},
       }
@@ -356,26 +408,73 @@ export async function clearEmpresasPocketBase(): Promise<void> {
  */
 export async function saveEmpresaRecord(empresa: EmpresaRow): Promise<string | undefined> {
   try {
+    const numFuncNum =
+      typeof empresa.numFunc === 'number'
+        ? empresa.numFunc
+        : empresa.numFunc
+          ? parseFloat(String(empresa.numFunc).replace(',', '.')) || null
+          : null
+    const pesoFolhaNum =
+      typeof empresa.pesoFolha === 'number'
+        ? empresa.pesoFolha
+        : empresa.pesoFolha
+          ? parseFloat(String(empresa.pesoFolha).replace(',', '.')) || null
+          : null
+    const pesoFiscalNum =
+      typeof empresa.pesoFiscal === 'number'
+        ? empresa.pesoFiscal
+        : empresa.pesoFiscal
+          ? parseFloat(String(empresa.pesoFiscal).replace(',', '.')) || null
+          : null
+    const receitasNum =
+      typeof empresa.receitas === 'number'
+        ? empresa.receitas
+        : empresa.receitas
+          ? parseFloat(String(empresa.receitas).replace(',', '.')) || null
+          : null
+    const despCustosNum =
+      typeof empresa.despCustos === 'number'
+        ? empresa.despCustos
+        : empresa.despCustos
+          ? parseFloat(String(empresa.despCustos).replace(',', '.')) || null
+          : null
+
     const payload = {
-      empresas: empresa.empresas,
-      cnpj: empresa.cnpj,
-      regimeTrib: empresa.regimeTrib,
-      ramoAtividade: empresa.ramoAtividade,
-      filial: empresa.filial,
-      grupo: empresa.grupo,
-      entrada: empresa.entrada,
-      zona: empresa.zona,
+      EMPRESAS: empresa.empresas || '',
+      CNPJ: empresa.cnpj || '',
+      REGIME_TRIB: empresa.regimeTrib || '',
+      RAMO_ATIVIDADE_2: empresa.ramoAtividade || '',
+      FILIAL: empresa.filial || '',
+      GRUPO: empresa.grupo || '',
+      CLIENTE_DESDE: empresa.entrada || '',
+      ZONA: empresa.zona || '',
+      CONTABIL: empresa.contabil || '',
+      NUM_FUNC: numFuncNum,
+      PESO_FOLHA: pesoFolhaNum,
+      PESO_FISCAL: pesoFiscalNum,
+      RECEITAS: receitasNum,
+      DESP_CUSTOS: despCustosNum,
+      ENVIA_SPED: empresa.enviaSped || '',
+      OBSERVACOES: empresa.observacoes || '',
+      LNK: empresa.lnk || '',
+      // Legados
+      empresas: empresa.empresas || '',
+      cnpj: empresa.cnpj || '',
+      regimeTrib: empresa.regimeTrib || '',
+      ramoAtividade: empresa.ramoAtividade || '',
+      filial: empresa.filial || '',
+      grupo: empresa.grupo || '',
+      entrada: empresa.entrada || '',
+      zona: empresa.zona || '',
       contabil: empresa.contabil || '',
-      numFunc: String(empresa.numFunc ?? ''),
-      pesoFolha: String(empresa.pesoFolha ?? ''),
-      pesoFiscal: String(empresa.pesoFiscal ?? ''),
-      receitas: String(empresa.receitas ?? ''),
-      despCustos: String(empresa.despCustos ?? ''),
+      numFunc: numFuncNum,
+      pesoFolha: pesoFolhaNum,
+      pesoFiscal: pesoFiscalNum,
+      receitas: receitasNum,
+      despCustos: despCustosNum,
       enviaSped: empresa.enviaSped || '',
       observacoes: empresa.observacoes || '',
       lnk: empresa.lnk || '',
-      peso1: String(empresa.peso1 ?? empresa.pesoFolha ?? ''),
-      peso2: String(empresa.peso2 ?? empresa.pesoFiscal ?? ''),
       isManual: empresa.isManual ?? false,
       customFields: empresa.customFields ?? {},
     }

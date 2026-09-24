@@ -1,0 +1,1 @@
+migrate((app) => {}, (app) => {})

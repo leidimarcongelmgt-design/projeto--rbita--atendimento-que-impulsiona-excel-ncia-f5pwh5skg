@@ -40,9 +40,14 @@ export const Header: React.FC<HeaderProps> = ({
             <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight leading-snug">
               DOSSIÊ DO CLIENTE
             </h1>
-            <p className="text-xs text-slate-500 font-normal">
-              Identificação do emissor e emissão de dossiê
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-slate-500 font-normal">
+                Identificação do emissor e emissão de dossiê
+              </p>
+              <span className="text-[10px] font-mono bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">
+                v0.0.54
+              </span>
+            </div>
           </div>
         </div>
 

@@ -112,7 +112,7 @@ export async function fetchDptoContabil(): Promise<DptoContabilRow[]> {
   const localData = loadDptoContabilFromStorage()
 
   try {
-    const records = await pb.collection(COLLECTION_NAME).getFullList<DptoContabilRow>({
+    const records = await pb.collection(COLLECTION_NAME).getFullList<Record<string, unknown>>({
       sort: 'created',
       requestKey: null,
     })
@@ -121,11 +121,11 @@ export async function fetchDptoContabil(): Promise<DptoContabilRow[]> {
 
     if (records && records.length > 0) {
       const mapped: DptoContabilRow[] = records.map((r) => ({
-        id: r.id,
-        empresa: r.empresa || '',
-        cnpj: r.cnpj || '',
-        zona: r.zona || '',
-        contabil: r.contabil || '',
+        id: String(r.id || ''),
+        empresa: String(r.EMPRESAS ?? r.empresa ?? ''),
+        cnpj: String(r.CNPJ ?? r.cnpj ?? ''),
+        zona: String(r.ZONA ?? r.zona ?? ''),
+        contabil: String(r.CONTABIL ?? r.contabil ?? ''),
       }))
       try {
         localStorage.setItem(DPTO_CONTABIL_PERSIST_KEY, JSON.stringify(mapped))
@@ -138,7 +138,9 @@ export async function fetchDptoContabil(): Promise<DptoContabilRow[]> {
 
     if (localData.length > 0) {
       syncDptoContabilToPocketBase(localData).catch(() => {})
+      return localData
     }
+    return []
   } catch {
     isPocketBaseAvailable = false
   }
@@ -153,7 +155,11 @@ export async function syncDptoContabilToPocketBase(rows: DptoContabilRow[]): Pro
 
     for (const row of rows) {
       const payload = {
-        empresa: row.empresa,
+        EMPRESAS: row.empresa || '',
+        CNPJ: row.cnpj || '',
+        ZONA: row.zona || '',
+        CONTABIL: row.contabil || '',
+        empresa: row.empresa || '',
         cnpj: row.cnpj || '',
         zona: row.zona || '',
         contabil: row.contabil || '',
@@ -190,7 +196,11 @@ export async function clearDptoContabilPocketBase(): Promise<void> {
 export async function saveDptoContabilRecord(row: DptoContabilRow): Promise<string | undefined> {
   try {
     const payload = {
-      empresa: row.empresa,
+      EMPRESAS: row.empresa || '',
+      CNPJ: row.cnpj || '',
+      ZONA: row.zona || '',
+      CONTABIL: row.contabil || '',
+      empresa: row.empresa || '',
       cnpj: row.cnpj || '',
       zona: row.zona || '',
       contabil: row.contabil || '',
