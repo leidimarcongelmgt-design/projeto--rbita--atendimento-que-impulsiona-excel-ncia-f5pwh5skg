@@ -236,10 +236,7 @@ export async function fetchEmpresas(): Promise<EmpresaRow[]> {
   const localData = loadEmpresasFromStorage()
 
   try {
-    const records = await pb.collection(COLLECTION_NAME).getFullList<Record<string, unknown>>({
-      sort: 'created',
-      requestKey: null,
-    })
+    const records = await fetchAllPocketBaseRecords(COLLECTION_NAME)
 
     isPocketBaseAvailable = true
 
@@ -307,126 +304,191 @@ export async function fetchEmpresas(): Promise<EmpresaRow[]> {
 /**
  * Sincroniza conjunto de empresas no PocketBase (criação / atualização)
  */
-export async function syncEmpresasToPocketBase(empresas: EmpresaRow[]): Promise<void> {
-  try {
-    const existing = await pb.collection(COLLECTION_NAME).getFullList({ requestKey: null })
-    const existingIds = new Set(existing.map((e) => e.id))
-    const existingByCnpj = new Map<string, string>()
-    const existingByName = new Map<string, string>()
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-    for (const item of existing) {
-      const c = cleanCNPJ((item.cnpj || item.CNPJ || '') as string)
-      if (c) existingByCnpj.set(c, item.id)
-      const n = normalizeHeader((item.nome || item.empresas || item.EMPRESAS || '') as string)
-      if (n) existingByName.set(n, item.id)
-    }
-
-    for (const emp of empresas) {
-      const numFuncNum =
-        typeof emp.numFunc === 'number'
-          ? emp.numFunc
-          : emp.numFunc
-            ? parseFloat(String(emp.numFunc).replace(',', '.')) || null
-            : null
-      const pesoFolhaNum =
-        typeof emp.pesoFolha === 'number'
-          ? emp.pesoFolha
-          : emp.pesoFolha
-            ? parseFloat(String(emp.pesoFolha).replace(',', '.')) || null
-            : null
-      const pesoFiscalNum =
-        typeof emp.pesoFiscal === 'number'
-          ? emp.pesoFiscal
-          : emp.pesoFiscal
-            ? parseFloat(String(emp.pesoFiscal).replace(',', '.')) || null
-            : null
-      const receitasNum =
-        typeof emp.receitas === 'number'
-          ? emp.receitas
-          : emp.receitas
-            ? parseFloat(String(emp.receitas).replace(',', '.')) || null
-            : null
-      const despCustosNum =
-        typeof emp.despCustos === 'number'
-          ? emp.despCustos
-          : emp.despCustos
-            ? parseFloat(String(emp.despCustos).replace(',', '.')) || null
-            : null
-
-      const payload = {
-        nome: emp.empresas || '',
-        cnpj: emp.cnpj || '',
-        regime_trib: emp.regimeTrib || '',
-        ramo_atividade: emp.ramoAtividade || '',
-        filial: emp.filial || '',
-        grupo: emp.grupo || '',
-        cliente_desde: emp.entrada || '',
-        zona: emp.zona || '',
-        contabil: emp.contabil || '',
-        num_func: String(emp.numFunc ?? ''),
-        peso_folha: String(emp.pesoFolha ?? ''),
-        peso_fiscal: String(emp.pesoFiscal ?? ''),
-        receitas: String(emp.receitas ?? ''),
-        desp_custos: String(emp.despCustos ?? ''),
-        envia_sped: emp.enviaSped || '',
-        observacoes: emp.observacoes || '',
-        lkn: emp.lnk || '',
-        EMPRESAS: emp.empresas || '',
-        CNPJ: emp.cnpj || '',
-        REGIME_TRIB: emp.regimeTrib || '',
-        RAMO_ATIVIDADE_2: emp.ramoAtividade || '',
-        FILIAL: emp.filial || '',
-        GRUPO: emp.grupo || '',
-        CLIENTE_DESDE: emp.entrada || '',
-        ZONA: emp.zona || '',
-        CONTABIL: emp.contabil || '',
-        NUM_FUNC: numFuncNum,
-        PESO_FOLHA: pesoFolhaNum,
-        PESO_FISCAL: pesoFiscalNum,
-        RECEITAS: receitasNum,
-        DESP_CUSTOS: despCustosNum,
-        ENVIA_SPED: emp.enviaSped || '',
-        OBSERVACOES: emp.observacoes || '',
-        LNK: emp.lnk || '',
-        // Legados para máxima compatibilidade
-        empresas: emp.empresas || '',
-        regimeTrib: emp.regimeTrib || '',
-        ramoAtividade: emp.ramoAtividade || '',
-        entrada: emp.entrada || '',
-        numFunc: numFuncNum,
-        pesoFolha: pesoFolhaNum,
-        pesoFiscal: pesoFiscalNum,
-        despCustos: despCustosNum,
-        enviaSped: emp.enviaSped || '',
-        isManual: emp.isManual ?? false,
-        customFields: emp.customFields ?? {},
-        custom_columns: emp.customFields ?? {},
+async function retryWithBackoff<T>(fn: () => Promise<T>, maxRetries = 4): Promise<T> {
+  let attempt = 0
+  while (true) {
+    try {
+      return await fn()
+    } catch (err: unknown) {
+      attempt++
+      const is429 =
+        err &&
+        typeof err === 'object' &&
+        'status' in err &&
+        (err as { status: number }).status === 429
+      if (attempt <= maxRetries && is429) {
+        await sleep(300 * Math.pow(2, attempt - 1))
+        continue
       }
-
-      // PocketBase IDs têm 15 caracteres alfanuméricos
-      const isValidPbId = emp.id && emp.id.length === 15 && !emp.id.includes('-')
-      const targetId =
-        (isValidPbId && existingIds.has(emp.id) ? emp.id : undefined) ||
-        (cleanCNPJ(emp.cnpj) ? existingByCnpj.get(cleanCNPJ(emp.cnpj)) : undefined) ||
-        (normalizeHeader(emp.empresas)
-          ? existingByName.get(normalizeHeader(emp.empresas))
-          : undefined)
-
-      if (targetId) {
-        await pb.collection(COLLECTION_NAME).update(targetId, payload, { requestKey: null })
-      } else {
-        const created = await pb.collection(COLLECTION_NAME).create(payload, { requestKey: null })
-        const c = cleanCNPJ(emp.cnpj)
-        if (c) existingByCnpj.set(c, created.id)
-        const n = normalizeHeader(emp.empresas)
-        if (n) existingByName.set(n, created.id)
-        existingIds.add(created.id)
-      }
+      throw err
     }
-    isPocketBaseAvailable = true
-  } catch {
-    isPocketBaseAvailable = false
   }
+}
+
+async function fetchAllPocketBaseRecords(
+  collectionName: string,
+): Promise<Record<string, unknown>[]> {
+  const records: Record<string, unknown>[] = []
+  let page = 1
+  const perPage = 200
+
+  while (true) {
+    const res = await retryWithBackoff(() =>
+      pb.collection(collectionName).getList<Record<string, unknown>>(page, perPage, {
+        sort: 'created',
+        requestKey: null,
+      }),
+    )
+
+    if (res.items && res.items.length > 0) {
+      records.push(...res.items)
+    }
+
+    if (page >= res.totalPages || res.items.length === 0) {
+      break
+    }
+    page++
+  }
+
+  return records
+}
+
+let syncEmpresasQueue = Promise.resolve()
+
+export async function syncEmpresasToPocketBase(empresas: EmpresaRow[]): Promise<void> {
+  const runSync = async () => {
+    try {
+      const existing = await fetchAllPocketBaseRecords(COLLECTION_NAME)
+      const existingIds = new Set(existing.map((e) => String(e.id || '')))
+      const existingByCnpj = new Map<string, string>()
+      const existingByName = new Map<string, string>()
+
+      for (const item of existing) {
+        const itemId = String(item.id || '')
+        const c = cleanCNPJ((item.cnpj || item.CNPJ || '') as string)
+        if (c && !existingByCnpj.has(c)) existingByCnpj.set(c, itemId)
+        const n = normalizeHeader((item.nome || item.empresas || item.EMPRESAS || '') as string)
+        if (n && !existingByName.has(n)) existingByName.set(n, itemId)
+      }
+
+      for (const emp of empresas) {
+        const numFuncNum =
+          typeof emp.numFunc === 'number'
+            ? emp.numFunc
+            : emp.numFunc
+              ? parseFloat(String(emp.numFunc).replace(',', '.')) || null
+              : null
+        const pesoFolhaNum =
+          typeof emp.pesoFolha === 'number'
+            ? emp.pesoFolha
+            : emp.pesoFolha
+              ? parseFloat(String(emp.pesoFolha).replace(',', '.')) || null
+              : null
+        const pesoFiscalNum =
+          typeof emp.pesoFiscal === 'number'
+            ? emp.pesoFiscal
+            : emp.pesoFiscal
+              ? parseFloat(String(emp.pesoFiscal).replace(',', '.')) || null
+              : null
+        const receitasNum =
+          typeof emp.receitas === 'number'
+            ? emp.receitas
+            : emp.receitas
+              ? parseFloat(String(emp.receitas).replace(',', '.')) || null
+              : null
+        const despCustosNum =
+          typeof emp.despCustos === 'number'
+            ? emp.despCustos
+            : emp.despCustos
+              ? parseFloat(String(emp.despCustos).replace(',', '.')) || null
+              : null
+
+        const payload = {
+          nome: emp.empresas || '',
+          cnpj: emp.cnpj || '',
+          regime_trib: emp.regimeTrib || '',
+          ramo_atividade: emp.ramoAtividade || '',
+          filial: emp.filial || '',
+          grupo: emp.grupo || '',
+          cliente_desde: emp.entrada || '',
+          zona: emp.zona || '',
+          contabil: emp.contabil || '',
+          num_func: String(emp.numFunc ?? ''),
+          peso_folha: String(emp.pesoFolha ?? ''),
+          peso_fiscal: String(emp.pesoFiscal ?? ''),
+          receitas: String(emp.receitas ?? ''),
+          desp_custos: String(emp.despCustos ?? ''),
+          envia_sped: emp.enviaSped || '',
+          observacoes: emp.observacoes || '',
+          lkn: emp.lnk || '',
+          EMPRESAS: emp.empresas || '',
+          CNPJ: emp.cnpj || '',
+          REGIME_TRIB: emp.regimeTrib || '',
+          RAMO_ATIVIDADE_2: emp.ramoAtividade || '',
+          FILIAL: emp.filial || '',
+          GRUPO: emp.grupo || '',
+          CLIENTE_DESDE: emp.entrada || '',
+          ZONA: emp.zona || '',
+          CONTABIL: emp.contabil || '',
+          NUM_FUNC: numFuncNum,
+          PESO_FOLHA: pesoFolhaNum,
+          PESO_FISCAL: pesoFiscalNum,
+          RECEITAS: receitasNum,
+          DESP_CUSTOS: despCustosNum,
+          ENVIA_SPED: emp.enviaSped || '',
+          OBSERVACOES: emp.observacoes || '',
+          LNK: emp.lnk || '',
+          empresas: emp.empresas || '',
+          regimeTrib: emp.regimeTrib || '',
+          ramoAtividade: emp.ramoAtividade || '',
+          entrada: emp.entrada || '',
+          numFunc: numFuncNum,
+          pesoFolha: pesoFolhaNum,
+          pesoFiscal: pesoFiscalNum,
+          despCustos: despCustosNum,
+          enviaSped: emp.enviaSped || '',
+          isManual: emp.isManual ?? false,
+          customFields: emp.customFields ?? {},
+          custom_columns: emp.customFields ?? {},
+        }
+
+        const cleanC = cleanCNPJ(emp.cnpj)
+        const normN = normalizeHeader(emp.empresas)
+        const isValidPbId = emp.id && emp.id.length === 15 && !emp.id.includes('-')
+
+        // Preferência por match existente: se já existir CNPJ ou nome no índice, sempre ATUALIZA
+        const targetId =
+          (cleanC ? existingByCnpj.get(cleanC) : undefined) ||
+          (normN ? existingByName.get(normN) : undefined) ||
+          (isValidPbId && existingIds.has(emp.id) ? emp.id : undefined)
+
+        if (targetId) {
+          await retryWithBackoff(() =>
+            pb.collection(COLLECTION_NAME).update(targetId, payload, { requestKey: null }),
+          )
+          if (cleanC) existingByCnpj.set(cleanC, targetId)
+          if (normN) existingByName.set(normN, targetId)
+        } else {
+          const created = await retryWithBackoff(() =>
+            pb.collection(COLLECTION_NAME).create(payload, { requestKey: null }),
+          )
+          const newId = String(created.id)
+          if (cleanC) existingByCnpj.set(cleanC, newId)
+          if (normN) existingByName.set(normN, newId)
+          existingIds.add(newId)
+        }
+        await sleep(40)
+      }
+      isPocketBaseAvailable = true
+    } catch {
+      isPocketBaseAvailable = false
+    }
+  }
+
+  syncEmpresasQueue = syncEmpresasQueue.then(runSync, runSync)
+  return syncEmpresasQueue
 }
 
 /**
@@ -434,9 +496,14 @@ export async function syncEmpresasToPocketBase(empresas: EmpresaRow[]): Promise<
  */
 export async function clearEmpresasPocketBase(): Promise<void> {
   try {
-    const list = await pb.collection(COLLECTION_NAME).getFullList({ requestKey: null })
+    const list = await fetchAllPocketBaseRecords(COLLECTION_NAME)
     for (const r of list) {
-      await pb.collection(COLLECTION_NAME).delete(r.id, { requestKey: null })
+      if (r.id) {
+        await retryWithBackoff(() =>
+          pb.collection(COLLECTION_NAME).delete(String(r.id), { requestKey: null }),
+        ).catch(() => {})
+        await sleep(30)
+      }
     }
     isPocketBaseAvailable = true
   } catch {
@@ -537,22 +604,25 @@ export async function saveEmpresaRecord(empresa: EmpresaRow): Promise<string | u
       // Checa duplicidade por CNPJ ou nome antes de criar novo
       const clean = cleanCNPJ(empresa.cnpj)
       if (clean) {
-        const match = await pb
-          .collection(COLLECTION_NAME)
-          .getFirstListItem(`cnpj ~ "${empresa.cnpj}"`, { requestKey: null })
-          .catch(() => null)
+        const match = await retryWithBackoff(() =>
+          pb
+            .collection(COLLECTION_NAME)
+            .getFirstListItem(`cnpj ~ "${clean}"`, { requestKey: null }),
+        ).catch(() => null)
         if (match) targetId = match.id
       }
     }
 
     if (targetId) {
-      const updated = await pb
-        .collection(COLLECTION_NAME)
-        .update(targetId, payload, { requestKey: null })
+      const updated = await retryWithBackoff(() =>
+        pb.collection(COLLECTION_NAME).update(targetId!, payload, { requestKey: null }),
+      )
       isPocketBaseAvailable = true
       return updated.id
     } else {
-      const created = await pb.collection(COLLECTION_NAME).create(payload, { requestKey: null })
+      const created = await retryWithBackoff(() =>
+        pb.collection(COLLECTION_NAME).create(payload, { requestKey: null }),
+      )
       isPocketBaseAvailable = true
       return created.id
     }
@@ -569,7 +639,7 @@ export async function deleteEmpresaRecord(id: string): Promise<boolean> {
   try {
     const isValidPbId = id && id.length === 15 && !id.includes('-')
     if (isValidPbId) {
-      await pb.collection(COLLECTION_NAME).delete(id, { requestKey: null })
+      await retryWithBackoff(() => pb.collection(COLLECTION_NAME).delete(id, { requestKey: null }))
       isPocketBaseAvailable = true
       return true
     }

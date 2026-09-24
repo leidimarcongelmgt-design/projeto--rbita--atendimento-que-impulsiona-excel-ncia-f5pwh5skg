@@ -114,10 +114,7 @@ export async function fetchDptoPessoal(): Promise<DptoPessoalRow[]> {
   const localData = loadDptoPessoalFromStorage()
 
   try {
-    const records = await pb.collection(COLLECTION_NAME).getFullList<Record<string, unknown>>({
-      sort: 'created',
-      requestKey: null,
-    })
+    const records = await fetchAllPocketBaseRecords(COLLECTION_NAME)
 
     isPocketBaseAvailable = true
 
@@ -154,70 +151,142 @@ export async function fetchDptoPessoal(): Promise<DptoPessoalRow[]> {
   return localData
 }
 
-export async function syncDptoPessoalToPocketBase(rows: DptoPessoalRow[]): Promise<void> {
-  try {
-    const existing = await pb.collection(COLLECTION_NAME).getFullList({ requestKey: null })
-    const existingIds = new Set(existing.map((e) => e.id))
-    const existingByCnpj = new Map<string, string>()
-    const existingByName = new Map<string, string>()
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-    for (const item of existing) {
-      const c = cleanCNPJ((item.cnpj || item.CNPJ || '') as string)
-      if (c) existingByCnpj.set(c, item.id)
-      const n = normalizeHeader((item.nome || item.empresa || item.EMPRESAS || '') as string)
-      if (n) existingByName.set(n, item.id)
-    }
-
-    for (const row of rows) {
-      const numFuncNum =
-        typeof row.numFunc === 'number'
-          ? row.numFunc
-          : row.numFunc
-            ? parseFloat(String(row.numFunc).replace(',', '.')) || null
-            : null
-      const payload = {
-        nome: row.empresa || '',
-        cnpj: row.cnpj || '',
-        zona: row.zona || '',
-        num_func: String(row.numFunc ?? ''),
-        EMPRESAS: row.empresa || '',
-        CNPJ: row.cnpj || '',
-        ZONA: row.zona || '',
-        NUM_FUNC: numFuncNum,
-        empresa: row.empresa || '',
-        numFunc: numFuncNum,
+async function retryWithBackoff<T>(fn: () => Promise<T>, maxRetries = 4): Promise<T> {
+  let attempt = 0
+  while (true) {
+    try {
+      return await fn()
+    } catch (err: unknown) {
+      attempt++
+      const is429 =
+        err &&
+        typeof err === 'object' &&
+        'status' in err &&
+        (err as { status: number }).status === 429
+      if (attempt <= maxRetries && is429) {
+        await sleep(300 * Math.pow(2, attempt - 1))
+        continue
       }
-
-      const isValidPbId = row.id && row.id.length === 15 && !row.id.includes('-')
-      const targetId =
-        (isValidPbId && existingIds.has(row.id) ? row.id : undefined) ||
-        (cleanCNPJ(row.cnpj) ? existingByCnpj.get(cleanCNPJ(row.cnpj)) : undefined) ||
-        (normalizeHeader(row.empresa)
-          ? existingByName.get(normalizeHeader(row.empresa))
-          : undefined)
-
-      if (targetId) {
-        await pb.collection(COLLECTION_NAME).update(targetId, payload, { requestKey: null })
-      } else {
-        const created = await pb.collection(COLLECTION_NAME).create(payload, { requestKey: null })
-        const c = cleanCNPJ(row.cnpj)
-        if (c) existingByCnpj.set(c, created.id)
-        const n = normalizeHeader(row.empresa)
-        if (n) existingByName.set(n, created.id)
-        existingIds.add(created.id)
-      }
+      throw err
     }
-    isPocketBaseAvailable = true
-  } catch {
-    isPocketBaseAvailable = false
   }
+}
+
+async function fetchAllPocketBaseRecords(
+  collectionName: string,
+): Promise<Record<string, unknown>[]> {
+  const records: Record<string, unknown>[] = []
+  let page = 1
+  const perPage = 200
+
+  while (true) {
+    const res = await retryWithBackoff(() =>
+      pb.collection(collectionName).getList<Record<string, unknown>>(page, perPage, {
+        sort: 'created',
+        requestKey: null,
+      }),
+    )
+
+    if (res.items && res.items.length > 0) {
+      records.push(...res.items)
+    }
+
+    if (page >= res.totalPages || res.items.length === 0) {
+      break
+    }
+    page++
+  }
+
+  return records
+}
+
+let syncPessoalQueue = Promise.resolve()
+
+export async function syncDptoPessoalToPocketBase(rows: DptoPessoalRow[]): Promise<void> {
+  const runSync = async () => {
+    try {
+      const existing = await fetchAllPocketBaseRecords(COLLECTION_NAME)
+      const existingIds = new Set(existing.map((e) => String(e.id || '')))
+      const existingByCnpj = new Map<string, string>()
+      const existingByName = new Map<string, string>()
+
+      for (const item of existing) {
+        const itemId = String(item.id || '')
+        const c = cleanCNPJ((item.cnpj || item.CNPJ || '') as string)
+        if (c && !existingByCnpj.has(c)) existingByCnpj.set(c, itemId)
+        const n = normalizeHeader((item.nome || item.empresa || item.EMPRESAS || '') as string)
+        if (n && !existingByName.has(n)) existingByName.set(n, itemId)
+      }
+
+      for (const row of rows) {
+        const numFuncNum =
+          typeof row.numFunc === 'number'
+            ? row.numFunc
+            : row.numFunc
+              ? parseFloat(String(row.numFunc).replace(',', '.')) || null
+              : null
+        const payload = {
+          nome: row.empresa || '',
+          cnpj: row.cnpj || '',
+          zona: row.zona || '',
+          num_func: String(row.numFunc ?? ''),
+          EMPRESAS: row.empresa || '',
+          CNPJ: row.cnpj || '',
+          ZONA: row.zona || '',
+          NUM_FUNC: numFuncNum,
+          empresa: row.empresa || '',
+          numFunc: numFuncNum,
+        }
+
+        const cleanC = cleanCNPJ(row.cnpj)
+        const normN = normalizeHeader(row.empresa)
+        const isValidPbId = row.id && row.id.length === 15 && !row.id.includes('-')
+
+        // Preferência por match existente: se já existir CNPJ ou nome no índice, sempre ATUALIZA
+        const targetId =
+          (cleanC ? existingByCnpj.get(cleanC) : undefined) ||
+          (normN ? existingByName.get(normN) : undefined) ||
+          (isValidPbId && existingIds.has(row.id) ? row.id : undefined)
+
+        if (targetId) {
+          await retryWithBackoff(() =>
+            pb.collection(COLLECTION_NAME).update(targetId, payload, { requestKey: null }),
+          )
+          if (cleanC) existingByCnpj.set(cleanC, targetId)
+          if (normN) existingByName.set(normN, targetId)
+        } else {
+          const created = await retryWithBackoff(() =>
+            pb.collection(COLLECTION_NAME).create(payload, { requestKey: null }),
+          )
+          const newId = String(created.id)
+          if (cleanC) existingByCnpj.set(cleanC, newId)
+          if (normN) existingByName.set(normN, newId)
+          existingIds.add(newId)
+        }
+        await sleep(40)
+      }
+      isPocketBaseAvailable = true
+    } catch {
+      isPocketBaseAvailable = false
+    }
+  }
+
+  syncPessoalQueue = syncPessoalQueue.then(runSync, runSync)
+  return syncPessoalQueue
 }
 
 export async function clearDptoPessoalPocketBase(): Promise<void> {
   try {
-    const list = await pb.collection(COLLECTION_NAME).getFullList({ requestKey: null })
+    const list = await fetchAllPocketBaseRecords(COLLECTION_NAME)
     for (const r of list) {
-      await pb.collection(COLLECTION_NAME).delete(r.id, { requestKey: null })
+      if (r.id) {
+        await retryWithBackoff(() =>
+          pb.collection(COLLECTION_NAME).delete(String(r.id), { requestKey: null }),
+        ).catch(() => {})
+        await sleep(30)
+      }
     }
     isPocketBaseAvailable = true
   } catch {
@@ -255,22 +324,25 @@ export async function saveDptoPessoalRecord(row: DptoPessoalRow): Promise<string
     if (!targetId) {
       const clean = cleanCNPJ(row.cnpj)
       if (clean) {
-        const match = await pb
-          .collection(COLLECTION_NAME)
-          .getFirstListItem(`cnpj ~ "${row.cnpj}"`, { requestKey: null })
-          .catch(() => null)
+        const match = await retryWithBackoff(() =>
+          pb
+            .collection(COLLECTION_NAME)
+            .getFirstListItem(`cnpj ~ "${clean}"`, { requestKey: null }),
+        ).catch(() => null)
         if (match) targetId = match.id
       }
     }
 
     if (targetId) {
-      const updated = await pb
-        .collection(COLLECTION_NAME)
-        .update(targetId, payload, { requestKey: null })
+      const updated = await retryWithBackoff(() =>
+        pb.collection(COLLECTION_NAME).update(targetId!, payload, { requestKey: null }),
+      )
       isPocketBaseAvailable = true
       return updated.id
     } else {
-      const created = await pb.collection(COLLECTION_NAME).create(payload, { requestKey: null })
+      const created = await retryWithBackoff(() =>
+        pb.collection(COLLECTION_NAME).create(payload, { requestKey: null }),
+      )
       isPocketBaseAvailable = true
       return created.id
     }
@@ -287,7 +359,7 @@ export async function deleteDptoPessoalRecord(id: string): Promise<boolean> {
   try {
     const isValidPbId = id && id.length === 15 && !id.includes('-')
     if (isValidPbId) {
-      await pb.collection(COLLECTION_NAME).delete(id, { requestKey: null })
+      await retryWithBackoff(() => pb.collection(COLLECTION_NAME).delete(id, { requestKey: null }))
       isPocketBaseAvailable = true
       return true
     }
