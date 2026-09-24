@@ -4,8 +4,11 @@ import { EmpresaRow } from '@/types/empresa'
 import {
   parseDptoContabilFile,
   mergeDptoContabilRows,
-  saveDptoContabilToStorage,
   syncContabilFromEmpresas,
+  saveDptoContabilToStorage,
+  clearDptoContabilStorage,
+  deleteDptoContabilRecord,
+  saveDptoContabilRecord,
 } from '@/lib/dptoContabilService'
 import { useResizableColumns, RESIZABLE_STORAGE_KEYS } from '@/hooks/use-resizable-columns'
 import { ResizableTh } from '@/components/calculator/ResizableTh'
@@ -172,7 +175,11 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
     unrecognizedCols: string[] = [],
   ) => {
     const result = mergeDptoContabilRows(rows, incomingRows, mode)
+    if (mode === 'replace') {
+      clearDptoContabilStorage()
+    }
     onRowsChange(result.rows)
+    saveDptoContabilToStorage(result.rows)
 
     setLastImportSummary({
       added: result.addedCount,
@@ -228,31 +235,56 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
 
     const synced = syncContabilFromEmpresas(empresas, rows)
     onRowsChange(synced)
+    saveDptoContabilToStorage(synced)
     toast.success(`${synced.length} empresa(s) carregada(s) da aba Empresas com sucesso!`)
   }
 
-  // Edição inline de CONTÁBIL
+  // Edição inline do CONTÁBIL
   const handleContabilChange = (id: string, value: string) => {
-    const updated = rows.map((r) => (r.id === id ? { ...r, contabil: value } : r))
+    let changedRow: DptoContabilRow | undefined
+    const updated = rows.map((r) => {
+      if (r.id !== id) return r
+      changedRow = { ...r, contabil: value }
+      return changedRow
+    })
     onRowsChange(updated)
+    if (changedRow) saveDptoContabilRecord(changedRow).catch(() => {})
   }
 
   // Edição inline de ZONA
   const handleZonaChange = (id: string, value: string) => {
-    const updated = rows.map((r) => (r.id === id ? { ...r, zona: value } : r))
+    let changedRow: DptoContabilRow | undefined
+    const updated = rows.map((r) => {
+      if (r.id !== id) return r
+      changedRow = { ...r, zona: value }
+      return changedRow
+    })
     onRowsChange(updated)
+    if (changedRow) saveDptoContabilRecord(changedRow).catch(() => {})
   }
 
   // Edição inline de CNPJ
   const handleCnpjChange = (id: string, value: string) => {
-    const updated = rows.map((r) => (r.id === id ? { ...r, cnpj: value } : r))
+    let changedRow: DptoContabilRow | undefined
+    const updated = rows.map((r) => {
+      if (r.id !== id) return r
+      changedRow = { ...r, cnpj: value }
+      return changedRow
+    })
     onRowsChange(updated)
+    if (changedRow) saveDptoContabilRecord(changedRow).catch(() => {})
   }
 
   // Edição inline do nome da empresa
   const handleEmpresaChange = (id: string, value: string) => {
-    const updated = rows.map((r) => (r.id === id ? { ...r, empresa: value } : r))
+    let changedRow: DptoContabilRow | undefined
+    const updated = rows.map((r) => {
+      if (r.id !== id) return r
+      changedRow = { ...r, empresa: value }
+      return changedRow
+    })
     onRowsChange(updated)
+    if (changedRow) saveDptoContabilRecord(changedRow).catch(() => {})
   }
 
   // Adicionar linha manualmente
@@ -272,7 +304,9 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
       contabil: newContabil.trim(),
     }
 
-    onRowsChange([...rows, newRow])
+    const updated = [...rows, newRow]
+    onRowsChange(updated)
+    saveDptoContabilToStorage(updated)
     setNewEmpresaNome('')
     setNewEmpresaCnpj('')
     setNewZona('')
@@ -283,19 +317,21 @@ export const DptoContabilTab: React.FC<DptoContabilTabProps> = ({
 
   // Remover linha individual
   const handleDeleteRow = (id: string, empresaNome: string) => {
+    deleteDptoContabilRecord(id).catch(() => {})
     const updated = rows.filter((r) => r.id !== id)
     onRowsChange(updated)
+    saveDptoContabilToStorage(updated)
     toast.success(`Registro da empresa "${empresaNome || 'Sem Nome'}" removido.`)
   }
 
   // Limpar tudo
   const handleClearAll = () => {
+    clearDptoContabilStorage()
     onRowsChange([])
     setLastImportSummary(null)
     setClearDialogOpen(false)
     toast.info('Lista do Dpto. Contábil limpa com sucesso.')
   }
-
   // Alternar ordenação
   const handleSort = (field: SortField) => {
     setSortConfig((prev) => {

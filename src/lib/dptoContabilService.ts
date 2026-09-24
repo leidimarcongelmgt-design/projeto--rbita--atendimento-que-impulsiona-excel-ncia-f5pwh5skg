@@ -8,6 +8,12 @@ export const DPTO_CONTABIL_STORAGE_KEY = 'orbita_dpto_contabil'
 export const DPTO_CONTABIL_PERSIST_KEY = 'orbita_dpto_contabil_persistent'
 const COLLECTION_NAME = 'dpto_contabil'
 
+let isPocketBaseAvailable: boolean | null = null
+
+export function getDptoContabilBackendStatus(): boolean | null {
+  return isPocketBaseAvailable
+}
+
 /**
  * Carrega a lista de Dpto. Contábil síncrona (localStorage com migração de sessionStorage)
  */
@@ -64,7 +70,8 @@ export function clearDptoContabilStorage(): void {
 }
 
 /**
- * Busca registros no PocketBase com fallback para armazenamento local
+ * Busca registros no PocketBase com fallback para armazenamento local.
+ * Se o backend estiver vazio e houver dados locais, migra automaticamente.
  */
 export async function fetchDptoContabil(): Promise<DptoContabilRow[]> {
   const localData = loadDptoContabilFromStorage()
@@ -75,6 +82,8 @@ export async function fetchDptoContabil(): Promise<DptoContabilRow[]> {
       requestKey: null,
     })
 
+    isPocketBaseAvailable = true
+
     if (records && records.length > 0) {
       const mapped: DptoContabilRow[] = records.map((r) => ({
         id: r.id,
@@ -83,8 +92,12 @@ export async function fetchDptoContabil(): Promise<DptoContabilRow[]> {
         zona: r.zona || '',
         contabil: r.contabil || '',
       }))
-      localStorage.setItem(DPTO_CONTABIL_PERSIST_KEY, JSON.stringify(mapped))
-      sessionStorage.setItem(DPTO_CONTABIL_STORAGE_KEY, JSON.stringify(mapped))
+      try {
+        localStorage.setItem(DPTO_CONTABIL_PERSIST_KEY, JSON.stringify(mapped))
+        sessionStorage.setItem(DPTO_CONTABIL_STORAGE_KEY, JSON.stringify(mapped))
+      } catch {
+        /* intentionally ignored */
+      }
       return mapped
     }
 
@@ -92,13 +105,13 @@ export async function fetchDptoContabil(): Promise<DptoContabilRow[]> {
       syncDptoContabilToPocketBase(localData).catch(() => {})
     }
   } catch {
-    // Silencioso se backend indisponível
+    isPocketBaseAvailable = false
   }
 
   return localData
 }
 
-async function syncDptoContabilToPocketBase(rows: DptoContabilRow[]): Promise<void> {
+export async function syncDptoContabilToPocketBase(rows: DptoContabilRow[]): Promise<void> {
   try {
     const existing = await pb.collection(COLLECTION_NAME).getFullList({ requestKey: null })
     const existingIds = new Set(existing.map((e) => e.id))
@@ -111,25 +124,76 @@ async function syncDptoContabilToPocketBase(rows: DptoContabilRow[]): Promise<vo
         contabil: row.contabil || '',
       }
 
-      if (row.id && existingIds.has(row.id)) {
+      const isValidPbId = row.id && row.id.length === 15 && !row.id.includes('-')
+      if (isValidPbId && existingIds.has(row.id)) {
         await pb.collection(COLLECTION_NAME).update(row.id, payload, { requestKey: null })
       } else {
         await pb.collection(COLLECTION_NAME).create(payload, { requestKey: null })
       }
     }
+    isPocketBaseAvailable = true
   } catch {
-    // ignore
+    isPocketBaseAvailable = false
   }
 }
 
-async function clearDptoContabilPocketBase(): Promise<void> {
+export async function clearDptoContabilPocketBase(): Promise<void> {
   try {
     const list = await pb.collection(COLLECTION_NAME).getFullList({ requestKey: null })
     for (const r of list) {
       await pb.collection(COLLECTION_NAME).delete(r.id, { requestKey: null })
     }
+    isPocketBaseAvailable = true
   } catch {
-    // ignore
+    isPocketBaseAvailable = false
+  }
+}
+
+/**
+ * Cria ou atualiza registro individual no backend
+ */
+export async function saveDptoContabilRecord(row: DptoContabilRow): Promise<string | undefined> {
+  try {
+    const payload = {
+      empresa: row.empresa,
+      cnpj: row.cnpj || '',
+      zona: row.zona || '',
+      contabil: row.contabil || '',
+    }
+
+    const isValidPbId = row.id && row.id.length === 15 && !row.id.includes('-')
+    if (isValidPbId) {
+      const updated = await pb
+        .collection(COLLECTION_NAME)
+        .update(row.id, payload, { requestKey: null })
+      isPocketBaseAvailable = true
+      return updated.id
+    } else {
+      const created = await pb.collection(COLLECTION_NAME).create(payload, { requestKey: null })
+      isPocketBaseAvailable = true
+      return created.id
+    }
+  } catch {
+    isPocketBaseAvailable = false
+    return undefined
+  }
+}
+
+/**
+ * Deleta registro individual no backend
+ */
+export async function deleteDptoContabilRecord(id: string): Promise<boolean> {
+  try {
+    const isValidPbId = id && id.length === 15 && !id.includes('-')
+    if (isValidPbId) {
+      await pb.collection(COLLECTION_NAME).delete(id, { requestKey: null })
+      isPocketBaseAvailable = true
+      return true
+    }
+    return false
+  } catch {
+    isPocketBaseAvailable = false
+    return false
   }
 }
 

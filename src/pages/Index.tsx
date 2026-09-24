@@ -114,7 +114,7 @@ export default function Index() {
   }, [])
 
   // "Nova Consulta": redefine apenas os parâmetros da URL da aba Identificação,
-  // SEM apagar as informações persistentes do banco/tabelas!
+  // SEM apagar as informações persistentes do banco/tabelas nem as larguras das colunas!
   const handleReset = useCallback(() => {
     const nextState = { ...DEFAULT_CALCULATOR_STATE }
     setState(nextState)
@@ -122,7 +122,7 @@ export default function Index() {
     const newQuery = serializeStateToUrl(nextState)
     window.history.replaceState(null, '', `${window.location.pathname}${newQuery}`)
     toast.info(
-      'Nova Consulta iniciada: parâmetros de Identificação redefinidos. Dados das tabelas permanecem fixos.',
+      'Nova Consulta iniciada: formulário de Identificação redefinido. Dados das tabelas e larguras de colunas permanecem intactos.',
     )
   }, [])
 

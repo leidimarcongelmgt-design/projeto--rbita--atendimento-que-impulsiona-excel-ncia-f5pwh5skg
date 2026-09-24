@@ -4,8 +4,11 @@ import { EmpresaRow } from '@/types/empresa'
 import {
   parseDptoFiscalFile,
   mergeDptoFiscalRows,
-  saveDptoFiscalToStorage,
   syncFiscalFromEmpresas,
+  saveDptoFiscalToStorage,
+  clearDptoFiscalStorage,
+  deleteDptoFiscalRecord,
+  saveDptoFiscalRecord,
 } from '@/lib/dptoFiscalService'
 import { useResizableColumns, RESIZABLE_STORAGE_KEYS } from '@/hooks/use-resizable-columns'
 import { ResizableTh } from '@/components/calculator/ResizableTh'
@@ -168,7 +171,11 @@ export const DptoFiscalTab: React.FC<DptoFiscalTabProps> = ({ rows, onRowsChange
     unrecognizedCols: string[] = [],
   ) => {
     const result = mergeDptoFiscalRows(rows, incomingRows, mode)
+    if (mode === 'replace') {
+      clearDptoFiscalStorage()
+    }
     onRowsChange(result.rows)
+    saveDptoFiscalToStorage(result.rows)
 
     setLastImportSummary({
       added: result.addedCount,
@@ -224,37 +231,63 @@ export const DptoFiscalTab: React.FC<DptoFiscalTabProps> = ({ rows, onRowsChange
 
     const synced = syncFiscalFromEmpresas(empresas, rows)
     onRowsChange(synced)
+    saveDptoFiscalToStorage(synced)
     toast.success(`${synced.length} empresa(s) carregada(s) da aba Empresas com sucesso!`)
   }
 
   // Edição inline do PESO
   const handlePesoChange = (id: string, value: string) => {
+    let changedRow: DptoFiscalRow | undefined
     const updated = rows.map((r) => {
       if (r.id !== id) return r
       const trimmed = value.trim()
-      if (trimmed === '') return { ...r, peso: '' }
-      const parsed = Number(trimmed.replace(',', '.'))
-      return { ...r, peso: !isNaN(parsed) ? parsed : value }
+      const val =
+        trimmed === ''
+          ? ''
+          : !isNaN(Number(trimmed.replace(',', '.')))
+            ? Number(trimmed.replace(',', '.'))
+            : value
+      changedRow = { ...r, peso: val }
+      return changedRow
     })
     onRowsChange(updated)
+    if (changedRow) saveDptoFiscalRecord(changedRow).catch(() => {})
   }
 
   // Edição inline de ZONA
   const handleZonaChange = (id: string, value: string) => {
-    const updated = rows.map((r) => (r.id === id ? { ...r, zona: value } : r))
+    let changedRow: DptoFiscalRow | undefined
+    const updated = rows.map((r) => {
+      if (r.id !== id) return r
+      changedRow = { ...r, zona: value }
+      return changedRow
+    })
     onRowsChange(updated)
+    if (changedRow) saveDptoFiscalRecord(changedRow).catch(() => {})
   }
 
   // Edição inline de CNPJ
   const handleCnpjChange = (id: string, value: string) => {
-    const updated = rows.map((r) => (r.id === id ? { ...r, cnpj: value } : r))
+    let changedRow: DptoFiscalRow | undefined
+    const updated = rows.map((r) => {
+      if (r.id !== id) return r
+      changedRow = { ...r, cnpj: value }
+      return changedRow
+    })
     onRowsChange(updated)
+    if (changedRow) saveDptoFiscalRecord(changedRow).catch(() => {})
   }
 
   // Edição inline do nome da empresa
   const handleEmpresaChange = (id: string, value: string) => {
-    const updated = rows.map((r) => (r.id === id ? { ...r, empresa: value } : r))
+    let changedRow: DptoFiscalRow | undefined
+    const updated = rows.map((r) => {
+      if (r.id !== id) return r
+      changedRow = { ...r, empresa: value }
+      return changedRow
+    })
     onRowsChange(updated)
+    if (changedRow) saveDptoFiscalRecord(changedRow).catch(() => {})
   }
 
   // Adicionar linha manualmente
@@ -280,7 +313,9 @@ export const DptoFiscalTab: React.FC<DptoFiscalTabProps> = ({ rows, onRowsChange
       peso: pesoVal,
     }
 
-    onRowsChange([...rows, newRow])
+    const updated = [...rows, newRow]
+    onRowsChange(updated)
+    saveDptoFiscalToStorage(updated)
     setNewEmpresaNome('')
     setNewEmpresaCnpj('')
     setNewZona('')
@@ -291,13 +326,16 @@ export const DptoFiscalTab: React.FC<DptoFiscalTabProps> = ({ rows, onRowsChange
 
   // Remover linha individual
   const handleDeleteRow = (id: string, empresaNome: string) => {
+    deleteDptoFiscalRecord(id).catch(() => {})
     const updated = rows.filter((r) => r.id !== id)
     onRowsChange(updated)
+    saveDptoFiscalToStorage(updated)
     toast.success(`Registro da empresa "${empresaNome || 'Sem Nome'}" removido.`)
   }
 
   // Limpar tudo
   const handleClearAll = () => {
+    clearDptoFiscalStorage()
     onRowsChange([])
     setLastImportSummary(null)
     setClearDialogOpen(false)

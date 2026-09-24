@@ -7,6 +7,16 @@ export const EMPRESAS_PERSIST_KEY = 'orbita_empresas_persistent'
 const COLLECTION_NAME = 'empresas'
 
 /**
+ * Indicador de disponibilidade do backend
+ */
+let isPocketBaseAvailable: boolean | null = null
+let hasWarnedOffline = false
+
+export function getEmpresasBackendStatus(): { isAvailable: boolean | null; hasWarned: boolean } {
+  return { isAvailable: isPocketBaseAvailable, hasWarned: hasWarnedOffline }
+}
+
+/**
  * Remove acentos, pontuação, múltiplos espaços e converte para minúsculas
  */
 export function normalizeHeader(header: string): string {
@@ -23,7 +33,6 @@ export function normalizeHeader(header: string): string {
 
 /**
  * Formata CNPJ: se tiver 14 dígitos (com ou sem máscara), formata como 00.000.000/0000-00.
- * Se tiver tamanho diferente ou não puder ser formatado, retorna a string limpa.
  */
 export function formatCNPJ(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return ''
@@ -33,7 +42,6 @@ export function formatCNPJ(value: string | number | null | undefined): string {
   if (digits.length === 14) {
     return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')
   }
-  // Se veio número com zeros à esquerda cortados pelo Excel (ex: 12 ou 13 dígitos), completa com zeros à esquerda até 14
   if (digits.length >= 11 && digits.length < 14) {
     const padded = digits.padStart(14, '0')
     return padded.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')
@@ -55,11 +63,10 @@ export function cleanCNPJ(value: string | number | null | undefined): string {
 }
 
 /**
- * Carrega a lista de empresas síncrona (do localStorage permanente ou migração inicial do sessionStorage)
+ * Carrega a lista de empresas síncrona do localStorage (com migração de sessionStorage)
  */
 export function loadEmpresasFromStorage(): EmpresaRow[] {
   try {
-    // 1. Tenta carregar do localStorage permanente
     const persistent = localStorage.getItem(EMPRESAS_PERSIST_KEY)
     if (persistent) {
       const parsed = JSON.parse(persistent)
@@ -68,7 +75,6 @@ export function loadEmpresasFromStorage(): EmpresaRow[] {
       }
     }
 
-    // 2. Migração automática: se houver dados no sessionStorage da sessão anterior/atual, copia para permanente
     const sessionRaw = sessionStorage.getItem(EMPRESAS_STORAGE_KEY)
     if (sessionRaw) {
       const parsedSession = JSON.parse(sessionRaw)
@@ -84,26 +90,22 @@ export function loadEmpresasFromStorage(): EmpresaRow[] {
 }
 
 /**
- * Salva a lista de empresas de forma permanente (localStorage + sync assíncrono com PocketBase)
+ * Salva a lista de empresas localmente (localStorage + sessionStorage) e sincroniza assincronamente com o banco
  */
 export function saveEmpresasToStorage(empresas: EmpresaRow[]): void {
   try {
-    // Persistência permanente no navegador
     localStorage.setItem(EMPRESAS_PERSIST_KEY, JSON.stringify(empresas))
-    // Mantém sessionStorage espelhado para retrocompatibilidade
     sessionStorage.setItem(EMPRESAS_STORAGE_KEY, JSON.stringify(empresas))
   } catch {
     // quota exceeded ou ambiente restrito
   }
 
-  // Tenta sincronizar com o PocketBase em segundo plano (se disponível)
-  syncEmpresasToPocketBase(empresas).catch(() => {
-    // Falha silenciosa no backend — dados já estão garantidos no localStorage
-  })
+  // Dispara sincronização em segundo plano
+  syncEmpresasToPocketBase(empresas).catch(() => {})
 }
 
 /**
- * Limpa o armazenamento de empresas (permanente e de sessão)
+ * Limpa o armazenamento de empresas (local e no backend se disponível)
  */
 export function clearEmpresasStorage(): void {
   try {
@@ -113,22 +115,23 @@ export function clearEmpresasStorage(): void {
     // ignore
   }
 
-  // Remove também no backend PocketBase se a coleção existir
   clearEmpresasPocketBase().catch(() => {})
 }
 
 /**
- * Busca empresas no PocketBase com fallback automático para o armazenamento local
+ * Busca empresas no PocketBase com fallback resiliente para armazenamento local.
+ * Se o backend estiver vazio e houver dados no sessionStorage/localStorage, faz o envio inicial.
  */
 export async function fetchEmpresas(): Promise<EmpresaRow[]> {
   const localData = loadEmpresasFromStorage()
 
   try {
-    // Tenta carregar até 1000 registros do backend
     const records = await pb.collection(COLLECTION_NAME).getFullList<EmpresaRow>({
       sort: 'created',
       requestKey: null,
     })
+
+    isPocketBaseAvailable = true
 
     if (records && records.length > 0) {
       const mapped: EmpresaRow[] = records.map((r) => ({
@@ -146,33 +149,35 @@ export async function fetchEmpresas(): Promise<EmpresaRow[]> {
         peso1: r.peso1,
         peso2: r.peso2,
       }))
-      // Atualiza o cache permanente
-      localStorage.setItem(EMPRESAS_PERSIST_KEY, JSON.stringify(mapped))
-      sessionStorage.setItem(EMPRESAS_STORAGE_KEY, JSON.stringify(mapped))
+      try {
+        localStorage.setItem(EMPRESAS_PERSIST_KEY, JSON.stringify(mapped))
+        sessionStorage.setItem(EMPRESAS_STORAGE_KEY, JSON.stringify(mapped))
+      } catch {
+        /* intentionally ignored */
+      }
       return mapped
     }
 
-    // Se o backend estiver vazio mas houver dados locais, faz o seed para o backend
+    // Backend está vazio mas temos dados locais: migração inicial
     if (localData.length > 0) {
       syncEmpresasToPocketBase(localData).catch(() => {})
     }
   } catch {
-    // PocketBase indisponível ou coleção ainda não criada: usa dados locais com segurança
+    isPocketBaseAvailable = false
+    // Backend indisponível: app continua funcionando sem interrupção usando dados locais
   }
 
   return localData
 }
 
 /**
- * Sincroniza dados com o PocketBase (se a coleção estiver configurada)
+ * Sincroniza conjunto de empresas no PocketBase (criação / atualização)
  */
-async function syncEmpresasToPocketBase(empresas: EmpresaRow[]): Promise<void> {
+export async function syncEmpresasToPocketBase(empresas: EmpresaRow[]): Promise<void> {
   try {
-    // Se a coleção não existir ou retornar 404, o catch captura
     const existing = await pb.collection(COLLECTION_NAME).getFullList({ requestKey: null })
     const existingIds = new Set(existing.map((e) => e.id))
 
-    // Cria ou atualiza registros
     for (const emp of empresas) {
       const payload = {
         empresas: emp.empresas,
@@ -189,28 +194,88 @@ async function syncEmpresasToPocketBase(empresas: EmpresaRow[]): Promise<void> {
         peso2: String(emp.peso2 ?? ''),
       }
 
-      if (emp.id && existingIds.has(emp.id)) {
+      // PocketBase IDs têm 15 caracteres alfanuméricos
+      const isValidPbId = emp.id && emp.id.length === 15 && !emp.id.includes('-')
+      if (isValidPbId && existingIds.has(emp.id)) {
         await pb.collection(COLLECTION_NAME).update(emp.id, payload, { requestKey: null })
       } else {
         await pb.collection(COLLECTION_NAME).create(payload, { requestKey: null })
       }
     }
+    isPocketBaseAvailable = true
   } catch {
-    // Silencioso se PocketBase não estiver respondendo
+    isPocketBaseAvailable = false
   }
 }
 
 /**
- * Limpa todos os registros de empresas no PocketBase
+ * Remove todos os registros no backend
  */
-async function clearEmpresasPocketBase(): Promise<void> {
+export async function clearEmpresasPocketBase(): Promise<void> {
   try {
     const list = await pb.collection(COLLECTION_NAME).getFullList({ requestKey: null })
     for (const r of list) {
       await pb.collection(COLLECTION_NAME).delete(r.id, { requestKey: null })
     }
+    isPocketBaseAvailable = true
   } catch {
-    // ignore
+    isPocketBaseAvailable = false
+  }
+}
+
+/**
+ * Cria ou atualiza uma empresa individual no backend
+ */
+export async function saveEmpresaRecord(empresa: EmpresaRow): Promise<string | undefined> {
+  try {
+    const payload = {
+      empresas: empresa.empresas,
+      cnpj: empresa.cnpj,
+      regimeTrib: empresa.regimeTrib,
+      ramoAtividade: empresa.ramoAtividade,
+      zona: empresa.zona,
+      filial: empresa.filial,
+      entrada: empresa.entrada,
+      grupo: empresa.grupo,
+      contabil: empresa.contabil || '',
+      numFunc: String(empresa.numFunc ?? ''),
+      peso1: String(empresa.peso1 ?? ''),
+      peso2: String(empresa.peso2 ?? ''),
+    }
+
+    const isValidPbId = empresa.id && empresa.id.length === 15 && !empresa.id.includes('-')
+    if (isValidPbId) {
+      const updated = await pb
+        .collection(COLLECTION_NAME)
+        .update(empresa.id, payload, { requestKey: null })
+      isPocketBaseAvailable = true
+      return updated.id
+    } else {
+      const created = await pb.collection(COLLECTION_NAME).create(payload, { requestKey: null })
+      isPocketBaseAvailable = true
+      return created.id
+    }
+  } catch {
+    isPocketBaseAvailable = false
+    return undefined
+  }
+}
+
+/**
+ * Deleta uma empresa no backend
+ */
+export async function deleteEmpresaRecord(id: string): Promise<boolean> {
+  try {
+    const isValidPbId = id && id.length === 15 && !id.includes('-')
+    if (isValidPbId) {
+      await pb.collection(COLLECTION_NAME).delete(id, { requestKey: null })
+      isPocketBaseAvailable = true
+      return true
+    }
+    return false
+  } catch {
+    isPocketBaseAvailable = false
+    return false
   }
 }
 
@@ -231,7 +296,6 @@ export function mapHeadersToFields(headers: string[]): {
     const normalized = normalizeHeader(rawHeader)
     if (!normalized) return
 
-    // Reconhecimento tolerante
     if (
       normalized === 'empresas' ||
       normalized === 'empresa' ||
@@ -307,9 +371,6 @@ export function mapHeadersToFields(headers: string[]): {
   return { mapping, unrecognizedColumns }
 }
 
-/**
- * Normaliza o valor de uma célula para string/número limpo
- */
 function normalizeCellValue(val: unknown): string | number {
   if (val === null || val === undefined) return ''
   if (typeof val === 'number') {
@@ -345,7 +406,6 @@ export async function parseEmpresasFile(file: File): Promise<{
     return { rows: [], ignoredRowsCount: 0, unrecognizedColumns: [] }
   }
 
-  // Primeira linha = cabeçalho
   const headerRow = (rawData[0] || []).map((c) => String(c ?? ''))
   const { mapping, unrecognizedColumns } = mapHeadersToFields(headerRow)
 
@@ -386,7 +446,6 @@ export async function parseEmpresasFile(file: File): Promise<{
     const empresasVal = (rowObj.empresas || '').toString().trim()
     const cnpjVal = (rowObj.cnpj || '').toString().trim()
 
-    // Validação: linha sem EMPRESAS e sem CNPJ é descartada e contada como ignorada
     if (!empresasVal && !cnpjVal) {
       ignoredRowsCount++
       continue
@@ -433,7 +492,6 @@ export function mergeEmpresas(
     }
   }
 
-  // Append: registros com o MESMO CNPJ (quando preenchido) atualizam a linha existente; os demais são adicionados
   const cnpjMap = new Map<string, number>()
   const result: EmpresaRow[] = existing.map((r, idx) => {
     const clean = cleanCNPJ(r.cnpj)
@@ -451,7 +509,7 @@ export function mergeEmpresas(
       const existingRow = result[existingIdx]
       result[existingIdx] = {
         ...item,
-        id: existingRow.id, // Preserva id existente
+        id: existingRow.id,
       }
       updatedCount++
     } else {

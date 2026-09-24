@@ -1,6 +1,12 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react'
 import { EmpresaRow, EMPRESA_COLUMNS, EmpresaColumnKey } from '@/types/empresa'
-import { parseEmpresasFile, mergeEmpresas, saveEmpresasToStorage } from '@/lib/empresasService'
+import {
+  parseEmpresasFile,
+  mergeEmpresas,
+  saveEmpresasToStorage,
+  clearEmpresasStorage,
+  deleteEmpresaRecord,
+} from '@/lib/empresasService'
 import { useResizableColumns, RESIZABLE_STORAGE_KEYS } from '@/hooks/use-resizable-columns'
 import { ResizableTh } from '@/components/calculator/ResizableTh'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -112,7 +118,7 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
     unrecognized: string[]
   } | null>(null)
 
-  // Salva no sessionStorage sempre que a lista de empresas mudar
+  // Salva permanentemente sempre que a lista de empresas mudar
   useEffect(() => {
     saveEmpresasToStorage(empresas)
   }, [empresas])
@@ -159,7 +165,11 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
     unrecognizedCols: string[] = [],
   ) => {
     const result = mergeEmpresas(empresas, incomingRows, mode)
+    if (mode === 'replace') {
+      clearEmpresasStorage()
+    }
     onEmpresasChange(result.newRecords)
+    saveEmpresasToStorage(result.newRecords)
 
     setLastImportSummary({
       added: result.addedCount,
@@ -212,6 +222,7 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
 
   // Limpar tudo
   const handleClearAll = () => {
+    clearEmpresasStorage()
     onEmpresasChange([])
     setLastImportSummary(null)
     setClearDialogOpen(false)
@@ -220,8 +231,10 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
 
   // Remover linha individual
   const handleDeleteRow = (id: string, empresaNome: string) => {
+    deleteEmpresaRecord(id).catch(() => {})
     const updated = empresas.filter((row) => row.id !== id)
     onEmpresasChange(updated)
+    saveEmpresasToStorage(updated)
     toast.success(`Empresa "${empresaNome || 'Sem Nome'}" removida.`)
   }
 

@@ -8,6 +8,12 @@ export const DPTO_FISCAL_STORAGE_KEY = 'orbita_dpto_fiscal_pesos'
 export const DPTO_FISCAL_PERSIST_KEY = 'orbita_dpto_fiscal_pesos_persistent'
 const COLLECTION_NAME = 'dpto_fiscal'
 
+let isPocketBaseAvailable: boolean | null = null
+
+export function getDptoFiscalBackendStatus(): boolean | null {
+  return isPocketBaseAvailable
+}
+
 /**
  * Carrega a lista de Dpto. Fiscal - Pesos síncrona (localStorage com migração de sessionStorage)
  */
@@ -64,7 +70,8 @@ export function clearDptoFiscalStorage(): void {
 }
 
 /**
- * Busca registros no PocketBase com fallback para armazenamento local
+ * Busca registros no PocketBase com fallback para armazenamento local.
+ * Se o backend estiver vazio e houver dados locais, migra automaticamente.
  */
 export async function fetchDptoFiscal(): Promise<DptoFiscalRow[]> {
   const localData = loadDptoFiscalFromStorage()
@@ -75,6 +82,8 @@ export async function fetchDptoFiscal(): Promise<DptoFiscalRow[]> {
       requestKey: null,
     })
 
+    isPocketBaseAvailable = true
+
     if (records && records.length > 0) {
       const mapped: DptoFiscalRow[] = records.map((r) => ({
         id: r.id,
@@ -83,8 +92,12 @@ export async function fetchDptoFiscal(): Promise<DptoFiscalRow[]> {
         zona: r.zona || '',
         peso: r.peso ?? '',
       }))
-      localStorage.setItem(DPTO_FISCAL_PERSIST_KEY, JSON.stringify(mapped))
-      sessionStorage.setItem(DPTO_FISCAL_STORAGE_KEY, JSON.stringify(mapped))
+      try {
+        localStorage.setItem(DPTO_FISCAL_PERSIST_KEY, JSON.stringify(mapped))
+        sessionStorage.setItem(DPTO_FISCAL_STORAGE_KEY, JSON.stringify(mapped))
+      } catch {
+        /* intentionally ignored */
+      }
       return mapped
     }
 
@@ -92,13 +105,13 @@ export async function fetchDptoFiscal(): Promise<DptoFiscalRow[]> {
       syncDptoFiscalToPocketBase(localData).catch(() => {})
     }
   } catch {
-    // Silencioso se backend indisponível
+    isPocketBaseAvailable = false
   }
 
   return localData
 }
 
-async function syncDptoFiscalToPocketBase(rows: DptoFiscalRow[]): Promise<void> {
+export async function syncDptoFiscalToPocketBase(rows: DptoFiscalRow[]): Promise<void> {
   try {
     const existing = await pb.collection(COLLECTION_NAME).getFullList({ requestKey: null })
     const existingIds = new Set(existing.map((e) => e.id))
@@ -111,25 +124,76 @@ async function syncDptoFiscalToPocketBase(rows: DptoFiscalRow[]): Promise<void> 
         peso: String(row.peso ?? ''),
       }
 
-      if (row.id && existingIds.has(row.id)) {
+      const isValidPbId = row.id && row.id.length === 15 && !row.id.includes('-')
+      if (isValidPbId && existingIds.has(row.id)) {
         await pb.collection(COLLECTION_NAME).update(row.id, payload, { requestKey: null })
       } else {
         await pb.collection(COLLECTION_NAME).create(payload, { requestKey: null })
       }
     }
+    isPocketBaseAvailable = true
   } catch {
-    // ignore
+    isPocketBaseAvailable = false
   }
 }
 
-async function clearDptoFiscalPocketBase(): Promise<void> {
+export async function clearDptoFiscalPocketBase(): Promise<void> {
   try {
     const list = await pb.collection(COLLECTION_NAME).getFullList({ requestKey: null })
     for (const r of list) {
       await pb.collection(COLLECTION_NAME).delete(r.id, { requestKey: null })
     }
+    isPocketBaseAvailable = true
   } catch {
-    // ignore
+    isPocketBaseAvailable = false
+  }
+}
+
+/**
+ * Cria ou atualiza registro individual no backend
+ */
+export async function saveDptoFiscalRecord(row: DptoFiscalRow): Promise<string | undefined> {
+  try {
+    const payload = {
+      empresa: row.empresa,
+      cnpj: row.cnpj || '',
+      zona: row.zona || '',
+      peso: String(row.peso ?? ''),
+    }
+
+    const isValidPbId = row.id && row.id.length === 15 && !row.id.includes('-')
+    if (isValidPbId) {
+      const updated = await pb
+        .collection(COLLECTION_NAME)
+        .update(row.id, payload, { requestKey: null })
+      isPocketBaseAvailable = true
+      return updated.id
+    } else {
+      const created = await pb.collection(COLLECTION_NAME).create(payload, { requestKey: null })
+      isPocketBaseAvailable = true
+      return created.id
+    }
+  } catch {
+    isPocketBaseAvailable = false
+    return undefined
+  }
+}
+
+/**
+ * Deleta registro individual no backend
+ */
+export async function deleteDptoFiscalRecord(id: string): Promise<boolean> {
+  try {
+    const isValidPbId = id && id.length === 15 && !id.includes('-')
+    if (isValidPbId) {
+      await pb.collection(COLLECTION_NAME).delete(id, { requestKey: null })
+      isPocketBaseAvailable = true
+      return true
+    }
+    return false
+  } catch {
+    isPocketBaseAvailable = false
+    return false
   }
 }
 
