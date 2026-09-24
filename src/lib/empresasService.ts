@@ -1,9 +1,10 @@
 import * as XLSX from 'xlsx'
-import { EmpresaRow, ImportResult } from '@/types/empresa'
+import { EmpresaRow, ImportResult, CustomColumnDef } from '@/types/empresa'
 import pb from '@/lib/pocketbase/client'
 
 export const EMPRESAS_STORAGE_KEY = 'orbita_empresas'
 export const EMPRESAS_PERSIST_KEY = 'orbita_empresas_persistent'
+export const EMPRESAS_CUSTOM_COLUMNS_KEY = 'orbita_empresas_custom_columns'
 const COLLECTION_NAME = 'empresas'
 
 /**
@@ -90,6 +91,38 @@ export function loadEmpresasFromStorage(): EmpresaRow[] {
 }
 
 /**
+ * Carrega a lista de colunas personalizadas cadastradas pelo usuário
+ */
+export function loadCustomColumnsFromStorage(): CustomColumnDef[] {
+  try {
+    const raw =
+      localStorage.getItem(EMPRESAS_CUSTOM_COLUMNS_KEY) ||
+      sessionStorage.getItem(EMPRESAS_CUSTOM_COLUMNS_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        return parsed
+      }
+    }
+    return []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Salva a lista de colunas personalizadas no localStorage e sessionStorage
+ */
+export function saveCustomColumnsToStorage(columns: CustomColumnDef[]): void {
+  try {
+    localStorage.setItem(EMPRESAS_CUSTOM_COLUMNS_KEY, JSON.stringify(columns))
+    sessionStorage.setItem(EMPRESAS_CUSTOM_COLUMNS_KEY, JSON.stringify(columns))
+  } catch {
+    // quota exceeded ou ambiente restrito
+  }
+}
+
+/**
  * Salva a lista de empresas localmente (localStorage + sessionStorage) e sincroniza assincronamente com o banco
  */
 export function saveEmpresasToStorage(empresas: EmpresaRow[]): void {
@@ -148,6 +181,8 @@ export async function fetchEmpresas(): Promise<EmpresaRow[]> {
         numFunc: r.numFunc,
         peso1: r.peso1,
         peso2: r.peso2,
+        isManual: Boolean(r.isManual),
+        customFields: r.customFields && typeof r.customFields === 'object' ? r.customFields : {},
       }))
       try {
         localStorage.setItem(EMPRESAS_PERSIST_KEY, JSON.stringify(mapped))
@@ -192,6 +227,8 @@ export async function syncEmpresasToPocketBase(empresas: EmpresaRow[]): Promise<
         numFunc: String(emp.numFunc ?? ''),
         peso1: String(emp.peso1 ?? ''),
         peso2: String(emp.peso2 ?? ''),
+        isManual: emp.isManual ?? false,
+        customFields: emp.customFields ?? {},
       }
 
       // PocketBase IDs têm 15 caracteres alfanuméricos
@@ -241,6 +278,8 @@ export async function saveEmpresaRecord(empresa: EmpresaRow): Promise<string | u
       numFunc: String(empresa.numFunc ?? ''),
       peso1: String(empresa.peso1 ?? ''),
       peso2: String(empresa.peso2 ?? ''),
+      isManual: empresa.isManual ?? false,
+      customFields: empresa.customFields ?? {},
     }
 
     const isValidPbId = empresa.id && empresa.id.length === 15 && !empresa.id.includes('-')
@@ -474,28 +513,90 @@ export async function parseEmpresasFile(file: File): Promise<{
 }
 
 /**
- * Combina novos registros com registros existentes (append ou merge por CNPJ)
+ * Combina novos registros com registros existentes (append ou merge por CNPJ/Nome).
+ * REQUISITOS:
+ * 1. Linhas manuais (isManual: true) sobrevivem a reimportações/mesclagens mesmo que não estejam na planilha.
+ * 2. Valores de colunas personalizadas (customFields) devem ser preservados por linha
+ *    quando a planilha é importada / atualizada.
+ * 3. Se mode === 'replace', substitui as empresas que vieram de importações anteriores,
+ *    porém MANTÉM as linhas manuais intactas com seus respectivos customFields.
  */
 export function mergeEmpresas(
   existing: EmpresaRow[],
   incoming: EmpresaRow[],
   mode: 'replace' | 'append',
 ): ImportResult {
+  // Separamos as linhas criadas manualmente
+  const manualRows = existing.filter((r) => r.isManual)
+
+  // Mapas para busca rápida em existing por CNPJ e por Nome
+  const existingByCnpj = new Map<string, EmpresaRow>()
+  const existingByName = new Map<string, EmpresaRow>()
+
+  for (const r of existing) {
+    const c = cleanCNPJ(r.cnpj)
+    if (c) existingByCnpj.set(c, r)
+    const n = normalizeHeader(r.empresas)
+    if (n) existingByName.set(n, r)
+  }
+
   if (mode === 'replace') {
+    // Ao substituir: criamos o conjunto com os incoming rows,
+    // mas recuperamos customFields se houver correspondência com existing,
+    // e preservamos as linhas manuais que não foram sobrescritas pela planilha.
+    const incomingCnpjs = new Set<string>()
+    const incomingNames = new Set<string>()
+
+    const newRecords: EmpresaRow[] = incoming.map((item) => {
+      const c = cleanCNPJ(item.cnpj)
+      const n = normalizeHeader(item.empresas)
+      if (c) incomingCnpjs.add(c)
+      if (n) incomingNames.add(n)
+
+      // Procura se já existia para preservar id e customFields
+      const prev = (c ? existingByCnpj.get(c) : null) || (n ? existingByName.get(n) : null)
+      if (prev) {
+        return {
+          ...item,
+          id: prev.id,
+          // Preserva campos customizados já preenchidos
+          customFields: { ...(prev.customFields || {}), ...(item.customFields || {}) },
+          // Preserva flag manual se o usuário tiver criado e vier complementando
+          isManual: prev.isManual,
+        }
+      }
+      return item
+    })
+
+    // Adiciona linhas manuais que NÃO estavam na planilha importada
+    for (const manual of manualRows) {
+      const c = cleanCNPJ(manual.cnpj)
+      const n = normalizeHeader(manual.empresas)
+      const inPlanilha = (c && incomingCnpjs.has(c)) || (n && incomingNames.has(n))
+      if (!inPlanilha) {
+        newRecords.push(manual)
+      }
+    }
+
     return {
       addedCount: incoming.length,
       updatedCount: 0,
       ignoredRowsCount: 0,
       unrecognizedColumns: [],
       totalRowsProcessed: incoming.length,
-      newRecords: incoming,
+      newRecords,
     }
   }
 
+  // mode === 'append' (mesclagem / adição)
   const cnpjMap = new Map<string, number>()
+  const nameMap = new Map<string, number>()
+
   const result: EmpresaRow[] = existing.map((r, idx) => {
-    const clean = cleanCNPJ(r.cnpj)
-    if (clean) cnpjMap.set(clean, idx)
+    const c = cleanCNPJ(r.cnpj)
+    if (c) cnpjMap.set(c, idx)
+    const n = normalizeHeader(r.empresas)
+    if (n) nameMap.set(n, idx)
     return { ...r }
   })
 
@@ -503,21 +604,33 @@ export function mergeEmpresas(
   let updatedCount = 0
 
   for (const item of incoming) {
-    const clean = cleanCNPJ(item.cnpj)
-    if (clean && cnpjMap.has(clean)) {
-      const existingIdx = cnpjMap.get(clean)!
-      const existingRow = result[existingIdx]
-      result[existingIdx] = {
+    const c = cleanCNPJ(item.cnpj)
+    const n = normalizeHeader(item.empresas)
+
+    let matchIdx: number | undefined
+    if (c && cnpjMap.has(c)) {
+      matchIdx = cnpjMap.get(c)
+    } else if (n && nameMap.has(n)) {
+      matchIdx = nameMap.get(n)
+    }
+
+    if (matchIdx !== undefined) {
+      const existingRow = result[matchIdx]
+      result[matchIdx] = {
         ...item,
         id: existingRow.id,
+        // Preserva valores de colunas personalizadas
+        customFields: { ...(existingRow.customFields || {}), ...(item.customFields || {}) },
+        // Preserva flag se era manual
+        isManual: existingRow.isManual,
       }
       updatedCount++
     } else {
       result.push(item)
       addedCount++
-      if (clean) {
-        cnpjMap.set(clean, result.length - 1)
-      }
+      const newIdx = result.length - 1
+      if (c) cnpjMap.set(c, newIdx)
+      if (n) nameMap.set(n, newIdx)
     }
   }
 

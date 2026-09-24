@@ -1,11 +1,20 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react'
-import { EmpresaRow, EMPRESA_COLUMNS, EmpresaColumnKey } from '@/types/empresa'
+import {
+  EmpresaRow,
+  EMPRESA_COLUMNS,
+  EmpresaColumnKey,
+  EmpresaFixedColumnKey,
+  CustomColumnDef,
+} from '@/types/empresa'
 import {
   parseEmpresasFile,
   mergeEmpresas,
   saveEmpresasToStorage,
   clearEmpresasStorage,
   deleteEmpresaRecord,
+  saveEmpresaRecord,
+  loadCustomColumnsFromStorage,
+  saveCustomColumnsToStorage,
 } from '@/lib/empresasService'
 import { useResizableColumns, RESIZABLE_STORAGE_KEYS } from '@/hooks/use-resizable-columns'
 import { ResizableTh } from '@/components/calculator/ResizableTh'
@@ -13,6 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Label } from '@/components/ui/label'
 import {
   Dialog,
   DialogContent,
@@ -45,6 +55,9 @@ import {
   CheckCircle2,
   Info,
   X,
+  Plus,
+  Columns,
+  Pencil,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -88,12 +101,22 @@ const MIN_EMPRESAS_COL_WIDTHS: { [key: string]: number } = {
 export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasChange }) => {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Hook de controle de largura das colunas redimensionáveis com persistência em sessionStorage
+  // Colunas personalizadas do usuário
+  const [customColumns, setCustomColumns] = useState<CustomColumnDef[]>(() => {
+    return loadCustomColumnsFromStorage()
+  })
+
+  // Hook de controle de largura das colunas redimensionáveis com persistência em sessionStorage/localStorage
   const { widths, startResize, isDraggingRef } = useResizableColumns(
     RESIZABLE_STORAGE_KEYS.EMPRESAS,
     DEFAULT_EMPRESAS_COL_WIDTHS,
     MIN_EMPRESAS_COL_WIDTHS,
   )
+
+  // Salva colunas customizadas
+  useEffect(() => {
+    saveCustomColumnsToStorage(customColumns)
+  }, [customColumns])
 
   // Estados de busca e ordenação
   const [searchQuery, setSearchQuery] = useState('')
@@ -117,6 +140,42 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
     ignored: number
     unrecognized: string[]
   } | null>(null)
+
+  // Diálogo para Adicionar Nova Empresa Manualmente
+  const [addModalOpen, setAddModalOpen] = useState(false)
+  const [newEmpresaNome, setNewEmpresaNome] = useState('')
+  const [newCnpj, setNewCnpj] = useState('')
+  const [newRegimeTrib, setNewRegimeTrib] = useState('')
+  const [newRamoAtividade, setNewRamoAtividade] = useState('')
+  const [newZona, setNewZona] = useState('')
+  const [newFilial, setNewFilial] = useState('')
+  const [newEntrada, setNewEntrada] = useState('')
+  const [newGrupo, setNewGrupo] = useState('')
+  const [newCustomValues, setNewCustomValues] = useState<Record<string, string>>({})
+
+  // Diálogo para Adicionar Coluna Personalizada
+  const [addColumnModalOpen, setAddColumnModalOpen] = useState(false)
+  const [newColumnTitle, setNewColumnTitle] = useState('')
+
+  // Diálogo para Renomear Coluna Personalizada
+  const [renameColumnModalOpen, setRenameColumnModalOpen] = useState(false)
+  const [columnToRename, setColumnToRename] = useState<CustomColumnDef | null>(null)
+  const [renamedColumnTitle, setRenamedColumnTitle] = useState('')
+
+  // Diálogo de confirmação para Remover Coluna Personalizada
+  const [deleteColumnModalOpen, setDeleteColumnModalOpen] = useState(false)
+  const [columnToDelete, setColumnToDelete] = useState<CustomColumnDef | null>(null)
+
+  // Máscara dinâmica de CNPJ: 00.000.000/0000-00
+  const applyCnpjMask = (val: string): string => {
+    const digits = val.replace(/\D/g, '').slice(0, 14)
+    if (digits.length <= 2) return digits
+    if (digits.length <= 5) return `${digits.slice(0, 2)}.${digits.slice(2)}`
+    if (digits.length <= 8) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5)}`
+    if (digits.length <= 12)
+      return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}`
+    return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12, 14)}`
+  }
 
   // Salva permanentemente sempre que a lista de empresas mudar
   useEffect(() => {
@@ -229,6 +288,177 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
     toast.info('Lista de empresas limpa com sucesso.')
   }
 
+  // Edição inline de campos fixos
+  const handleFieldChange = (id: string, field: EmpresaFixedColumnKey, value: string) => {
+    let changedRow: EmpresaRow | undefined
+    const updated = empresas.map((r) => {
+      if (r.id !== id) return r
+      changedRow = {
+        ...r,
+        [field]: field === 'cnpj' ? applyCnpjMask(value) : value,
+      }
+      return changedRow
+    })
+    onEmpresasChange(updated)
+    if (changedRow) saveEmpresaRecord(changedRow).catch(() => {})
+  }
+
+  // Edição inline de colunas personalizadas
+  const handleCustomFieldChange = (id: string, colId: string, value: string) => {
+    let changedRow: EmpresaRow | undefined
+    const updated = empresas.map((r) => {
+      if (r.id !== id) return r
+      changedRow = {
+        ...r,
+        customFields: {
+          ...(r.customFields || {}),
+          [colId]: value,
+        },
+      }
+      return changedRow
+    })
+    onEmpresasChange(updated)
+    if (changedRow) saveEmpresaRecord(changedRow).catch(() => {})
+  }
+
+  // Adicionar linha manualmente
+  const handleAddManualRow = (e: React.FormEvent) => {
+    e.preventDefault()
+    const trimmedNome = newEmpresaNome.trim()
+    if (!trimmedNome) {
+      toast.error('Informe o nome da EMPRESA.')
+      return
+    }
+
+    const newRow: EmpresaRow = {
+      id: `emp-manual-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      empresas: trimmedNome,
+      cnpj: newCnpj.trim(),
+      regimeTrib: newRegimeTrib.trim(),
+      ramoAtividade: newRamoAtividade.trim(),
+      zona: newZona.trim(),
+      filial: newFilial.trim(),
+      entrada: newEntrada.trim(),
+      grupo: newGrupo.trim(),
+      isManual: true,
+      customFields: { ...newCustomValues },
+    }
+
+    const updated = [...empresas, newRow]
+    onEmpresasChange(updated)
+    saveEmpresasToStorage(updated)
+    saveEmpresaRecord(newRow).catch(() => {})
+
+    // Limpa formulário
+    setNewEmpresaNome('')
+    setNewCnpj('')
+    setNewRegimeTrib('')
+    setNewRamoAtividade('')
+    setNewZona('')
+    setNewFilial('')
+    setNewEntrada('')
+    setNewGrupo('')
+    setNewCustomValues({})
+    setAddModalOpen(false)
+    toast.success(`Empresa "${trimmedNome}" cadastrada com sucesso!`)
+  }
+
+  // Criar nova coluna personalizada
+  const handleAddCustomColumn = (e: React.FormEvent) => {
+    e.preventDefault()
+    const label = newColumnTitle.trim()
+    if (!label) {
+      toast.error('Informe o título da coluna.')
+      return
+    }
+
+    // Verifica se colisão com colunas fixas ou colunas já existentes
+    const fixedConflict = EMPRESA_COLUMNS.some((c) => c.label.toLowerCase() === label.toLowerCase())
+    const customConflict = customColumns.some((c) => c.label.toLowerCase() === label.toLowerCase())
+
+    if (fixedConflict || customConflict) {
+      toast.error('Já existe uma coluna com esse título.')
+      return
+    }
+
+    const newCol: CustomColumnDef = {
+      id: `col_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      label,
+      created: new Date().toISOString(),
+    }
+
+    const updatedCols = [...customColumns, newCol]
+    setCustomColumns(updatedCols)
+    saveCustomColumnsToStorage(updatedCols)
+    setNewColumnTitle('')
+    setAddColumnModalOpen(false)
+    toast.success(`Coluna "${label}" adicionada com sucesso!`)
+  }
+
+  // Confirmar renomeação de coluna personalizada
+  const handleConfirmRenameColumn = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!columnToRename) return
+    const newLabel = renamedColumnTitle.trim()
+    if (!newLabel) {
+      toast.error('Informe o novo título da coluna.')
+      return
+    }
+
+    const fixedConflict = EMPRESA_COLUMNS.some(
+      (c) => c.label.toLowerCase() === newLabel.toLowerCase(),
+    )
+    const customConflict = customColumns.some(
+      (c) => c.id !== columnToRename.id && c.label.toLowerCase() === newLabel.toLowerCase(),
+    )
+
+    if (fixedConflict || customConflict) {
+      toast.error('Já existe uma coluna com esse título.')
+      return
+    }
+
+    const updatedCols = customColumns.map((c) =>
+      c.id === columnToRename.id ? { ...c, label: newLabel } : c,
+    )
+    setCustomColumns(updatedCols)
+    saveCustomColumnsToStorage(updatedCols)
+    toast.success(`Coluna renomeada para "${newLabel}".`)
+    setRenameColumnModalOpen(false)
+    setColumnToRename(null)
+    setRenamedColumnTitle('')
+  }
+
+  // Confirmar remoção de coluna personalizada
+  const handleConfirmDeleteColumn = () => {
+    if (!columnToDelete) return
+    const colId = columnToDelete.id
+    const colLabel = columnToDelete.label
+
+    // Remove das definições de colunas
+    const updatedCols = customColumns.filter((c) => c.id !== colId)
+    setCustomColumns(updatedCols)
+    saveCustomColumnsToStorage(updatedCols)
+
+    // Remove os valores correspondentes de todas as linhas de empresa
+    const updatedEmpresas = empresas.map((emp) => {
+      if (!emp.customFields || !(colId in emp.customFields)) return emp
+      const copyFields = { ...emp.customFields }
+      delete copyFields[colId]
+      return { ...emp, customFields: copyFields }
+    })
+    onEmpresasChange(updatedEmpresas)
+    saveEmpresasToStorage(updatedEmpresas)
+
+    // Se estiver ordenando por essa coluna, reseta a ordenação
+    if (sortConfig?.key === colId) {
+      setSortConfig(null)
+    }
+
+    toast.success(`Coluna "${colLabel}" e seus valores foram removidos.`)
+    setDeleteColumnModalOpen(false)
+    setColumnToDelete(null)
+  }
+
   // Remover linha individual
   const handleDeleteRow = (id: string, empresaNome: string) => {
     deleteEmpresaRecord(id).catch(() => {})
@@ -255,34 +485,65 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
   const filteredAndSortedEmpresas = useMemo(() => {
     let result = [...empresas]
 
-    // Filtro por texto em tempo real (EMPRESAS ou CNPJ)
+    // Filtro por texto em tempo real (EMPRESAS, CNPJ ou colunas personalizadas)
     const q = searchQuery.trim().toLowerCase()
     if (q) {
       const qDigits = q.replace(/\D/g, '')
       result = result.filter((item) => {
-        const matchEmpresa = item.empresas.toLowerCase().includes(q)
-        const matchCnpj = item.cnpj.toLowerCase().includes(q)
-        const matchCnpjDigits = qDigits ? item.cnpj.replace(/\D/g, '').includes(qDigits) : false
-        return matchEmpresa || matchCnpj || matchCnpjDigits
+        const matchEmpresa = (item.empresas || '').toLowerCase().includes(q)
+        const matchCnpj = (item.cnpj || '').toLowerCase().includes(q)
+        const matchCnpjDigits = qDigits
+          ? (item.cnpj || '').replace(/\D/g, '').includes(qDigits)
+          : false
+        const matchRegime = (item.regimeTrib || '').toLowerCase().includes(q)
+        const matchRamo = (item.ramoAtividade || '').toLowerCase().includes(q)
+        const matchZona = (item.zona || '').toLowerCase().includes(q)
+        const matchFilial = (item.filial || '').toLowerCase().includes(q)
+        const matchEntrada = (item.entrada || '').toLowerCase().includes(q)
+        const matchGrupo = (item.grupo || '').toLowerCase().includes(q)
+
+        // Busca em colunas personalizadas
+        let matchCustom = false
+        if (item.customFields) {
+          for (const val of Object.values(item.customFields)) {
+            if (val && String(val).toLowerCase().includes(q)) {
+              matchCustom = true
+              break
+            }
+          }
+        }
+
+        return (
+          matchEmpresa ||
+          matchCnpj ||
+          matchCnpjDigits ||
+          matchRegime ||
+          matchRamo ||
+          matchZona ||
+          matchFilial ||
+          matchEntrada ||
+          matchGrupo ||
+          matchCustom
+        )
       })
     }
 
     // Ordenação
     if (sortConfig) {
       const { key, direction } = sortConfig
-      const colMeta = EMPRESA_COLUMNS.find((c) => c.key === key)
-      const isNum = colMeta?.numeric
+      const isFixedCol = EMPRESA_COLUMNS.some((c) => c.key === key)
 
       result.sort((a, b) => {
-        const valA = a[key]
-        const valB = b[key]
+        let valA: unknown
+        let valB: unknown
 
-        if (isNum) {
-          const numA =
-            typeof valA === 'number' ? valA : parseFloat(String(valA).replace(',', '.')) || 0
-          const numB =
-            typeof valB === 'number' ? valB : parseFloat(String(valB).replace(',', '.')) || 0
-          return direction === 'asc' ? numA - numB : numB - numA
+        if (isFixedCol) {
+          valA = a[key as EmpresaFixedColumnKey]
+          valB = b[key as EmpresaFixedColumnKey]
+        } else {
+          // Coluna personalizada
+          valA = a.customFields?.[key] ?? ''
+          valB = b.customFields?.[key] ?? ''
         }
 
         const strA = (valA ?? '').toString().toLowerCase()
@@ -327,6 +588,28 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
 
                 <Button
                   type="button"
+                  variant="outline"
+                  onClick={() => setAddModalOpen(true)}
+                  className="text-xs h-9 text-slate-700 hover:text-slate-900 border-slate-300 gap-1.5"
+                  title="Cadastrar uma empresa manualmente"
+                >
+                  <Plus className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Adicionar Linha</span>
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setAddColumnModalOpen(true)}
+                  className="text-xs h-9 text-purple-900 hover:bg-purple-50 border-purple-200 gap-1.5 font-medium"
+                  title="Criar coluna personalizada na tabela"
+                >
+                  <Columns className="w-3.5 h-3.5 text-purple-800" />
+                  <span>Adicionar Coluna</span>
+                </Button>
+
+                <Button
+                  type="button"
                   onClick={() => fileInputRef.current?.click()}
                   className="bg-[#1E3A5F] hover:bg-[#16304F] text-white text-xs h-9 px-4 gap-2 shadow-sm"
                 >
@@ -368,14 +651,20 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
               {/* Representação visual do cabeçalho (cores roxas como na imagem anexada) */}
               <div className="overflow-x-auto pb-1">
                 <div className="inline-flex min-w-full text-[11px] font-bold text-white tracking-wider rounded overflow-hidden shadow-xs border border-purple-950">
-                  {EMPRESA_COLUMNS.map((col, idx) => (
+                  {EMPRESA_COLUMNS.map((col) => (
                     <div
                       key={col.key}
-                      className={`bg-[#380638] px-3 py-2 whitespace-nowrap text-center ${
-                        idx < EMPRESA_COLUMNS.length - 1 ? 'border-r border-purple-950/40' : ''
-                      }`}
+                      className="bg-[#380638] px-3 py-2 whitespace-nowrap text-center border-r border-purple-950/40"
                     >
                       {col.label}
+                    </div>
+                  ))}
+                  {customColumns.map((col) => (
+                    <div
+                      key={col.id}
+                      className="bg-[#4a0d4a] px-3 py-2 whitespace-nowrap text-center border-r border-purple-950/40 text-purple-200"
+                    >
+                      {col.label} (extra)
                     </div>
                   ))}
                 </div>
@@ -459,6 +748,15 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                     {filteredAndSortedEmpresas.length === 1 ? '' : 's'})
                   </span>
                 )}
+                {customColumns.length > 0 && (
+                  <Badge
+                    variant="outline"
+                    className="font-medium px-2 py-0.5 text-purple-800 bg-purple-50 border-purple-200"
+                  >
+                    {customColumns.length}{' '}
+                    {customColumns.length === 1 ? 'coluna extra' : 'colunas extras'}
+                  </Badge>
+                )}
               </div>
             </div>
 
@@ -533,6 +831,84 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                             </ResizableTh>
                           )
                         })}
+
+                        {/* Cabeçalhos das Colunas Personalizadas */}
+                        {customColumns.map((col) => {
+                          const isSorted = sortConfig?.key === col.id
+                          const colWidth = widths[col.id] || 150
+                          return (
+                            <ResizableTh
+                              key={col.id}
+                              width={colWidth}
+                              minWidth={80}
+                              resizable={true}
+                              onResizeStart={(e) => startResize(e, col.id)}
+                              onHeaderClick={() => handleSort(col.id)}
+                              isDraggingRef={isDraggingRef}
+                              className="py-2.5 px-3 font-bold uppercase tracking-wider cursor-pointer hover:bg-purple-900/60 transition-colors border-r border-purple-950/40 whitespace-nowrap overflow-hidden bg-[#420942]"
+                              title={`Coluna personalizada: ${col.label}. Clique para ordenar.`}
+                            >
+                              <div className="inline-flex items-center justify-between gap-1.5 w-full overflow-hidden">
+                                <div className="inline-flex items-center gap-1 truncate">
+                                  <span className="truncate">{col.label}</span>
+                                  {isSorted ? (
+                                    sortConfig.direction === 'asc' ? (
+                                      <ArrowUp className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
+                                    ) : (
+                                      <ArrowDown className="w-3.5 h-3.5 text-yellow-300 flex-shrink-0" />
+                                    )
+                                  ) : (
+                                    <ArrowUpDown className="w-3 h-3 text-purple-300 opacity-60 flex-shrink-0" />
+                                  )}
+                                </div>
+
+                                {/* Ações do Cabeçalho: Renomear / Excluir coluna */}
+                                <div
+                                  className="inline-flex items-center gap-0.5 flex-shrink-0"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setColumnToRename(col)
+                                          setRenamedColumnTitle(col.label)
+                                          setRenameColumnModalOpen(true)
+                                        }}
+                                        className="h-5 w-5 rounded p-0 text-purple-300 hover:text-white hover:bg-purple-800/80 inline-flex items-center justify-center transition-colors"
+                                      >
+                                        <Pencil className="w-3 h-3" />
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">
+                                      <span>Renomear coluna</span>
+                                    </TooltipContent>
+                                  </Tooltip>
+
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setColumnToDelete(col)
+                                          setDeleteColumnModalOpen(true)
+                                        }}
+                                        className="h-5 w-5 rounded p-0 text-purple-300 hover:text-red-300 hover:bg-red-950/60 inline-flex items-center justify-center transition-colors"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">
+                                      <span>Remover coluna</span>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </div>
+                              </div>
+                            </ResizableTh>
+                          )
+                        })}
+
                         <th
                           style={{
                             width: `${widths.acoes}px`,
@@ -547,7 +923,10 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                     <tbody className="divide-y divide-slate-200 bg-white">
                       {filteredAndSortedEmpresas.length === 0 ? (
                         <tr>
-                          <td colSpan={10} className="py-8 text-center text-slate-500">
+                          <td
+                            colSpan={10 + customColumns.length}
+                            className="py-8 text-center text-slate-500"
+                          >
                             Nenhum registro encontrado para o filtro "{searchQuery}".
                           </td>
                         </tr>
@@ -557,57 +936,118 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                             key={empresa.id}
                             className="hover:bg-slate-50 transition-colors group"
                           >
-                            <td className="py-2.5 px-3 text-center text-slate-400 font-mono text-[11px] border-r border-slate-100 truncate">
-                              {index + 1}
+                            <td className="py-2 px-2 text-center text-slate-400 font-mono text-[11px] border-r border-slate-100 truncate">
+                              <div className="flex items-center justify-center gap-1">
+                                <span>{index + 1}</span>
+                                {empresa.isManual && (
+                                  <span
+                                    title="Linha criada manualmente"
+                                    className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"
+                                  />
+                                )}
+                              </div>
                             </td>
-                            <td
-                              className="py-2.5 px-3 font-medium text-slate-900 border-r border-slate-100 truncate"
-                              title={empresa.empresas}
-                            >
-                              {empresa.empresas || '—'}
+                            <td className="py-1 px-1 border-r border-slate-100 overflow-hidden">
+                              <Input
+                                value={empresa.empresas}
+                                onChange={(e) =>
+                                  handleFieldChange(empresa.id, 'empresas', e.target.value)
+                                }
+                                className="h-8 text-xs font-medium text-slate-900 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
+                                placeholder="Nome da empresa"
+                              />
                             </td>
-                            <td
-                              className="py-2.5 px-3 font-mono text-slate-700 border-r border-slate-100 truncate"
-                              title={empresa.cnpj}
-                            >
-                              {empresa.cnpj || '—'}
+                            <td className="py-1 px-1 border-r border-slate-100 overflow-hidden">
+                              <Input
+                                value={empresa.cnpj}
+                                onChange={(e) =>
+                                  handleFieldChange(empresa.id, 'cnpj', e.target.value)
+                                }
+                                className="h-8 text-xs font-mono text-slate-700 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
+                                placeholder="00.000.000/0000-00"
+                              />
                             </td>
-                            <td
-                              className="py-2.5 px-3 text-slate-700 border-r border-slate-100 truncate"
-                              title={empresa.regimeTrib}
-                            >
-                              {empresa.regimeTrib || '—'}
+                            <td className="py-1 px-1 border-r border-slate-100 overflow-hidden">
+                              <Input
+                                value={empresa.regimeTrib}
+                                onChange={(e) =>
+                                  handleFieldChange(empresa.id, 'regimeTrib', e.target.value)
+                                }
+                                className="h-8 text-xs text-slate-700 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
+                                placeholder="Regime"
+                              />
                             </td>
-                            <td
-                              className="py-2.5 px-3 text-slate-700 border-r border-slate-100 truncate"
-                              title={empresa.ramoAtividade}
-                            >
-                              {empresa.ramoAtividade || '—'}
+                            <td className="py-1 px-1 border-r border-slate-100 overflow-hidden">
+                              <Input
+                                value={empresa.ramoAtividade}
+                                onChange={(e) =>
+                                  handleFieldChange(empresa.id, 'ramoAtividade', e.target.value)
+                                }
+                                className="h-8 text-xs text-slate-700 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
+                                placeholder="Ramo de atividade"
+                              />
                             </td>
-                            <td
-                              className="py-2.5 px-3 text-slate-700 border-r border-slate-100 truncate"
-                              title={empresa.zona}
-                            >
-                              {empresa.zona || '—'}
+                            <td className="py-1 px-1 border-r border-slate-100 overflow-hidden">
+                              <Input
+                                value={empresa.zona}
+                                onChange={(e) =>
+                                  handleFieldChange(empresa.id, 'zona', e.target.value)
+                                }
+                                className="h-8 text-xs text-slate-700 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
+                                placeholder="Zona"
+                              />
                             </td>
-                            <td
-                              className="py-2.5 px-3 text-slate-700 border-r border-slate-100 truncate"
-                              title={empresa.filial}
-                            >
-                              {empresa.filial || '—'}
+                            <td className="py-1 px-1 border-r border-slate-100 overflow-hidden">
+                              <Input
+                                value={empresa.filial}
+                                onChange={(e) =>
+                                  handleFieldChange(empresa.id, 'filial', e.target.value)
+                                }
+                                className="h-8 text-xs text-slate-700 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
+                                placeholder="Filial"
+                              />
                             </td>
-                            <td
-                              className="py-2.5 px-3 text-slate-700 border-r border-slate-100 truncate"
-                              title={empresa.entrada}
-                            >
-                              {empresa.entrada || '—'}
+                            <td className="py-1 px-1 border-r border-slate-100 overflow-hidden">
+                              <Input
+                                value={empresa.entrada}
+                                onChange={(e) =>
+                                  handleFieldChange(empresa.id, 'entrada', e.target.value)
+                                }
+                                className="h-8 text-xs text-slate-700 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
+                                placeholder="DD/MM/AAAA"
+                              />
                             </td>
-                            <td
-                              className="py-2.5 px-3 text-slate-700 border-r border-slate-100 truncate"
-                              title={empresa.grupo}
-                            >
-                              {empresa.grupo || '—'}
+                            <td className="py-1 px-1 border-r border-slate-100 overflow-hidden">
+                              <Input
+                                value={empresa.grupo}
+                                onChange={(e) =>
+                                  handleFieldChange(empresa.id, 'grupo', e.target.value)
+                                }
+                                className="h-8 text-xs text-slate-700 border-transparent hover:border-slate-300 focus:border-[#1E3A5F] bg-transparent focus:bg-white w-full"
+                                placeholder="Grupo"
+                              />
                             </td>
+
+                            {/* Células das Colunas Personalizadas (editáveis inline) */}
+                            {customColumns.map((col) => {
+                              const cellVal = empresa.customFields?.[col.id] ?? ''
+                              return (
+                                <td
+                                  key={col.id}
+                                  className="py-1 px-1 border-r border-slate-100 overflow-hidden bg-purple-50/20"
+                                >
+                                  <Input
+                                    value={cellVal}
+                                    onChange={(e) =>
+                                      handleCustomFieldChange(empresa.id, col.id, e.target.value)
+                                    }
+                                    className="h-8 text-xs text-slate-800 border-transparent hover:border-purple-300 focus:border-purple-700 bg-transparent focus:bg-white w-full"
+                                    placeholder="—"
+                                  />
+                                </td>
+                              )
+                            })}
+
                             <td className="py-2.5 px-3 text-center whitespace-nowrap">
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -694,6 +1134,313 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
           </DialogContent>
         </Dialog>
 
+        {/* Diálogo para Adicionar Nova Linha / Empresa Manualmente */}
+        <Dialog open={addModalOpen} onOpenChange={setAddModalOpen}>
+          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold text-slate-900">
+                Cadastrar Empresa Manualmente
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-500 pt-1">
+                Preencha os dados da empresa. Apenas o nome da empresa é obrigatório; os demais
+                campos são opcionais e podem ser preenchidos ou editados inline a qualquer momento.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleAddManualRow} className="space-y-3.5 pt-2">
+              <div className="space-y-1">
+                <Label htmlFor="manualEmpresaNome" className="text-xs font-semibold text-slate-700">
+                  EMPRESAS (Razão Social / Nome) *
+                </Label>
+                <Input
+                  id="manualEmpresaNome"
+                  placeholder="Ex: Empresa Exemplo Ltda"
+                  value={newEmpresaNome}
+                  onChange={(e) => setNewEmpresaNome(e.target.value)}
+                  className="h-9 text-xs"
+                  autoFocus
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="manualEmpresaCnpj"
+                    className="text-xs font-semibold text-slate-700"
+                  >
+                    CNPJ (com máscara)
+                  </Label>
+                  <Input
+                    id="manualEmpresaCnpj"
+                    placeholder="00.000.000/0000-00"
+                    value={newCnpj}
+                    onChange={(e) => setNewCnpj(applyCnpjMask(e.target.value))}
+                    className="h-9 text-xs font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="manualRegimeTrib"
+                    className="text-xs font-semibold text-slate-700"
+                  >
+                    REGIME TRIB.
+                  </Label>
+                  <Input
+                    id="manualRegimeTrib"
+                    placeholder="Ex: Simples Nacional, Lucro Presumido"
+                    value={newRegimeTrib}
+                    onChange={(e) => setNewRegimeTrib(e.target.value)}
+                    className="h-9 text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="manualRamo" className="text-xs font-semibold text-slate-700">
+                    RAMO DE ATIVIDADE 2
+                  </Label>
+                  <Input
+                    id="manualRamo"
+                    placeholder="Ex: Comércio Varejista"
+                    value={newRamoAtividade}
+                    onChange={(e) => setNewRamoAtividade(e.target.value)}
+                    className="h-9 text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="manualEmpresaZona"
+                    className="text-xs font-semibold text-slate-700"
+                  >
+                    ZONA
+                  </Label>
+                  <Input
+                    id="manualEmpresaZona"
+                    placeholder="Ex: 01, Zona Sul, Matriz"
+                    value={newZona}
+                    onChange={(e) => setNewZona(e.target.value)}
+                    className="h-9 text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="manualFilial" className="text-xs font-semibold text-slate-700">
+                    FILIAL
+                  </Label>
+                  <Input
+                    id="manualFilial"
+                    placeholder="Ex: Sim, Não, 001"
+                    value={newFilial}
+                    onChange={(e) => setNewFilial(e.target.value)}
+                    className="h-9 text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="manualEntrada" className="text-xs font-semibold text-slate-700">
+                    CLIENTE DESDE
+                  </Label>
+                  <Input
+                    id="manualEntrada"
+                    placeholder="DD/MM/AAAA"
+                    value={newEntrada}
+                    onChange={(e) => setNewEntrada(e.target.value)}
+                    className="h-9 text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="manualGrupo" className="text-xs font-semibold text-slate-700">
+                    GRUPO
+                  </Label>
+                  <Input
+                    id="manualGrupo"
+                    placeholder="Ex: Grupo A"
+                    value={newGrupo}
+                    onChange={(e) => setNewGrupo(e.target.value)}
+                    className="h-9 text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Se houver colunas personalizadas, permite preenchê-las também */}
+              {customColumns.length > 0 && (
+                <div className="pt-2 border-t border-slate-200 space-y-2">
+                  <span className="text-xs font-semibold text-purple-900 block">
+                    Colunas Personalizadas (Opcional)
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {customColumns.map((col) => (
+                      <div key={col.id} className="space-y-1">
+                        <Label
+                          htmlFor={`manualCol_${col.id}`}
+                          className="text-xs font-medium text-slate-700"
+                        >
+                          {col.label}
+                        </Label>
+                        <Input
+                          id={`manualCol_${col.id}`}
+                          placeholder={`Valor para ${col.label}`}
+                          value={newCustomValues[col.id] || ''}
+                          onChange={(e) =>
+                            setNewCustomValues((prev) => ({
+                              ...prev,
+                              [col.id]: e.target.value,
+                            }))
+                          }
+                          className="h-9 text-xs"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <DialogFooter className="pt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setAddModalOpen(false)}
+                  className="text-xs h-9"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  className="bg-[#1E3A5F] hover:bg-[#16304F] text-white text-xs h-9"
+                >
+                  Cadastrar Empresa
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Diálogo para Adicionar Nova Coluna Personalizada */}
+        <Dialog open={addColumnModalOpen} onOpenChange={setAddColumnModalOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold text-slate-900">
+                Adicionar Coluna Personalizada
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-500 pt-1">
+                Crie uma coluna extra na tabela da aba Empresas. A coluna aceita edição de texto
+                livre em cada linha, pode ser redimensionada por arrasto, filtrada na busca e
+                ordenada.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleAddCustomColumn} className="space-y-4 pt-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="newColTitle" className="text-xs font-semibold text-slate-700">
+                  Título da Coluna *
+                </Label>
+                <Input
+                  id="newColTitle"
+                  placeholder="Ex: Observações, Responsável, Telefone, Status..."
+                  value={newColumnTitle}
+                  onChange={(e) => setNewColumnTitle(e.target.value)}
+                  className="h-9 text-xs"
+                  autoFocus
+                />
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setAddColumnModalOpen(false)}
+                  className="text-xs h-9"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  className="bg-purple-900 hover:bg-purple-950 text-white text-xs h-9"
+                >
+                  Criar Coluna
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Diálogo para Renomear Coluna Personalizada */}
+        <Dialog open={renameColumnModalOpen} onOpenChange={setRenameColumnModalOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold text-slate-900">
+                Renomear Coluna Personalizada
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-500 pt-1">
+                Altere o nome da coluna exibido no cabeçalho. Os dados preenchidos nas linhas serão
+                preservados.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleConfirmRenameColumn} className="space-y-4 pt-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="renameColTitle" className="text-xs font-semibold text-slate-700">
+                  Novo Título da Coluna *
+                </Label>
+                <Input
+                  id="renameColTitle"
+                  value={renamedColumnTitle}
+                  onChange={(e) => setRenamedColumnTitle(e.target.value)}
+                  className="h-9 text-xs"
+                  autoFocus
+                />
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setRenameColumnModalOpen(false)}
+                  className="text-xs h-9"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  className="bg-purple-900 hover:bg-purple-950 text-white text-xs h-9"
+                >
+                  Salvar
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Diálogo de Confirmação: Remover Coluna Personalizada */}
+        <AlertDialog open={deleteColumnModalOpen} onOpenChange={setDeleteColumnModalOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-base font-bold text-slate-900">
+                Remover a coluna "{columnToDelete?.label}"?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-xs text-slate-500 pt-1">
+                Essa ação excluirá a coluna personalizada da tabela e apagará todos os valores
+                preenchidos nela para todas as empresas. Essa ação não poderá ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="text-xs h-9">Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmDeleteColumn}
+                className="text-xs h-9 bg-red-600 hover:bg-red-700 text-white"
+              >
+                Sim, Remover Coluna
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {/* Diálogo de Confirmação: Limpar Tudo */}
         <AlertDialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
           <AlertDialogContent>
@@ -702,8 +1449,9 @@ export const EmpresasTab: React.FC<EmpresasTabProps> = ({ empresas, onEmpresasCh
                 Tem certeza que deseja limpar todas as empresas?
               </AlertDialogTitle>
               <AlertDialogDescription className="text-xs text-slate-500 pt-1">
-                Essa ação removerá todas as {empresas.length} empresas importadas nesta sessão. Essa
-                ação não poderá ser desfeita.
+                Essa ação removerá todas as {empresas.length} empresas importadas ou cadastradas
+                nesta sessão. As colunas personalizadas configuradas serão mantidas. Essa ação não
+                poderá ser desfeita.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

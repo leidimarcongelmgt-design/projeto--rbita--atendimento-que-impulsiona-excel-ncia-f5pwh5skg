@@ -1,3 +1,9 @@
+export interface CustomColumnDef {
+  id: string // Identificador único / chave interna da coluna
+  label: string // Título exibido no cabeçalho
+  created?: string
+}
+
 export interface EmpresaRow {
   id: string
   empresas: string
@@ -8,6 +14,8 @@ export interface EmpresaRow {
   filial: string
   entrada: string
   grupo: string
+  isManual?: boolean // Identifica linhas cadastradas manualmente
+  customFields?: Record<string, string> // Valores das colunas personalizadas (chave = CustomColumnDef.id)
   // Campos opcionais legados caso existam em sessionStorage ou planilhas antigas
   contabil?: string
   numFunc?: number | string
@@ -15,7 +23,7 @@ export interface EmpresaRow {
   peso2?: number | string
 }
 
-export type EmpresaColumnKey =
+export type EmpresaFixedColumnKey =
   | 'empresas'
   | 'cnpj'
   | 'regimeTrib'
@@ -25,8 +33,10 @@ export type EmpresaColumnKey =
   | 'entrada'
   | 'grupo'
 
+export type EmpresaColumnKey = EmpresaFixedColumnKey | string
+
 export const EMPRESA_COLUMNS: {
-  key: EmpresaColumnKey
+  key: EmpresaFixedColumnKey
   label: string
   numeric?: boolean
   tooltip?: string
