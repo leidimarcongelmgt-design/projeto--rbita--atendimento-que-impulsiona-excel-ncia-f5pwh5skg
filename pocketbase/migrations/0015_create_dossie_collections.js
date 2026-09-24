@@ -1,1 +1,0 @@
-migrate((app) => {}, (app) => {})
